@@ -1,0 +1,17 @@
+{
+  // oxlint is the primary linter — anti-slop findings appear inline as you
+  // type, which is the whole point of running them at `error`.
+  "oxc.enable": true,
+  "oxc.configPath": ".oxlintrc.json",
+  "oxc.lint.run": "onType",
+
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "files.exclude": {
+    "**/.react-router": true
+  }
+}

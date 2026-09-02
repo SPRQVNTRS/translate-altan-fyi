@@ -1,0 +1,29 @@
+allowBuilds:
+  '@openrouter/sdk': true
+  esbuild: true
+
+# Restrict optional native deps to the build/deploy target arch. Migrated here
+# from the package.json `pnpm` field, which pnpm 11 no longer reads at all — it
+# warned on every install while silently applying none of this, so the repo was
+# resolving optional deps for every platform.
+supportedArchitectures:
+  os:
+    - linux
+  cpu:
+    - x64
+
+# Supply-chain hardening: a published version must be at least 7 days old before
+# pnpm will resolve it. pnpm 11's own default is 1440 minutes (24h); this widens
+# that to a week, which is the window in which a compromised release is normally
+# spotted and yanked — the point is that a project scaffolded from this stack
+# never resolves it at all.
+#
+# Only affects RESOLUTION (adding/updating deps). `--frozen-lockfile` installs,
+# which is what CI and every Docker build runs, are unaffected. To take an urgent
+# patch sooner, lower this temporarily or add the package to the exclude below.
+minimumReleaseAge: 10080
+
+# Exempt our own freshly-published internal packages, so a deploy that depends on
+# a @sprqvntrs release isn't blocked for a week after publishing it.
+minimumReleaseAgeExclude:
+  - '@sprqvntrs/*'

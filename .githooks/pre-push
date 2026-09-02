@@ -1,0 +1,90 @@
+#!/usr/bin/env sh
+# Pre-push quality gate — this repo's ONLY test gate.
+#
+# There is no GitHub Actions test runner by deliberate workspace policy: pushes
+# from the workstation are what trigger the build/deploy, so the tests belong in
+# front of the push rather than after it. A green push IS the signal.
+#
+# This repo ran a cloud CI workflow until 2026-08-31. It had been red since
+# 2026-05-15 because `pnpm install` 403s on the private @sprqvntrs/* packages:
+# they belong to SPRQVNTRS/platform, and this repo's job-scoped GITHUB_TOKEN
+# cannot read another repo's packages. Locally the scope resolves from the
+# developer's ~/.npmrc, so the gate below has no such problem.
+#
+# Runs: lint -> typecheck -> unit tests -> content validation -> production build.
+#
+# Lint runs first because oxlint is the fast tier: a finding fails the gate in
+# under a second rather than after a full build. The pre-commit hook lints only
+# the staged files, so this full-tree run is not redundant.
+#
+# The build tier is not redundant with typecheck either. React Router
+# route-chunk errors surface ONLY in `react-router build` — that is exactly how
+# the 2026-08-04 openplate `diary.tsx` failure reached production.
+#
+# tests/integration/ is deliberately excluded. Every case there self-skips
+# unless TEST_API_KEY is set AND a server is listening on :3456, so in the gate
+# it would assert nothing while looking green. That exclusion is safe only for
+# as long as that stays true, so it is enforced rather than trusted:
+# tests/unit/integration-tests-self-skip.test.ts fails the unit tier if any case
+# under tests/integration/ lacks a TEST_API_KEY skip guard.
+#
+# ACCEPTED RISK — this gate can be silently absent. It only runs when
+# core.hooksPath points at .githooks. Two things set that (`make hooks` from the
+# workspace root, and the `prepare` script pnpm runs after install), but neither
+# is guaranteed on a fresh clone that has not yet installed. There is no
+# server-side check that a pushed commit was gated. This is the same silent-skip
+# shape that let the old CI rot unnoticed from 2025-10-03 to 2026-08-16 — the
+# workspace accepts it because a workstation push IS the deploy trigger, not
+# because it is solved. If you clone this repo fresh: run `make hooks` first.
+#
+# Escape hatch (use deliberately, it pushes untested code):
+#   SKIP_TESTS=1 git push
+set -e
+
+if [ "${SKIP_TESTS:-0}" = "1" ]; then
+  echo "⚠ pre-push: gate SKIPPED explicitly (SKIP_TESTS=1)"
+  exit 0
+fi
+
+# Branch/tag deletions push no content — nothing to test. stdin gives one line
+# per ref: "<local_ref> <local_sha> <remote_ref> <remote_sha>"; an all-zero
+# local_sha means "delete this remote ref".
+has_content=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  case "$local_sha" in
+    '' | *[!0]*) has_content=1 ;;
+  esac
+done
+if [ "$has_content" = "0" ]; then
+  echo "▶ pre-push: deletion-only push, no tests to run"
+  exit 0
+fi
+
+# TS commands need the ts-dev toolbox (the host lacks native build tools), but
+# must run bare when the hook itself is already executing inside a container.
+if [ -f /run/.containerenv ] || [ -f /.dockerenv ]; then
+  run() { CI=true "$@"; }
+elif command -v toolbox >/dev/null 2>&1; then
+  run() { toolbox run -c ts-dev env CI=true "$@"; }
+else
+  echo "✖ pre-push: no ts-dev toolbox and not inside a container — cannot run the gate."
+  echo "  Install the toolbox, or bypass once with: SKIP_TESTS=1 git push"
+  exit 1
+fi
+
+echo "▶ pre-push: lint"
+run pnpm lint
+
+echo "▶ pre-push: typecheck"
+run pnpm typecheck
+
+echo "▶ pre-push: unit tests"
+run pnpm test:unit
+
+echo "▶ pre-push: content validation"
+run pnpm content:validate
+
+echo "▶ pre-push: production build"
+run pnpm build
+
+echo "✅ pre-push: all gates passed"

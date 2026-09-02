@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: ghcr.io/sprqvntrs/postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      PGDATA: /data/postgres
+    volumes:
+      - pg-data:/data/postgres
+
+volumes:
+  pg-data:
+    driver: local

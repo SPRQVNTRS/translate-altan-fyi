@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Lint gate on every commit.
+#
+# Installed by the `prepare` script (`git config core.hooksPath .githooks`),
+# which pnpm runs automatically after `pnpm install` — no separate setup step
+# and no husky dependency.
+#
+# oxlint runs on the staged files only, so the hook stays fast enough to be
+# invisible. The full-tree run lives in the pre-push gate (.githooks/pre-push).
+#
+# Escape hatch: `git commit --no-verify` (pre-push lints the whole tree anyway).
+
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs')
+
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+echo "→ oxlint (anti-slop + correctness) on staged files"
+# shellcheck disable=SC2086
+if ! pnpm exec oxlint --max-warnings 0 $staged; then
+  echo
+  echo "✖ Lint failed. Fix the findings above — do not downgrade a rule."
+  echo "  Auto-fixable subset: pnpm lint:fix"
+  echo "  Rule rationale:      AGENTS.md § Linting"
+  exit 1
+fi

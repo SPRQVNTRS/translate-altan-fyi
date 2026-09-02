@@ -1,0 +1,29 @@
+{
+  "include": ["**/*", "**/.server/**/*", "**/.client/**/*", ".react-router/types/**/*"],
+  "exclude": ["node_modules", "dist", "build", ".server/build", ".client/build", "variants", "tools/oxlint/anti-slop"],
+  "compilerOptions": {
+    // ES2023 for the non-mutating array methods (toSorted/toReversed/with) that
+    // `unicorn/no-array-sort` requires. Available on Node >=22 (see `engines`)
+    // and in every browser Vite targets.
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "types": ["node", "vite/client"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "rootDirs": [".", "./.react-router/types"],
+    "paths": {
+      "#app/*": ["./app/*"],
+      "#build/*": ["./build/*"],
+      "#config": ["./app/config/index.ts"],
+      "#drizzle/*": ["./drizzle/*"],
+      "#types/*": ["./types/*"]
+    },
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true
+  }
+}

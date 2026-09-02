@@ -1,0 +1,139 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error",
+    "pedantic": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "plugins": [
+    "typescript",
+    "react",
+    "import",
+    "promise",
+    "node",
+    "unicorn",
+    "oxc",
+    "jsx-a11y"
+  ],
+  "ignorePatterns": [
+    ".claude/**",
+    ".tracker/**",
+    ".adr/**",
+    ".react-router/**",
+    "build/**",
+    "drizzle/migrations/**",
+    "tools/oxlint/anti-slop/**",
+    "variants/self-hosted/**",
+    "variants/supabase/**"
+  ],
+  "jsPlugins": [
+    {
+      "name": "anti-slop",
+      "specifier": "./tools/oxlint/anti-slop/index.ts"
+    }
+  ],
+  "rules": {
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-runtime-typeof": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-returns": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "react/react-in-jsx-scope": "off",
+    "unicorn/no-instanceof-builtins": "off",
+    "import/no-named-as-default-member": "off",
+    "import/no-unassigned-import": "off",
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-underscore-dangle": "off",
+    "jsx-a11y/control-has-associated-label": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/app/**/*.ts",
+        "**/app/**/*.tsx",
+        "**/cli/**/*.ts",
+        "**/drizzle/**/*.ts",
+        "**/init.ts",
+        "**/server.ts",
+        "**/worker.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@supabase/supabase-js",
+                  "@supabase/supabase-js/*"
+                ],
+                "message": "Supabase imports are only allowed in variants/supabase/**. Use a variant-agnostic abstraction instead."
+              },
+              {
+                "group": [
+                  "@supabase/ssr",
+                  "@supabase/ssr/*"
+                ],
+                "message": "Supabase SSR imports are only allowed in variants/supabase/**. Use a variant-agnostic abstraction instead."
+              },
+              {
+                "group": [
+                  "remix-auth",
+                  "remix-auth/*"
+                ],
+                "message": "remix-auth imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
+              },
+              {
+                "group": [
+                  "remix-auth-form",
+                  "remix-auth-form/*"
+                ],
+                "message": "remix-auth-form imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
+              },
+              {
+                "group": [
+                  "bcryptjs",
+                  "bcryptjs/*"
+                ],
+                "message": "bcryptjs imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/variants/single-tenant/**/*.ts",
+        "**/variants/single-tenant/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "#drizzle/tenant",
+                "message": "#drizzle/tenant is the multi-tenant context wrapper and must not be used in the single-tenant variant."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
