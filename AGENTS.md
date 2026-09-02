@@ -125,6 +125,54 @@ The boundary helpers that exist so you rarely need an assertion:
 | Tenant-safe DB | [.claude/skills/tenant-safe-db/SKILL.md](.claude/skills/tenant-safe-db/SKILL.md) |
 | Architecture Decisions | [.adr/README.md](.adr/README.md) |
 
+## Accounts and the encrypted personal layer
+
+Two things about this app surprise people, so read them before touching anything
+under `app/lib/e2ee/`, `app/routes/sync.*` or `app/routes/api.v1.auth.*`.
+
+**1. The app is anonymous by default, and an account is an opt-in.** Search,
+lists and history all work with no account, stored on the device. There is no
+signup prompt anywhere a first-time visitor lands, and there must not be one.
+The single entry point to an account is a card on `/settings` offering to sync
+to another device. Nothing on the search, lists, history or entry path may
+require an account.
+
+**2. There is no email, no password and no reset link.** Accounts are identified
+by a `handle`, a short opaque name the CLIENT generates. Authentication is a
+passphrase, from which the browser derives an Argon2id key and then two separate
+HKDF branches: one becomes the key-encryption key that wraps the data key, the
+other becomes an auth hash. The server stores only `HMAC(pepper, authHash)` and
+never sees the passphrase, the KEK or the data key. Recovery is a recovery code,
+which is a SECOND authenticator, not a mailed link. A mailed link was removed
+upstream on purpose: it restored a login to data that stays sealed anyway, so it
+bought no recovery and opened an account-takeover path.
+
+Consequences you cannot design around:
+
+- **Nobody can let a user back in.** If the passphrase and the recovery code are
+  both lost, that account's synced data is gone. Say so plainly in copy at the
+  moment it matters. Do not soften it and do not imply support can help.
+- **The passphrase, the recovery code, the KEK and the DEK exist only in the
+  browser.** They must never reach a loader, an action, a form post, a URL, a
+  cookie or a log line. Client code derives, then posts the derived hash.
+- **The pre-login KDF endpoint always answers 200**, with a deterministic dummy
+  descriptor for an unknown handle. Making it 404 would turn it into an
+  account-enumeration oracle. Never branch its response on whether the account
+  exists.
+- **The domain-separation labels still say `openplate-sync`.** That is correct
+  and deliberate. They are the wire contract, and renaming them would re-key
+  every account.
+
+The code is COPIED from `openplate-sync` and `openplate` rather than shared, and
+every file names its source path and commit in a header. Fixes go upstream
+first, then here. See [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md)
+for why, and what that costs. `PROTOCOL.md` at the repo root is the normative
+specification; the TypeScript is its transcription, not the other way round.
+
+`users` and the organization tables survive for the API-key and org surface
+only. Authentication lives on `accounts`, and superadmin is
+`accounts.is_superadmin`.
+
 ## Architecture Decision Records (ADRs)
 
 Significant decisions — anything that constrains future work, locks in a trade-off, or would surprise a new contributor — are recorded as ADRs in [`.adr/`](.adr/). Read them before proposing a change that touches the same area; if you're making a new big-call decision, write a new ADR in the same conversation.
@@ -147,6 +195,7 @@ Significant decisions — anything that constrains future work, locks in a trade
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint | Accepted |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
+| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
 
 ## Coding Style Summary
 

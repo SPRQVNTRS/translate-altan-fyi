@@ -59,9 +59,11 @@
   },
   "account": {
     "metaTitle": "Account",
-    "metaDescription": "Details about your account and connected devices.",
-    "title": "Account details",
-    "body": "Account sign-in is not built yet. When it is ready, this screen will show your profile and the devices linked to your saved words."
+    "metaDescription": "View your account status and sync handle.",
+    "title": "Account",
+    "signedOutBody": "Your searches, lists, and history stay on this device without an account. If you want to sync your data to a second device, you can set that up in Settings.",
+    "signedInBody": "You use this handle to sign in on another device. Nothing else is stored here, because your data is encrypted and the server cannot read it.",
+    "handleLabel": "Sync handle"
   },
   "offline": {
     "metaTitle": "Offline",
@@ -125,5 +127,57 @@
     "generatedTitle": "Generated content",
     "generatedBody": "An AI language model writes the explanations and example sentences marked as generated content. No person reviews this text before publication. No upstream licence applies to them.",
     "empty": "No sources imported yet."
+  },
+  "sync": {
+    "settingsCardTitle": "Sync to another device",
+    "settingsCardBody": "You can access your vocabulary lists on a second device. Sync is optional and remains turned off until you set it up.",
+    "settingsCardAction": "Set up sync",
+    "setupMetaTitle": "Set up sync",
+    "setupMetaDescription": "Set up encrypted sync to study your vocabulary lists on another device.",
+    "introTitle": "How sync works",
+    "introBody": "Your device encrypts your lists before sending them, which turns them into scrambled data our servers cannot read. There is no email address connected to your account, so nobody can reset your access. If you lose your keys, your synced data is gone for good.",
+    "passphraseLabel": "Passphrase",
+    "passphraseHint": "Choose several memorable words, which stay on your device and are never sent to our servers.",
+    "passphraseConfirmLabel": "Repeat passphrase",
+    "passphraseMismatch": "Passphrases do not match.",
+    "passphraseTooWeak": "Passphrase is too short or too common.",
+    "continueAction": "Continue",
+    "handleTitle": "Your handle",
+    "handleBody": "This generated name is your handle, not an email address. Save it now, because you will need it to sign in on your second device.",
+    "handleCopyAction": "Copy handle",
+    "handleCopied": "Handle copied",
+    "recoveryTitle": "Your recovery code",
+    "recoveryBody": "This code restores your sync access if you forget your passphrase. The app displays it once and never shows it again. Write it down and store it in a safe place.",
+    "recoveryCopyAction": "Copy code",
+    "recoveryContinueAction": "I saved it",
+    "confirmTitle": "Confirm your code",
+    "confirmBody": "Type your recovery code here to confirm you have a working copy. A code that was only viewed is easy to lose.",
+    "confirmLabel": "Recovery code",
+    "confirmMismatch": "The code you entered does not match.",
+    "confirmFinishAction": "Finish setup",
+    "doneTitle": "Sync is on",
+    "doneBody": "Your lists will now sync across your devices. Open the app on your second device and sign in with your handle and passphrase.",
+    "loginMetaTitle": "Sign in to sync",
+    "loginTitle": "Sign in to sync",
+    "loginBody": "Enter the handle and passphrase you created on your first device.",
+    "loginHandleLabel": "Handle",
+    "loginPassphraseLabel": "Passphrase",
+    "loginSubmitAction": "Sign in",
+    "loginFailed": "Incorrect handle or passphrase.",
+    "signOutTitle": "Turn off sync",
+    "signOutBody": "Your lists will remain on this device, but new edits will stop syncing to other devices.",
+    "signOutAction": "Turn off sync",
+    "workingLabel": "Encrypting, please wait",
+    "genericError": "Something went wrong. Please try again.",
+    "passphrase": {
+      "strength": {
+        "weak": "Weak",
+        "fair": "Fair",
+        "strong": "Strong"
+      }
+    },
+    "setup": {
+      "passphraseTooShort": "Your passphrase is too short, so enter at least {{min}} characters."
+    }
   }
 }

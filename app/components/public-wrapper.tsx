@@ -98,14 +98,13 @@ export default function PublicWrapper({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            <Link
-              to="/login"
-              className="inline-flex items-center rounded-md border border-input px-3 py-1.5 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
-            >
-              Login
-            </Link>
-          )}
+          ) : null}
+          {/* NO SIGN-IN LINK, AND NOTHING BELONGS IN ITS PLACE. This wrapper is
+              the chrome for `/terms`, `/privacy` and the 404 page, and this
+              product has no general "log in" concept for a visitor: an account
+              is an opt-in for syncing to a second device, offered once, on
+              `/settings`. The link that used to sit here pointed at the deleted
+              bcrypt form, and there is nothing correct to repoint it at. */}
           <ThemeToggle />
         </div>
       </header>

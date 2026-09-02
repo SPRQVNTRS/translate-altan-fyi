@@ -58,10 +58,12 @@
     "languageFieldLabel": "App-Sprache"
   },
   "account": {
-    "metaTitle": "Konto",
-    "metaDescription": "Details zu deinem Konto und verknüpften Geräten.",
-    "title": "Kontodetails",
-    "body": "Die Anmeldung ist noch in Arbeit. Sobald sie fertig ist, siehst du hier dein Profil und die Geräte, die mit deinen gespeicherten Wörtern verknüpft sind."
+    "metaTitle": "Account",
+    "metaDescription": "Sieh dir deinen Account-Status und Sync-Handle an.",
+    "title": "Account",
+    "signedOutBody": "Deine Suchanfragen, Listen und dein Verlauf bleiben ohne Account auf diesem Gerät. Wenn du deine Daten mit einem zweiten Gerät synchronisieren möchtest, kannst du das in den Einstellungen einrichten.",
+    "signedInBody": "Du verwendest diesen Handle, um dich auf einem anderen Gerät anzumelden. Mehr wird hier nicht gespeichert, da deine Daten verschlüsselt sind und der Server sie nicht lesen kann.",
+    "handleLabel": "Sync-Handle"
   },
   "offline": {
     "metaTitle": "Offline",
@@ -125,5 +127,57 @@
     "generatedTitle": "Generierte Inhalte",
     "generatedBody": "Ein KI-Sprachmodell verfasst die als generierter Inhalt gekennzeichneten Erklärungen und Beispielsätze. Vor der Veröffentlichung werden diese Texte von keiner Person überprüft. Für sie gilt keine vorgelagerte Lizenz.",
     "empty": "Noch keine Quellen importiert."
+  },
+  "sync": {
+    "settingsCardTitle": "Mit anderem Gerät synchronisieren",
+    "settingsCardBody": "Du kannst auf deine Vokabellisten auf einem zweiten Gerät zugreifen. Die Synchronisierung ist optional und bleibt deaktiviert, bis du sie einrichtest.",
+    "settingsCardAction": "Synchronisierung einrichten",
+    "setupMetaTitle": "Synchronisierung einrichten",
+    "setupMetaDescription": "Richte die verschlüsselte Synchronisierung ein, um deine Vokabellisten auf einem anderen Gerät zu lernen.",
+    "introTitle": "So funktioniert die Synchronisierung",
+    "introBody": "Dein Gerät verschlüsselt deine Listen vor dem Senden, sodass unsere Server sie nicht lesen können. Es ist keine E-Mail-Adresse mit deinem Konto verknüpft, daher kann niemand deinen Zugang zurücksetzen. Wenn du deine Schlüssel verlierst, sind deine synchronisierten Daten unwiderruflich verloren.",
+    "passphraseLabel": "Passphrase",
+    "passphraseHint": "Wähle mehrere einprägsame Wörter, die auf deinem Gerät bleiben und nie an unsere Server gesendet werden.",
+    "passphraseConfirmLabel": "Passphrase wiederholen",
+    "passphraseMismatch": "Die Passphrasen stimmen nicht überein.",
+    "passphraseTooWeak": "Die Passphrase ist zu kurz oder zu gebräuchlich.",
+    "continueAction": "Weiter",
+    "handleTitle": "Dein Handle",
+    "handleBody": "Dieser generierte Name ist dein Handle, keine E-Mail-Adresse. Speichere ihn jetzt, denn du brauchst ihn für die Anmeldung auf deinem zweiten Gerät.",
+    "handleCopyAction": "Handle kopieren",
+    "handleCopied": "Handle kopiert",
+    "recoveryTitle": "Dein Wiederherstellungscode",
+    "recoveryBody": "Dieser Code stellt deinen Synchronisierungszugang wieder her, falls du deine Passphrase vergisst. Die App zeigt ihn nur einmal an. Schreibe ihn auf und bewahre ihn an einem sicheren Ort auf.",
+    "recoveryCopyAction": "Code kopieren",
+    "recoveryContinueAction": "Ich habe ihn gespeichert",
+    "confirmTitle": "Bestätige deinen Code",
+    "confirmBody": "Gib deinen Wiederherstellungscode hier ein, um zu bestätigen, dass du eine funktionierende Kopie hast. Ein Code, den man nur ansieht, geht leicht verloren.",
+    "confirmLabel": "Wiederherstellungscode",
+    "confirmMismatch": "Der eingegebene Code stimmt nicht überein.",
+    "confirmFinishAction": "Einrichtung abschließen",
+    "doneTitle": "Synchronisierung ist aktiv",
+    "doneBody": "Deine Listen werden jetzt auf deinen Geräten synchronisiert. Öffne die App auf deinem zweiten Gerät und melde dich mit deinem Handle und deiner Passphrase an.",
+    "loginMetaTitle": "Anmelden zum Synchronisieren",
+    "loginTitle": "Anmelden zum Synchronisieren",
+    "loginBody": "Gib das Handle und die Passphrase ein, die du auf deinem ersten Gerät erstellt hast.",
+    "loginHandleLabel": "Handle",
+    "loginPassphraseLabel": "Passphrase",
+    "loginSubmitAction": "Anmelden",
+    "loginFailed": "Ungültiges Handle oder ungültige Passphrase.",
+    "signOutTitle": "Synchronisierung deaktivieren",
+    "signOutBody": "Deine Listen bleiben auf diesem Gerät, aber neue Änderungen werden nicht mehr mit anderen Geräten synchronisiert.",
+    "signOutAction": "Synchronisierung deaktivieren",
+    "workingLabel": "Verschlüsselung läuft, bitte warten",
+    "genericError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "passphrase": {
+      "strength": {
+        "weak": "Schwach",
+        "fair": "Mäßig",
+        "strong": "Stark"
+      }
+    },
+    "setup": {
+      "passphraseTooShort": "Deine Passphrase ist zu kurz. Bitte gib mindestens {{min}} Zeichen ein."
+    }
   }
 }

@@ -40,6 +40,22 @@ export default [
   route('/api/v1/admin/db/describe/:table', 'routes/api.v1.admin.db.describe.$table.ts'),
   route('/api/v1/admin/db/query', 'routes/api.v1.admin.db.query.ts'),
 
+  // =============================================================================
+  // Accounts and the encrypted personal layer (M172)
+  // =============================================================================
+  // Resource routes: no default export, no UI. The browser derives its keys
+  // locally and posts only the derived hash, so nothing here ever receives a
+  // passphrase, a recovery code or a data key.
+  route('/api/v1/auth/kdf', 'routes/api.v1.auth.kdf.ts'),
+  route('/api/v1/auth/signup', 'routes/api.v1.auth.signup.ts'),
+  route('/api/v1/auth/login', 'routes/api.v1.auth.login.ts'),
+  route('/api/v1/auth/refresh', 'routes/api.v1.auth.refresh.ts'),
+  route('/api/v1/auth/logout', 'routes/api.v1.auth.logout.ts'),
+  route('/api/v1/auth/recover', 'routes/api.v1.auth.recover.ts'),
+  route('/api/v1/auth/recover-rotate', 'routes/api.v1.auth.recover-rotate.ts'),
+  route('/api/v1/auth/account', 'routes/api.v1.auth.account.ts'),
+  route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
+
   // Public and read only, unlike the bearer-token `/api/v1/*` routes above.
   route('/api/enrichment/:headwordId', 'routes/api.enrichment.$headwordId.ts'),
 
@@ -66,6 +82,13 @@ export default [
     route('/lists', 'routes/lists.tsx'),
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),
+    // Sync lives inside the app shell, not in `_public`, because it is a
+    // setting of an app the visitor is already using and not a gateway into
+    // it. There is no account in this product until somebody asks for a
+    // second device, so `/settings` is the only entry point either of these
+    // screens has.
+    route('/sync/setup', 'routes/sync.setup.tsx'),
+    route('/sync/login', 'routes/sync.login.tsx'),
     route('/account', 'routes/account.tsx'),
     // Inside `_app` so the offline fallback carries the same chrome as the
     // other shell routes the service worker precaches. It has no loader and no
@@ -74,10 +97,7 @@ export default [
   ]),
 
   layout('routes/_public.tsx', { id: '_public' }, [
-    route('/login', 'routes/login.tsx'),
     route('/logout', 'routes/logout.tsx'),
-    route('/register', 'routes/register.tsx'),
-    route('/forgot-password', 'routes/forgot-password.tsx'),
     route('/terms', 'routes/legal/terms.tsx'),
     route('/privacy', 'routes/legal/privacy.tsx'),
 

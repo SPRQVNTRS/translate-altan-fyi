@@ -110,6 +110,42 @@ tsx node_modules/drizzle-kit/bin.cjs push
 
 This is required because Node.js doesn't strip TypeScript inside `node_modules` (see [`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`](https://nodejs.org/api/typescript.html)). Since the schema imports from internal TS-only packages (e.g. `@sprqvntrs/workflows/schema`), `tsx` handles those during introspection.
 
+## Accounts and the encrypted personal layer
+
+The app is **anonymous by default**. Search, vocabulary lists and history all
+work with no account, stored on the device. There is no signup prompt, and
+nothing on those paths requires an account.
+
+An account exists for exactly one reason: syncing to a second device. It is
+offered in one place, a card on `/settings`.
+
+When a user opts in, their personal data is **end to end encrypted**:
+
+- The browser derives an Argon2id key from a passphrase, then splits it into two
+  independent HKDF branches. One is the key-encryption key that wraps the data
+  key. The other is an auth hash.
+- The server stores only `HMAC(pepper, authHash)`, with the pepper held outside
+  the database in `SERVER_SECRET`. It never sees the passphrase, the
+  key-encryption key or the data key, so it cannot decrypt anything. That is a
+  property of the construction, not a policy.
+- Accounts are identified by an opaque **handle**, not an email address. The
+  service stores no email, so there is no verification mail and no reset link.
+- Recovery is a **recovery code**, which is a second authenticator that wraps the
+  same data key under its own key. It is shown once and must be retyped before
+  setup completes, because a code you were shown and never typed is a code you
+  do not have.
+
+**Nobody can restore access.** If the passphrase and the recovery code are both
+lost, that account's synced data is unrecoverable. There is no operator override,
+because there is no key to override with.
+
+The protocol is specified in [`PROTOCOL.md`](PROTOCOL.md) and the implementation
+is copied from `openplate-sync` rather than shared, for the reasons in
+[ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
+
+Set `SERVER_SECRET` in every deployed environment. See `.env.example` for what it
+is, what it is not, and why rotating it is a breaking change.
+
 ## Multi-tenancy
 
 The app supports multi-tenant deployments with organization-based isolation enforced in **application code** via a typed query wrapper (`tenantDb(ctx)` from `#drizzle/tenant-db`). Postgres RLS is **not** used — see [`.adr/0003-app-enforced-multi-tenancy.md`](.adr/0003-app-enforced-multi-tenancy.md) for the rationale.
@@ -119,7 +155,7 @@ The app supports multi-tenant deployments with organization-based isolation enfo
 - **Wrapper-enforced isolation:** every read/write against a tenant-scoped table goes through `tenantDb(ctx)`, which auto-injects `organization_id` on inserts and ANDs it into the WHERE clause on selects/updates/deletes.
 - **Path-based routing:** organization context comes from the `/org/:orgSlug/*` URL pattern via `tenantMiddleware` and `getTenant(context)`.
 - **Flexible membership:** users can belong to multiple organizations with different roles.
-- **Superadmin access:** platform administrators access all organizations via dedicated `/super/*` routes that use `getRawDb()`; API-key superadmin keys bypass `assertOrgAccess`.
+- **Superadmin access:** platform administrators access all organizations via dedicated `/super/*` routes that use `getRawDb()`; API-key superadmin keys bypass `assertOrgAccess`. The flag itself lives on `accounts.is_superadmin` and is granted with `pnpm cli account grant-superadmin <handle>`.
 
 See [`.claude/skills/tenant-safe-db/SKILL.md`](.claude/skills/tenant-safe-db/SKILL.md) for full patterns and migration notes.
 
@@ -152,6 +188,7 @@ Significant choices are recorded as ADRs in [`.adr/`](.adr/). Read them before c
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 |
+| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared |
 
 ## Tests
 
@@ -163,7 +200,7 @@ pnpm test:integration     # node --test against the live dev server
 
 The integration suite (`tests/integration/`) spawns CLI subcommands against a running server and asserts the responses. Each test skips gracefully when `TEST_API_KEY` is not set, so the suite is safe to run in environments without seeded credentials.
 
-For commands that require a superadmin key (`user list`, `db check`), `TEST_API_KEY` must reference a key whose `createdBy` points to a user with `isSuperadmin: true`.
+For commands that require a superadmin key (`user list`, `db check`), `TEST_API_KEY` must reference a key created by a superadmin. Superadmin is `accounts.is_superadmin`, granted with `pnpm cli account grant-superadmin <handle>`.
 
 ## Building for production
 

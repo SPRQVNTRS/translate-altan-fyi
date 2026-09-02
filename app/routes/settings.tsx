@@ -1,7 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
+import type { Route } from './+types/settings';
 import { LanguageToggle } from '#app/components/language-toggle';
+import { SyncSettingsCards } from '#app/components/sync/sync-settings-cards';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
+import { getAccountSession } from '#app/services/account-session.server';
 
 export const meta: MetaFunction = ({ matches }) => {
   const language = metaLanguage(matches);
@@ -11,7 +14,19 @@ export const meta: MetaFunction = ({ matches }) => {
   ];
 };
 
-export default function SettingsRoute() {
+/**
+ * Whether this browser holds a sync session, and nothing else about it.
+ *
+ * The handle is deliberately not returned: the settings screen has no copy
+ * that names it, and a value that is not rendered is a value that cannot leak
+ * into a screenshot or a bug report.
+ */
+export async function loader({ request }: Route.LoaderArgs) {
+  const account = await getAccountSession(request);
+  return { isSignedIn: account !== null };
+}
+
+export default function SettingsRoute({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
 
   return (
@@ -30,6 +45,7 @@ export default function SettingsRoute() {
           <LanguageToggle />
         </div>
       </div>
+      <SyncSettingsCards isSignedIn={loaderData.isSignedIn} />
     </div>
   );
 }

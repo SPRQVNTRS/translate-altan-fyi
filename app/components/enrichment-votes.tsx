@@ -178,10 +178,19 @@ export function EnrichmentVotes(props: EnrichmentVotesProps): ReactNode {
       {/* THE WHOLE SENTENCE IS THE LINK, and that is not a style choice. A
           separate "Sign in" label would be a word this component invented, and
           `app/locales` has no key for one. Linking the sentence keeps the prompt
-          translated and still gives the reader the way in. */}
+          translated and still gives the reader the way in.
+
+          THE ONE SIGN-IN LINK ON A CONTENT SURFACE, and it is allowed here for
+          a reason that applies nowhere else. Search, lists, history and entry
+          all work anonymously and must never prompt for an account. Voting
+          cannot: a vote has to be attributable to one reader or the tally is
+          ballot stuffing, and the re-enrichment decision downstream spends
+          money on that number. So this affordance is legitimate, and it stays
+          exactly this quiet. Do not add a second prompt anywhere on this page
+          and do not make this one more prominent. */}
       {messageKey !== null && isSignInPrompt && (
         <p className="mt-2 text-xs">
-          <Link to="/login" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <Link to="/sync/login" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
             {t(messageKey)}
           </Link>
         </p>

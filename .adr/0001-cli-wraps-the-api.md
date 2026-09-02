@@ -34,6 +34,31 @@ Concretely:
 
 Everything else goes through HTTP. Adding to this list requires a new ADR amendment.
 
+## Amendment, 2026-09-02: `account grant-superadmin`
+
+`pnpm cli account grant-superadmin <handle>` talks to Postgres directly. It is
+added to the bootstrap exception list above, beside `user create` and
+`api-key create`.
+
+The reason is the one that defines the whole "bootstrap-only" category: this
+command grants the flag that decides who may reach an administrative surface at
+all. Routing it through the API would require an authenticated superadmin call
+to create the first superadmin, which never bootstraps. It is the same circle
+`api-key create` breaks, in the same way.
+
+It is deliberately narrow. It sets `accounts.is_superadmin = true` for one
+already-existing handle and does nothing else. It cannot create an account,
+cannot set a passphrase and cannot revoke, so it is not a back door into the
+encrypted personal layer. There is nothing for it to be a back door into: the
+server holds no key that unwraps a data key, so a superadmin flag grants
+administrative reach over the shared dictionary and over nobody's vocabulary
+lists.
+
+The handle is normalized (NFKC, trim, lowercase) through the same
+`normalizeHandle` the account store uses, so the operator cannot miss an account
+by typing a different spelling of its handle, and an unknown handle is a loud
+error rather than a silent no-op.
+
 ## Amendment, 2026-09-02: the open-data importers, and their verification counterpart
 
 `pnpm cli import wikidata-lexemes`, `import panlex` and `import tatoeba` talk to
