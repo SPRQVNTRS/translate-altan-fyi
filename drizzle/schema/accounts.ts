@@ -4,10 +4,10 @@
  * then here. Do not let the two drift.
  */
 /**
- * The end-to-end-encrypted personal layer's three tables: `accounts`,
- * `account_tokens` and `sync_key_records`.
+ * The end-to-end-encrypted personal layer's four tables: `accounts`,
+ * `account_tokens`, `sync_blobs` and `sync_key_records`.
  *
- * ALL THREE ARE GLOBAL, NOT TENANT-SCOPED. None of them carries an
+ * ALL FOUR ARE GLOBAL, NOT TENANT-SCOPED. None of them carries an
  * `organizationId`, none of them belongs in `TENANT_TABLES` in
  * `drizzle/tenant-db.ts`, and every read or write goes through `getRawDb()`.
  * An account is a person's own identity on this installation; it is not a row
@@ -194,6 +194,51 @@ export type InsertAccountToken = InferInsertModel<typeof accountTokens>;
 export type SelectAccountToken = InferSelectModel<typeof accountTokens>;
 
 // =============================================================================
+// Sync blobs
+// =============================================================================
+
+export const syncBlobs = pgTable(
+  'sync_blobs',
+  {
+    id: serial('id').primaryKey(),
+    /**
+     * `onDelete: 'cascade'` is the self-serve DSAR mechanism: deleting an
+     * account removes every blob it ever pushed in the same statement, with
+     * no cleanup job to forget to run and no window where orphaned ciphertext
+     * survives its owner. This closed the M118 privacy blocker.
+     */
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /**
+     * Monotonic per-account version — the CAS token (PROTOCOL.md §5.1). A
+     * push is accepted only when its `baseVersion` equals the current max;
+     * a stale push is a `409`, never a blind overwrite that would silently
+     * discard another device's unsynced changes.
+     */
+    blobVersion: integer('blob_version').notNull(),
+    /** The envelope's wire-format version (`ENVELOPE_VERSION`), independent of the payload's own schema version. */
+    envelopeVersion: integer('envelope_version').notNull(),
+    /** Opaque ciphertext: `iv ‖ AES-256-GCM(...)` as one packed blob. The service never parses it and holds no key for it. */
+    ciphertext: bytea('ciphertext').notNull(),
+    /** Redundant with `ciphertext`'s length, but avoids reading a 2 MiB blob just to report storage usage. */
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The CAS guarantee itself: two concurrent pushes off the same
+    // `baseVersion` can both pass the read, but only one INSERT of the same
+    // (account, version) pair can survive. Retention (N=5) is enforced by the
+    // adapter's prune step — Postgres has no native "keep last N rows" rule.
+    uniqueIndex('sync_blobs_account_version_idx').on(table.accountId, table.blobVersion),
+    index('sync_blobs_account_idx').on(table.accountId),
+  ],
+);
+
+export type InsertSyncBlob = InferInsertModel<typeof syncBlobs>;
+export type SelectSyncBlob = InferSelectModel<typeof syncBlobs>;
+
+// =============================================================================
 // Sync key records
 // =============================================================================
 
@@ -251,7 +296,12 @@ export type SelectSyncKeyRecord = InferSelectModel<typeof syncKeyRecords>;
 
 export const accountsRelations = relations(accounts, ({ many }) => ({
   tokens: many(accountTokens),
+  blobs: many(syncBlobs),
   keyRecords: many(syncKeyRecords),
+}));
+
+export const syncBlobsRelations = relations(syncBlobs, ({ one }) => ({
+  account: one(accounts, { fields: [syncBlobs.accountId], references: [accounts.id] }),
 }));
 
 export const accountTokensRelations = relations(accountTokens, ({ one }) => ({

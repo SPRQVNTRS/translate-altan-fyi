@@ -60,7 +60,7 @@ import {
 } from '../../app/lib/e2ee/auth-handlers';
 import { handlePutKeyRecord } from '../../app/lib/e2ee/key-records-handler';
 import { createDrizzleAccountStore } from '../../app/lib/e2ee/drizzle-account-store.server';
-import { createDrizzleKeyRecordStore } from '../../app/services/e2ee-key-record-store.server';
+import { createDrizzleStorageAdapter } from '../../app/services/e2ee-storage-adapter.server';
 import { deriveServerSecrets } from '../../app/lib/e2ee/server-secrets';
 import { generateFamilyId, generateToken, hashToken } from '../../app/lib/e2ee/tokens';
 import { computeVerifier } from '../../app/lib/e2ee/verifier';
@@ -186,7 +186,7 @@ after(async () => {
   await pool.end();
 
   // AND THE APP'S OWN POOL, which this file never asked for.
-  // `drizzle-account-store.server.ts` and `e2ee-key-record-store.server.ts` both
+  // `drizzle-account-store.server.ts` and `e2ee-storage-adapter.server.ts` both
   // import `#drizzle/tenant-db`, which opens a connection pool AT MODULE LOAD.
   // Every store under test is constructed with the local `db` above, so that
   // pool is never queried — but it is open, and an open pool is a live handle.
@@ -339,7 +339,7 @@ describe('e2ee accounts, against a real database', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const account = await signUp('recover');
-      const store = createDrizzleKeyRecordStore(db);
+      const store = createDrizzleStorageAdapter(db);
 
       // The account starts with a `passphrase` record wrapping its DEK.
       const seeded = await handlePutKeyRecord(
@@ -442,7 +442,7 @@ describe('e2ee accounts, against a real database', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const account = await signUp('kinds');
-      const store = createDrizzleKeyRecordStore(db);
+      const store = createDrizzleStorageAdapter(db);
       const dek = new Uint8Array(Buffer.from(wrappedDek(), 'base64'));
 
       const passphraseWithout = await handlePutKeyRecord(
@@ -482,7 +482,7 @@ describe('e2ee accounts, against a real database', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const account = await signUp('cas');
-      const store = createDrizzleKeyRecordStore(db);
+      const store = createDrizzleStorageAdapter(db);
 
       const created = await handlePutKeyRecord(
         {

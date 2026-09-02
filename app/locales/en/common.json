@@ -63,7 +63,10 @@
     "title": "Account",
     "signedOutBody": "Your searches, lists, and history stay on this device without an account. If you want to sync your data to a second device, you can set that up in Settings.",
     "signedInBody": "You use this handle to sign in on another device. Nothing else is stored here, because your data is encrypted and the server cannot read it.",
-    "handleLabel": "Sync handle"
+    "handleLabel": "Sync handle",
+    "vaultSizeLabel": "Encrypted server data size",
+    "vaultSizeEmpty": "No data synced yet.",
+    "vaultSizeHint": "The server stores these encrypted bytes and cannot read them, so it can only report their size."
   },
   "offline": {
     "metaTitle": "Offline",

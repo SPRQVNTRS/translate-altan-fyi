@@ -63,7 +63,10 @@
     "title": "Account",
     "signedOutBody": "Deine Suchanfragen, Listen und dein Verlauf bleiben ohne Account auf diesem Gerät. Wenn du deine Daten mit einem zweiten Gerät synchronisieren möchtest, kannst du das in den Einstellungen einrichten.",
     "signedInBody": "Du verwendest diesen Handle, um dich auf einem anderen Gerät anzumelden. Mehr wird hier nicht gespeichert, da deine Daten verschlüsselt sind und der Server sie nicht lesen kann.",
-    "handleLabel": "Sync-Handle"
+    "handleLabel": "Sync-Handle",
+    "vaultSizeLabel": "Größe der verschlüsselten Serverdaten",
+    "vaultSizeEmpty": "Noch keine Daten synchronisiert.",
+    "vaultSizeHint": "Der Server speichert diese verschlüsselten Bytes und kann sie nicht lesen, weshalb nur deren Größe angegeben werden kann."
   },
   "offline": {
     "metaTitle": "Offline",

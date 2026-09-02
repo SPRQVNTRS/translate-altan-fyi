@@ -54,6 +54,7 @@ export default [
   route('/api/v1/auth/recover', 'routes/api.v1.auth.recover.ts'),
   route('/api/v1/auth/recover-rotate', 'routes/api.v1.auth.recover-rotate.ts'),
   route('/api/v1/auth/account', 'routes/api.v1.auth.account.ts'),
+  route('/api/v1/sync/blob', 'routes/api.v1.sync.blob.ts'),
   route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
 
   // Public and read only, unlike the bearer-token `/api/v1/*` routes above.

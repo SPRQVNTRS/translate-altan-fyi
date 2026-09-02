@@ -42,7 +42,7 @@ import {
 import { asObject, asString, type JsonObject, type JsonValue } from '#app/lib/e2ee/json';
 import { isSyncKeyRecordKind, type SyncKeyRecordKind } from '#app/lib/e2ee/protocol';
 import type { SyncKeyRecord } from '#app/lib/e2ee/contract-types';
-import { createDrizzleKeyRecordStore } from '#app/services/e2ee-key-record-store.server';
+import { createDrizzleStorageAdapter } from '#app/services/e2ee-storage-adapter.server';
 import { getAccountSession } from '#app/services/account-session.server';
 import { errorResponse, jsonResponse, methodNotAllowed, readJsonBody } from '#app/lib/e2ee-http.server';
 
@@ -73,7 +73,7 @@ export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
   const session = await getAccountSession(request);
   if (session === null) return errorResponse(401, NOT_SIGNED_IN);
 
-  const records = await handleListKeyRecords(session.accountId, createDrizzleKeyRecordStore());
+  const records = await handleListKeyRecords(session.accountId, createDrizzleStorageAdapter());
   return jsonResponse({ keyRecords: records.map(toPayload) }, 200);
 }
 
@@ -112,7 +112,7 @@ async function putKeyRecord(request: Request, accountId: number): Promise<Respon
   // route cannot drift from the handler's unit tests.
   const result = await handlePutKeyRecord(
     { accountId, kind, kdfDescriptor: asObject(body.kdfDescriptor), wrappedDek, expectedUpdatedAt },
-    createDrizzleKeyRecordStore(),
+    createDrizzleStorageAdapter(),
   );
 
   if (result.status === 'invalid') return errorResponse(400, result.reason);
@@ -133,7 +133,7 @@ async function deleteKeyRecord(request: Request, accountId: number): Promise<Res
   const kind = kindFrom(request, body.kind);
   if (kind === null) return errorResponse(400, 'kind must be "passphrase" or "recovery"');
 
-  await handleDeleteKeyRecord({ accountId, kind }, createDrizzleKeyRecordStore());
+  await handleDeleteKeyRecord({ accountId, kind }, createDrizzleStorageAdapter());
   return new Response(null, { status: 204 });
 }
 

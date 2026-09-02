@@ -85,6 +85,13 @@
       "when": 1788367431861,
       "tag": "0011_handy_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788371452476,
+      "tag": "0012_conscious_glorian",
+      "breakpoints": true
     }
   ]
 }
