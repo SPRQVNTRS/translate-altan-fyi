@@ -27,6 +27,12 @@ export const workflows = _workflows;
 export const workflowOperations = _workflowOperations;
 export const workflowLocks = _workflowLocks;
 
+// Shared dictionary tables (headwords, senses, translations, ...).
+// Global, NOT tenant-scoped: none of them belongs in TENANT_TABLES.
+// Re-exported here because this file is the single entry point that
+// `drizzle/db.ts` and `drizzle.config.ts` both read.
+export * from './schema/dictionary';
+
 // =============================================================================
 // Organizations (Multi-Tenancy Core)
 // =============================================================================

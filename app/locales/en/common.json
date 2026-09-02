@@ -58,5 +58,10 @@
     "title": "No internet connection",
     "body": "Your device lost its connection, so this page is loading from local storage. Screens you already visited still work. Other screens will load when your connection returns.",
     "retry": "Try again"
+  },
+  "entry": {
+    "unavailable": {
+      "missing": "This entry is not available, but you can search for another word."
+    }
   }
 }

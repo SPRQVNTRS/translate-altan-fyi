@@ -58,5 +58,10 @@
     "title": "Keine Internetverbindung",
     "body": "Dein Gerät hat die Verbindung verloren, daher lädt diese Seite aus dem lokalen Speicher. Bereiche, die du schon besucht hast, funktionieren weiterhin. Alles andere lädt, sobald du wieder online bist.",
     "retry": "Erneut versuchen"
+  },
+  "entry": {
+    "unavailable": {
+      "missing": "Dieser Eintrag ist nicht verfügbar, aber du kannst nach einem anderen Wort suchen."
+    }
   }
 }
