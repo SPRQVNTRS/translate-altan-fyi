@@ -176,6 +176,84 @@ export function providerEntry(id: ProviderId): ProviderEntry {
   return PROVIDERS[id];
 }
 
+// -----------------------------------------------------------------------------
+// WHAT A MODEL COSTS
+// -----------------------------------------------------------------------------
+// WHY THIS TABLE EXISTS AT ALL
+//   @sprqvntrs/llm 3.13.1 keeps its own pricing table and reports a cost on
+//   `lastUsage.cost`. It does not carry the DEFAULT model,
+//   `google/gemini-3.7-flash`, so it returned `cost: null` for every enrichment
+//   this app has ever run, and the `cost_usd` column was uniformly null. A daily
+//   budget cap expressed in currency needs a column with numbers in it.
+//
+// PROVENANCE
+//   USD per MILLION tokens, read from https://openrouter.ai/api/v1/models on
+//   2026-09-02. Nothing refreshes these figures, so treat them as a fallback
+//   estimate, not as billing truth. The registry prefers the library's own
+//   number whenever it has one, for exactly that reason.
+//
+// AN UNPRICED MODEL IS null, NEVER A GUESSED ZERO
+//   `modelPrice` returns null for a model with no row below. Zero would be the
+//   dangerous answer: a budget cap adds costs up, and a model that always costs
+//   nothing can never exhaust a budget, so the cap would stop enforcing without
+//   failing. EVERY model id in `PROVIDERS` above needs a row here, and adding a
+//   model up there without adding one down here is the mistake to avoid.
+// -----------------------------------------------------------------------------
+
+export interface ModelPrice {
+  inputUsdPerMTok: number;
+  outputUsdPerMTok: number;
+}
+
+export const MODEL_PRICES = {
+  // OpenRouter ids, which carry the vendor prefix.
+  'google/gemini-3.7-flash': { inputUsdPerMTok: 0.75, outputUsdPerMTok: 3.75 },
+  'google/gemini-3.5-flash-lite': { inputUsdPerMTok: 0.3, outputUsdPerMTok: 2.5 },
+  'google/gemini-3.1-pro-preview': { inputUsdPerMTok: 2, outputUsdPerMTok: 12 },
+  'openai/gpt-5.6-luna': { inputUsdPerMTok: 0.2, outputUsdPerMTok: 1.2 },
+  'anthropic/claude-sonnet-5': { inputUsdPerMTok: 2, outputUsdPerMTok: 10 },
+  'anthropic/claude-haiku-4.5': { inputUsdPerMTok: 1, outputUsdPerMTok: 5 },
+  // The direct-provider ids for the same models. They get their own rows rather
+  // than a prefix-stripping rule, because the id an operator picks is what the
+  // registry hands us and a rule would silently mis-price the first model whose
+  // two names diverge.
+  'gpt-5.6-luna': { inputUsdPerMTok: 0.2, outputUsdPerMTok: 1.2 },
+  'gpt-5.4-mini': { inputUsdPerMTok: 0.75, outputUsdPerMTok: 4.5 },
+  'claude-sonnet-5': { inputUsdPerMTok: 2, outputUsdPerMTok: 10 },
+  'claude-haiku-4.5': { inputUsdPerMTok: 1, outputUsdPerMTok: 5 },
+} satisfies Record<string, ModelPrice>;
+
+// A Map rather than a direct index into `MODEL_PRICES`. `satisfies` keeps the
+// literal key set, so indexing it with an arbitrary string needs a type
+// assertion, and an assertion here would buy nothing that this Map does not.
+const PRICE_BY_MODEL = new Map<string, ModelPrice>(Object.entries(MODEL_PRICES));
+
+/**
+ * Look a model's price up.
+ *
+ * @param model - the id as the operator selected it, either form.
+ * @returns the price, or null when the model has no row. See the section comment
+ *   above for why null and not zero.
+ */
+export function modelPrice(model: string): ModelPrice | null {
+  return PRICE_BY_MODEL.get(model) ?? null;
+}
+
+/**
+ * What a call costs at a given price, in USD.
+ *
+ * Pure arithmetic and deliberately unrounded: the caller decides how to present
+ * or store it, and rounding here would accumulate an error across the many small
+ * calls a daily budget sums.
+ *
+ * @param price - a row from `MODEL_PRICES`, in USD per million tokens.
+ * @param promptTokens - input tokens, as the provider counted them.
+ * @param completionTokens - output tokens, as the provider counted them.
+ */
+export function estimateCostUsd(price: ModelPrice, promptTokens: number, completionTokens: number): number {
+  return (promptTokens / 1e6) * price.inputUsdPerMTok + (completionTokens / 1e6) * price.outputUsdPerMTok;
+}
+
 /**
  * The model used when the `llm.active` setting is absent or unreadable.
  *

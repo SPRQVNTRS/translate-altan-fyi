@@ -1,8 +1,14 @@
 import type { z } from 'zod';
-import type { LlmProvider, ReasoningEffortLevel } from '@sprqvntrs/llm';
+import type { LlmProvider, LlmTokenUsage, ReasoningEffortLevel } from '@sprqvntrs/llm';
 
 import { createLLMClient } from '#app/lib/llm';
-import { type ActiveModelSelection, type ProviderId, providerEntry } from '#app/lib/llm/catalog';
+import {
+  type ActiveModelSelection,
+  type ProviderId,
+  estimateCostUsd,
+  modelPrice,
+  providerEntry,
+} from '#app/lib/llm/catalog';
 
 // =============================================================================
 // The LLM registry
@@ -30,7 +36,7 @@ export interface LlmCompletionRequest<T extends z.ZodType> {
 
 export interface LlmCompletionResult<TOut> {
   output: TOut;
-  /** Total USD from the client's `lastUsage.cost`, or null when the model is absent from the pricing table. */
+  /** Total USD for the call, or null when neither pricing source could put a number on it. See `resolveCostUsd`. */
   costUsd: number | null;
   latencyMs: number;
   provider: ProviderId;
@@ -86,6 +92,35 @@ function readApiKey(envVar: string): string | null {
 }
 
 /**
+ * Put a USD figure on a completed call, from the two sources we have.
+ *
+ * ORDER OF PREFERENCE, AND WHY IT IS THIS WAY
+ *   1. `usage.cost.total` from @sprqvntrs/llm. That is the provider's own
+ *      accounting for THIS call, so it already accounts for cached input and for
+ *      a price that moved since anyone last looked. Ours is a hand-kept table
+ *      that goes stale silently, so the library wins whenever it has an answer.
+ *   2. Our `MODEL_PRICES` row times the token counts the provider reported. The
+ *      library returns `cost: null` for any model missing from its own pricing
+ *      table, and the DEFAULT model `google/gemini-3.7-flash` is one of them:
+ *      without this step `cost_usd` was null on every row ever written, and a
+ *      budget cap in currency would have had nothing to read.
+ *   3. null, when the call reported no usage at all or the model has no price
+ *      row. Null and not zero, because a zero reads downstream as a free call
+ *      and a cap that sums free calls never triggers.
+ *
+ * @param usage - the client's `lastUsage` for the call just made.
+ * @param model - the configured model id, which is the key into our table.
+ */
+function resolveCostUsd(usage: LlmTokenUsage | null, model: string): number | null {
+  if (usage === null) return null;
+  const reported = usage.cost?.total;
+  if (reported !== undefined) return reported;
+  const price = modelPrice(model);
+  if (price === null) return null;
+  return estimateCostUsd(price, usage.promptTokens, usage.completionTokens);
+}
+
+/**
  * Build the real port for a configured model.
  *
  * `maxAttempts: 1` is deliberate. The caller owns the single retry, so a retry is
@@ -109,7 +144,7 @@ function createRealPort(configured: ConfiguredModel): LlmPort {
         timeout: request.timeoutMs,
         ...(reasoningEffort !== undefined && { reasoningEffort }),
       });
-      return { output, costUsd: client.lastUsage?.cost?.total ?? null };
+      return { output, costUsd: resolveCostUsd(client.lastUsage, configured.model) };
     },
   };
 }

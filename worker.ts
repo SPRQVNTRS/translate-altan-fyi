@@ -24,7 +24,7 @@ import {
 } from '#app/services/workflows.server';
 import { registerScheduledTasks } from '#app/scheduled-tasks';
 import { closePool } from '#drizzle/db';
-import { reportError } from '#app/lib/report-error';
+import { reportError } from '#app/lib/report-error.server';
 
 const { logger } = createWorkerLogger({
   serviceName: 'translate-altan-fyi-worker',

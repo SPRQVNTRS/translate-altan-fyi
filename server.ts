@@ -6,7 +6,7 @@ import { createServerLogger } from '@sprqvntrs/logger/server';
 import { createHttpLogger } from '@sprqvntrs/logger/http';
 import { initializeWorkflows, stopOrchestrator } from '#app/services/workflows.server';
 import { closePool, poolInitialized } from '#drizzle/db';
-import { reportError } from '#app/lib/report-error';
+import { reportError } from '#app/lib/report-error.server';
 import { apiJsonMiddleware } from '#app/lib/api-middleware.server';
 import { CONFIG } from '#app/config';
 
