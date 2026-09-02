@@ -52,10 +52,18 @@ export interface TitleHandle {
  * Written out here rather than imported from React Router so this module stays
  * framework-free and testable with plain objects. `UIMatch` carries both fields
  * as `unknown`, which satisfies this shape.
+ *
+ * THE FIELD IS `loaderData`, AND BOTH FIELDS ARE REQUIRED.
+ *   React Router 8 names a match's loader payload `loaderData`; there is no
+ *   `data` field. An earlier version of this interface asked for an OPTIONAL
+ *   `data`, which type-checked against every match and read `undefined` from
+ *   all of them, so the derived-title branch never ran while the `titleKey`
+ *   branch kept working. Requiring the fields is what makes a wrong name a
+ *   compile error at the `useMatches()` call site instead of a blank title.
  */
 export interface RouteTitleMatch {
-  readonly handle?: unknown;
-  readonly data?: unknown;
+  readonly handle: unknown;
+  readonly loaderData: unknown;
 }
 
 /**
@@ -105,7 +113,7 @@ export function routeTitle(
     if (!handle.success) continue;
 
     if (handle.data.title !== undefined) {
-      const data = LoaderDataSchema.safeParse(match.data);
+      const data = LoaderDataSchema.safeParse(match.loaderData);
       const derived = data.success ? firstNonEmpty(handle.data.title(data.data)) : undefined;
       if (derived !== undefined) return derived;
     }
