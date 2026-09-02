@@ -6,6 +6,7 @@ import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
 import { Label } from '#app/components/ui/label';
 import { signInToSync } from '#app/components/sync/sync-client';
+import { setSyncSession } from '#app/lib/sync/sync-session';
 import { classifySignInFailure } from '#app/lib/e2ee/flows/sign-in-error';
 import { reportError } from '#app/lib/report-error';
 
@@ -42,7 +43,10 @@ export function SyncLoginForm() {
     setError(null);
     setIsWorking(true);
     try {
-      await signInToSync({ handle, passphrase });
+      const session = await signInToSync({ handle, passphrase });
+      // Before the navigation. The DEK lives in memory only, so a route change
+      // that happened first would leave the sync engine with no key.
+      setSyncSession(session);
       await navigate('/settings');
     } catch (cause) {
       const failure = classifySignInFailure(cause);

@@ -33,7 +33,8 @@ import type { PassphraseKdfDescriptor } from '#app/lib/e2ee/client/passphrase-ke
 import { deriveRecoveryAuthHash, generateRecoveryCode } from '#app/lib/e2ee/client/recovery-kek';
 import { setupSyncKeys, type SyncKeySetupRecord, type SyncKeySetupResult } from '#app/lib/e2ee/client/setup-keys';
 import { errorKindForStatus, SyncRequestError } from '#app/lib/e2ee/client/sync-error';
-import { bytesToBase64 } from '#app/lib/e2ee/crypto/base64';
+import { base64ToBytes, bytesToBase64 } from '#app/lib/e2ee/crypto/base64';
+import { unwrapDek } from '#app/lib/e2ee/crypto/dek-wrap';
 import { generateHandle, normalizeHandle } from '#app/lib/e2ee/flows/handle';
 import { classifySignupFailure } from '#app/lib/e2ee/flows/signup-error';
 import { reportError } from '#app/lib/report-error';
@@ -166,11 +167,30 @@ export async function fetchKdfDescriptor(handle: string): Promise<PassphraseKdfD
   return response.kdfDescriptor;
 }
 
-/** What a completed setup hands back to the ceremony: the two things the user must save, and nothing else. */
+/**
+ * What a completed setup hands back to the ceremony: the two things the user
+ * must save, and the session the sync engine then runs under.
+ *
+ * `dek` LEAVES THIS MODULE, and that is the one deliberate widening of the
+ * boundary in this file's header. It goes to `setSyncSession`, which holds it
+ * in a module variable for the lifetime of the page and writes it nowhere. It
+ * must not be logged, stored, serialized or put in a form.
+ */
 export interface CreatedSyncAccount {
   handle: string;
   /** The grouped recovery code, for its one and only display. It is not stored anywhere. */
   recoveryCode: string;
+  /** The account row id, which binds the sync envelope's AAD to this account. Not a secret. */
+  accountId: number;
+  /** The unwrapped data key, straight from the setup run — memory only, never persisted. */
+  dek: Uint8Array;
+}
+
+/** What a sign-in resolves to: everything the sync engine needs, and nothing the user has to read. */
+export interface UnlockedSyncSession {
+  accountId: number;
+  /** The DEK, unwrapped on this device from the account's `passphrase` key record. Memory only. */
+  dek: Uint8Array;
 }
 
 /** The record kinds, in the order setup writes them. */
@@ -248,6 +268,32 @@ export function buildKeyRecordRequest(input: {
     expectedUpdatedAt: null,
   };
 }
+
+/**
+ * The account's wrapped-DEK records (`PROTOCOL.md` section 5.3).
+ *
+ * THE ENVELOPE KEY IS `keyRecords`, NOT `records`. The document spells it
+ * `records`; `app/routes/api.v1.sync.key-records.ts` answers `keyRecords`, and
+ * the route is what this client actually talks to, so the schema is
+ * transcribed from the route. Recorded here rather than left for a reader to
+ * discover through a silent parse failure.
+ *
+ * `kdfDescriptor` is deliberately not modelled. It is on the wire, and the
+ * unwrap below does not need it: the descriptor this device derived its KEK
+ * from came from `POST /v1/auth/kdf`, which is the account's own, and reading
+ * a second copy here would only create a second thing that could disagree.
+ */
+const keyRecordsResponseSchema = z.object({
+  keyRecords: z.array(
+    z.object({
+      kind: z.string(),
+      /** Base64 of the packed IV, ciphertext and tag (`PROTOCOL.md` section 4). */
+      wrappedDek: z.string().min(1),
+      /** The CAS token for the next write to this record. Read here only so the shape is asserted whole. */
+      updatedAt: z.string(),
+    }),
+  ),
+});
 
 /** The stored record echoed back by a successful `PUT` (`PROTOCOL.md` section 5.4). */
 const keyRecordResponseSchema = z.object({
@@ -333,7 +379,7 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
   });
   const recoveryAuthHash = await deriveRecoveryAuthHash(recoveryCode.raw);
 
-  const handle = await signUp({ keys, recoveryAuthHash });
+  const created = await signUp({ keys, recoveryAuthHash });
 
   try {
     // Sequential, not concurrent. Two writes against the same account through
@@ -347,21 +393,34 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
     throw cause;
   }
 
-  return { handle, recoveryCode: recoveryCode.formatted };
+  return {
+    handle: created.handle,
+    recoveryCode: recoveryCode.formatted,
+    accountId: created.accountId,
+    // The DEK the setup run just generated. Returning it is what lets the first
+    // device sync without a second Argon2id run to reopen what it just created.
+    dek: keys.dek,
+  };
 }
 
 /**
  * Creates the account row, minting a fresh handle for as long as the service
  * keeps answering `409`.
  *
- * @returns the handle the account was actually created under.
+ * @returns the handle the account was actually created under, and the id the
+ * service assigned it. The id comes out of the signup response that
+ * `sessionSchema` already parses, rather than a second round trip, and the
+ * sync envelope's AAD is bound to it.
  */
-async function signUp(input: { keys: SyncKeySetupResult; recoveryAuthHash: string }): Promise<string> {
+async function signUp(input: {
+  keys: SyncKeySetupResult;
+  recoveryAuthHash: string;
+}): Promise<{ handle: string; accountId: number }> {
   let attempt = 1;
   while (attempt <= MAX_HANDLE_ATTEMPTS) {
     const handle = generateHandle();
     try {
-      await requestJson({
+      const session = await requestJson({
         path: '/api/v1/auth/signup',
         method: 'POST',
         body: buildSignupRequest({
@@ -372,7 +431,7 @@ async function signUp(input: { keys: SyncKeySetupResult; recoveryAuthHash: strin
         }),
         schema: sessionSchema,
       });
-      return handle;
+      return { handle, accountId: session.account.id };
     } catch (cause) {
       // A taken handle is the ONE retryable signup failure: the handle is
       // machine-minted, so a collision is our problem to solve and not
@@ -388,26 +447,78 @@ async function signUp(input: { keys: SyncKeySetupResult; recoveryAuthHash: strin
 }
 
 /**
- * Signs in on a second device.
+ * Signs in on a second device, and opens the account's data key.
  *
  * The passphrase is stretched here and the derived `authHash` is what travels.
  * The service answers one `401` for an unknown handle and for a wrong
  * passphrase alike, deliberately, so the caller must not try to say which.
+ *
+ * ── Why the unwrap belongs in the same call ──────────────────────────────
+ *
+ * The one Argon2id run behind the login produces BOTH the `authHash` that
+ * travels and the `passphraseKek` that stays. Splitting the unwrap into a
+ * later call would mean either stretching the passphrase a second time, at the
+ * cost the user feels as a frozen screen, or holding the passphrase somewhere
+ * beyond this call frame — and there is no such somewhere. So the KEK is used
+ * where it is derived, and only the unwrapped DEK leaves.
  */
-export async function signInToSync({ handle, passphrase }: { handle: string; passphrase: string }): Promise<void> {
+export async function signInToSync({
+  handle,
+  passphrase,
+}: {
+  handle: string;
+  passphrase: string;
+}): Promise<UnlockedSyncSession> {
   const normalized = normalizeHandle(handle);
   const descriptor = await fetchKdfDescriptor(normalized);
-  const { authHash } = await deriveCredentialsFromPassphrase({
+  const { authHash, passphraseKek } = await deriveCredentialsFromPassphrase({
     passphrase,
     descriptor,
     deriveHash: workerArgon2idDeriver,
   });
-  await requestJson({
+  const session = await requestJson({
     path: '/api/v1/auth/login',
     method: 'POST',
     body: { handle: normalized, authHash },
     schema: sessionSchema,
   });
+
+  const dek = await unwrapPassphraseDek(passphraseKek);
+  return { accountId: session.account.id, dek };
+}
+
+/**
+ * Reads the account's key records and unwraps the DEK under the
+ * passphrase-derived KEK.
+ *
+ * AN ACCOUNT WITH NO `passphrase` RECORD IS UNOPENABLE. The passphrase
+ * authenticates and there is nothing on the server for it to unwrap, so no
+ * device can ever read that account's data. `deleteHalfBuiltAccount` above
+ * exists precisely so our own setup path cannot create this state: it destroys
+ * an account whose key records did not land rather than reporting a success
+ * that would hand the user credentials that are not credentials. Reaching this
+ * throw therefore means the account was made some other way.
+ *
+ * The unwrap itself throws a bare `OperationError` from WebCrypto when the KEK
+ * is wrong, which is deliberate on the crypto side — a GCM tag check does not
+ * say WHY it failed — and is left to propagate: `classifySignInFailure`
+ * already treats an unrecognised cause as the generic failure, and inventing a
+ * more specific message here would be guessing.
+ */
+async function unwrapPassphraseDek(passphraseKek: CryptoKey): Promise<Uint8Array> {
+  const response = await requestJson({
+    path: '/api/v1/sync/key-records',
+    method: 'GET',
+    schema: keyRecordsResponseSchema,
+  });
+  const record = response.keyRecords.find((candidate) => candidate.kind === 'passphrase');
+  if (record === undefined) {
+    throw new SyncRequestError({
+      kind: 'invalid',
+      message: 'This account holds no key for this passphrase, so its synced data cannot be opened.',
+    });
+  }
+  return unwrapDek({ wrappedDek: base64ToBytes(record.wrappedDek), kek: passphraseKek });
 }
 
 /** Ends the session on this device. The local data stays where it is; only the sync link goes. */

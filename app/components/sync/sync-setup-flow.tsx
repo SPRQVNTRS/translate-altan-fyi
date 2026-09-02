@@ -8,6 +8,7 @@ import { CopyButton } from '#app/components/sync/copy-button';
 import { PassphraseStrengthMeter } from '#app/components/sync/passphrase-strength-meter';
 import { isRecoveryCodeConfirmed } from '#app/components/sync/recovery-confirmation';
 import { createSyncAccount } from '#app/components/sync/sync-client';
+import { setSyncSession } from '#app/lib/sync/sync-session';
 import { reportError } from '#app/lib/report-error';
 import {
   initialSyncSetupState,
@@ -68,6 +69,10 @@ export function SyncSetupFlow() {
     dispatch({ type: 'detailsSubmitted' });
     try {
       const account = await createSyncAccount({ passphrase });
+      // Before the screen advances, and before anything can navigate away. The
+      // DEK exists only in memory, so the sync engine has to be handed it in
+      // the same turn that produced it.
+      setSyncSession({ accountId: account.accountId, dek: account.dek });
       dispatch({ type: 'setupSucceeded', handle: account.handle, recoveryCode: account.recoveryCode });
     } catch (cause) {
       // REPORTED, then shown. A bare `catch {}` here discarded the cause
