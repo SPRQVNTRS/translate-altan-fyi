@@ -173,7 +173,19 @@ export function chooseDirection(input: ChooseDirectionInput): Direction {
  *
  * The query form is normalized with `normalizeLemma` rather than
  * `normalizeForLanguage`, because at this point the language is exactly what is
- * not yet known. Returned un-awaited so a test can read the statement.
+ * not yet known, and `normalizeForLanguage` cannot be called without one.
+ *
+ * THAT MAKES THIS COUNT AN UNDER-COUNT, ON PURPOSE. Since M173/04 the stored
+ * column is folded per language, so `normalizeLemma('Straße')` is `'straße'`
+ * where the column holds `'strasse'`, and a German query written with `ß`
+ * scores no German votes here. The cost is a vote in a heuristic, not a lost
+ * search result: whichever language wins, the query is then normalized in THAT
+ * language before it reaches `searchHeadwords`. Folding the query four times,
+ * once per served language, would fix the count and cost a four-way OR on the
+ * hot path of every undirected query, for a tie-break that a stated `from` in
+ * the URL skips entirely.
+ *
+ * Returned un-awaited so a test can read the statement.
  */
 export function exactHitsByLanguageQuery(db: DictionaryDb, q: string) {
   return db

@@ -53,7 +53,7 @@ import {
   type Importer,
   type ImporterSource,
 } from '../../lib/importers/contract';
-import { tokenize } from '../../lib/importers/normalize';
+import { tokenizeForLanguage } from '../../lib/importers/normalize';
 import { readLines } from '../../lib/importers/stream';
 import { INSERT_CHUNK_SIZE, upsertSource, type ImporterDb } from '../../lib/importers/upsert';
 
@@ -349,7 +349,11 @@ async function writeBatch(db: ImporterDb, rows: ExampleRow[]): Promise<BatchResu
     if (source === undefined) {
       throw new Error(`Example ${row.externalId} came back from an insert that did not send it.`);
     }
-    for (const token of tokenize(source.text)) {
+    // Tokenized in the SENTENCE's language. The tokens are matched against
+    // `headwords.lemma_normalized`, which `normalizeForLanguage` wrote in the
+    // headword's language, so a Turkish sentence folded by English rules would
+    // attach to nothing and report no error.
+    for (const token of tokenizeForLanguage(source.text, source.languageCode)) {
       exampleIds.push(row.id);
       tokens.push(token);
       languageCodes.push(source.languageCode);
@@ -372,9 +376,10 @@ async function writeBatch(db: ImporterDb, rows: ExampleRow[]): Promise<BatchResu
  *   joins that against the headword index it already has.
  *
  * WHY BOTH SIDES ARE NORMALIZED IN TYPESCRIPT
- *   The tokens are produced by `tokenize`, which calls `normalizeLemma`, which
- *   is the same function that wrote `headwords.lemma_normalized` on import. One
- *   implementation on both sides of the equality. The alternative, normalizing
+ *   The tokens are produced by `tokenizeForLanguage`, which calls
+ *   `normalizeForLanguage`, which is the same function that wrote
+ *   `headwords.lemma_normalized` on import. One implementation on both sides of
+ *   the equality, and the language is carried to both. The alternative, normalizing
  *   the stored side in TypeScript and the query side with Postgres `unaccent`,
  *   puts two different normalizers on the two sides of an `=`. They agree on
  *   most rows and disagree on the edges, no row fails, no error is raised, and

@@ -1,5 +1,5 @@
 /**
- * Re-export only. The canonical home of `normalizeLemma` and `tokenize` is
+ * Re-export only. The canonical home of the normalizers is
  * `app/lib/dictionary/normalize.ts`.
  *
  * WHY IT MOVED
@@ -12,6 +12,17 @@
  *
  *   This file stays so the importers keep their local import path, and so
  *   `tests/unit/importer-normalize.test.ts` keeps testing the function the
- *   importers actually call.
+ *   importers actually call. `tests/unit/locale-fold.test.ts` goes one step
+ *   further and asserts that what arrives HERE and what arrives at the search
+ *   path are the same function, so this re-export cannot quietly fork.
+ *
+ * WHICH ONE TO CALL
+ *   `normalizeForLanguage` and `tokenizeForLanguage` on every write and every
+ *   lookup. `normalizeLemma` only where the language is genuinely unknown,
+ *   which today is language detection alone.
  */
-export { normalizeLemma, tokenize } from '#app/lib/dictionary/normalize';
+export {
+  normalizeLemma,
+  normalizeForLanguage,
+  tokenizeForLanguage,
+} from '#app/lib/dictionary/normalize';

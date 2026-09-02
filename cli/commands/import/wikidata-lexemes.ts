@@ -43,7 +43,7 @@ import type {
   ImportOptions,
   ImportSummary,
 } from '../../lib/importers/contract';
-import { normalizeLemma } from '../../lib/importers/normalize';
+import { normalizeForLanguage } from '../../lib/importers/normalize';
 import { readLines } from '../../lib/importers/stream';
 import { chunk, INSERT_CHUNK_SIZE, upsertHeadwords, upsertSource } from '../../lib/importers/upsert';
 import type { ImporterDb } from '../../lib/importers/upsert';
@@ -818,7 +818,12 @@ export const wikidataLexemesImporter: Importer<ImportOptions> = {
       const headword: InsertHeadword = {
         languageCode,
         lemma,
-        lemmaNormalized: normalizeLemma(lemma),
+        // The row's OWN language, never a default. `normalizeForLanguage` is
+        // the function the search path also calls, and the Turkish and German
+        // rules make its answer differ from the language-blind one: `ışık`
+        // stores as `isik`, `Straße` as `strasse`. A default here would write a
+        // key the query can no longer produce, on those rows only, silently.
+        lemmaNormalized: normalizeForLanguage(lemma, languageCode),
         pos: mapLexicalCategory(lexeme.lexicalCategory),
         sourceId,
       };

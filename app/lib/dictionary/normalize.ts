@@ -19,22 +19,28 @@
  *   small share of rows.
  *
  *   So the Tatoeba attachment join normalizes BOTH sides in TypeScript. It
- *   tokenizes the sentence here, normalizes the tokens here, and passes the
+ *   tokenizes the sentence here with `tokenizeForLanguage`, and passes the
  *   token array into SQL to be matched against the stored
- *   `headwords.lemma_normalized`, which this same function produced on import.
- *   One implementation on both sides, so the two cannot drift apart.
+ *   `headwords.lemma_normalized`, which `normalizeForLanguage` produced on
+ *   import. One implementation on both sides, so the two cannot drift apart.
  *
- * TURKISH DOTTED AND DOTLESS I ARE NOT HANDLED
+ * TURKISH DOTTED AND DOTLESS I ARE NOT HANDLED HERE, BY DESIGN
  *   `'I'.toLowerCase()` gives `'i'`. In Turkish the lowercase of `I` is `ı`, so
- *   that result is wrong. `'İ'` decomposes to `I` plus a combining dot, the dot
- *   is stripped as a mark, and the result is `'i'`, which happens to be right,
- *   by accident rather than by rule.
+ *   that result is wrong, and `normalizeLemma` still produces it. That is not a
+ *   gap any more: it is what the LANGUAGE-BLIND path is allowed to do.
  *
- *   Turkish casing needs locale-aware rules and a decision about what the
- *   stored form should be, and that is a later spec's job. Until then the
- *   limitation is named here rather than papered over: Turkish lookup will miss
- *   on words whose only difference is the dot.
+ *   The rule now lives in `./locale-fold.ts`, and `normalizeForLanguage` below
+ *   is how a caller reaches it. `normalizeLemma` survives for exactly one
+ *   caller, `detect-language.ts`, whose whole job is to answer "which language
+ *   is this?" and which therefore has no language to fold by. Its counts are a
+ *   heuristic and stay one.
+ *
+ *   Everything that stores or looks up a lemma calls `normalizeForLanguage`.
+ *   `normalizeLemma` is NOT the stored form of a headword any more, so do not
+ *   compare its output against `headwords.lemma_normalized` and expect a hit.
  */
+
+import { foldForSearch } from './locale-fold';
 
 /** Combining marks, which is what an accent decomposes into under NFD. */
 const COMBINING_MARKS = /\p{M}+/gu;
@@ -51,8 +57,18 @@ const WHITESPACE_RUN = /\s+/gu;
 const NON_WORD = /[^\p{L}\p{N}'’-]+/gu;
 
 /**
- * The stored form of a lemma. This is what `headwords.lemma_normalized` holds,
- * and what every lookup compares against.
+ * The LANGUAGE-BLIND normalized form, for the one caller that has no language.
+ *
+ * THIS IS NOT THE STORED FORM. `headwords.lemma_normalized` is written by
+ * `normalizeForLanguage`, and for Turkish and German the two now differ:
+ * `normalizeLemma('ışık')` is `'ısık'` where the stored form is `'isik'`, and
+ * `normalizeLemma('Straße')` is `'straße'` where the stored form is `'strasse'`.
+ * Comparing this output against the column finds nothing on exactly those rows.
+ *
+ * Its one legitimate caller is `detect-language.ts`, which counts exact hits per
+ * language in order to GUESS the language, and so cannot pass one. Those counts
+ * are a heuristic, and a Turkish or German row this misses only costs the guess
+ * a vote, never a search result.
  *
  * @param value A written word form, in any case and with any accents.
  * @returns The lowercased, unaccented, whitespace-collapsed form.
@@ -67,21 +83,57 @@ export function normalizeLemma(value: string): string {
 }
 
 /**
- * Split a sentence into normalized word tokens.
+ * Normalize a word form the way its own language would. THIS IS THE ONE
+ * FUNCTION that produces both the stored form and the query form.
  *
- * Order is first appearance, and duplicates are removed. Deterministic order
- * matters because the token array goes into a SQL statement, and two runs over
- * the same sentence must produce the same statement.
+ * WHY ONE FUNCTION AND NOT TWO THAT AGREE
+ *   `headwords.lemma_normalized` is written on import and compared with a plain
+ *   `=` at search time. Two implementations that agree today would not fail
+ *   when they stopped agreeing; they would move rows out of reach of the
+ *   queries that should find them, silently, on whatever small share of words
+ *   the two disagreed about. So there is one function, both sides call it, and
+ *   `tests/unit/locale-fold.test.ts` asserts the importer's import path and the
+ *   search path resolve to it row by row.
+ *
+ *   The corollary is the one that bites: changing the folding changes the
+ *   STORED form, so every existing row has to be rewritten in the same change.
+ *   That is what `drizzle/data-migrations/migrations/2026-09-02-lemma-normalized-locale-fold.ts`
+ *   is for. A folding change shipped without it leaves the table holding keys
+ *   the new query form can no longer produce.
+ *
+ * WHAT IT DOES
+ *   Casing and diacritics are delegated to `foldForSearch` in `./locale-fold.ts`,
+ *   which holds the per-language rule table. Whitespace collapsing and trimming
+ *   stay here, because the shape of a stored lemma is not a locale question.
+ *
+ * @param value A written word form.
+ * @param languageCode The language the form is being read as. Must be served.
+ * @returns The stored form to compare against `headwords.lemma_normalized`.
+ * @throws If the language has no fold rules. Folding an unknown language by
+ *   English rules would store a key nothing looks up, and report nothing.
+ */
+export function normalizeForLanguage(value: string, languageCode: string): string {
+  return foldForSearch(value, languageCode).replace(WHITESPACE_RUN, ' ').trim();
+}
+
+/**
+ * Split a sentence into normalized word tokens, folded by its own language.
+ *
+ * This is `tokenize` with the language supplied, and it is what the Tatoeba
+ * attachment join calls: the tokens it emits are compared against
+ * `headwords.lemma_normalized`, which `normalizeForLanguage` wrote. A token
+ * folded by different rules than the column would simply never match.
  *
  * @param sentence One sentence of running text.
+ * @param languageCode The language the sentence is written in. Must be served.
  * @returns Its distinct tokens, in stored form, in order of first appearance.
  */
-export function tokenize(sentence: string): string[] {
+export function tokenizeForLanguage(sentence: string, languageCode: string): string[] {
   const seen = new Set<string>();
   const tokens: string[] = [];
 
   for (const piece of sentence.split(NON_WORD)) {
-    const token = normalizeLemma(piece);
+    const token = normalizeForLanguage(piece, languageCode);
     if (token === '') continue;
     if (seen.has(token)) continue;
     seen.add(token);
@@ -89,38 +141,4 @@ export function tokenize(sentence: string): string[] {
   }
 
   return tokens;
-}
-
-/**
- * Normalize a word form the way its own language would.
- *
- * V1 BEHAVIOUR IS `normalizeLemma` FOR EVERY LANGUAGE, and the parameter is
- * deliberately ignored. The function exists now because the search path has to
- * CALL it now: a seam introduced later would have to be threaded through every
- * call site at the same time as the rules land, and the call sites are the part
- * that gets forgotten.
- *
- * THE FAILURE IT IS FOR
- *   Turkish. `'I'.toLowerCase()` gives `'i'`, but Turkish lowercases `I` to
- *   `ı`. A Turkish query for `IŞIK` therefore normalizes to `isik`, while the
- *   stored form of `ışık` is `isik` only because the same wrong rule ran on
- *   import. The two agree today by symmetry, and they stop agreeing the moment
- *   either side learns the real rule. Words whose only difference is the dot
- *   are already unreachable from each other.
- *
- * TODO(M173/04): that spec owns the locale-aware casing rules, for both the
- * stored form and the query form, and owns the re-import the change implies.
- * Do not add Turkish casing here on its own: changing only the query side
- * breaks the equality against every row already in the table.
- *
- * @param value A written word form.
- * @param languageCode The language the form is being read as. Unused in v1.
- * @returns The stored form to compare against `headwords.lemma_normalized`.
- */
-export function normalizeForLanguage(value: string, languageCode: string): string {
-  // Named and discarded rather than omitted from the signature: the parameter
-  // is the seam, and a caller that does not pass a language is the bug this is
-  // here to prevent.
-  void languageCode;
-  return normalizeLemma(value);
 }

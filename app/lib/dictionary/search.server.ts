@@ -532,8 +532,11 @@ export async function searchHeadwords(
   params: SearchHeadwordsParams,
 ): Promise<SearchHit[]> {
   // The normalization goes through `normalizeForLanguage`, not `normalizeLemma`.
-  // That call IS the locale seam: v1 ignores the language, and the day Turkish
-  // casing lands, this call site is already passing the language it needs.
+  // That call IS the locale seam, and it is now load-bearing rather than a
+  // placeholder: `params.from` selects the Turkish rules that fold all four i
+  // letters onto `i`, and the German rule that folds `ß` to `ss`. The SAME
+  // function wrote `headwords.lemma_normalized` on import, which is the only
+  // reason the `=` below can match anything.
   const normalizedQuery = normalizeForLanguage(params.q, params.from);
   // An empty query touches no database at all. It has no answer, and asking
   // Postgres for the answer to nothing still costs a round trip per request.
