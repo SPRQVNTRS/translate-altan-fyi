@@ -44,12 +44,23 @@ term() {
 # worker gets the smaller cap because its work is one prompt and one parsed
 # response at a time, while the web process holds the React Router server bundle
 # and the connection pool. Raise these together with `mem_limit`, never alone.
+# NODE IS INVOKED DIRECTLY, NOT THROUGH pnpm, AND THAT IS A MEMORY DECISION.
+#
+# `pnpm worker` costs four resident node processes, not one: pnpm's launcher,
+# pnpm itself, the tsx cli, and finally the program. `pnpm start` costs five,
+# because cross-env adds another. Measured inside the stage container, those
+# wrappers were most of the difference between 220 MiB for one service and
+# 476 MiB for two, and none of them does anything after the program starts.
+#
+# `node --import tsx` is exactly what the tsx cli ends up executing, so this
+# runs the same code with none of the scaffolding. The two package.json scripts
+# stay as they are for local use, where the wrappers cost nothing that matters.
 echo "[start] Starting worker..."
-NODE_OPTIONS="--max-old-space-size=128" pnpm worker &
+NODE_OPTIONS="--max-old-space-size=128" node --import tsx ./worker.ts &
 worker_pid=$!
 
 echo "[start] Starting server..."
-NODE_OPTIONS="--max-old-space-size=256" pnpm start &
+NODE_ENV=production NODE_OPTIONS="--max-old-space-size=256" node --import tsx ./server.ts &
 web_pid=$!
 
 trap 'term; exit 0' TERM INT
