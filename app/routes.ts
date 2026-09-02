@@ -90,6 +90,7 @@ export default [
     layout('routes/_super.tsx', { id: '_super' }, [
       route('/super/orgs', 'routes/super/orgs.tsx'),
       route('/super/users', 'routes/super/users.tsx'),
+      route('/super/llm', 'routes/super/llm.tsx'),
     ]),
   ]),
 

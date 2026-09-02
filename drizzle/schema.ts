@@ -33,6 +33,10 @@ export const workflowLocks = _workflowLocks;
 // `drizzle/db.ts` and `drizzle.config.ts` both read.
 export * from './schema/dictionary';
 
+// Global application settings (app_settings, app_settings_audit).
+// Also NOT tenant-scoped, and re-exported here for the same reason.
+export * from './schema/settings';
+
 // =============================================================================
 // Organizations (Multi-Tenancy Core)
 // =============================================================================

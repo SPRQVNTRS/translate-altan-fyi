@@ -43,6 +43,13 @@
       "when": 1788350979902,
       "tag": "0005_public_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788355468079,
+      "tag": "0006_flat_hulk",
+      "breakpoints": true
     }
   ]
 }
