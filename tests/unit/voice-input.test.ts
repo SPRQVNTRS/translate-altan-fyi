@@ -28,6 +28,7 @@ import {
   startVoiceSession,
   transcriptFromEvent,
   VOICE_LANGUAGES,
+  ServerVoiceControl,
   VoiceControl,
   voiceLanguageTag,
   voiceStateForError,
@@ -35,6 +36,7 @@ import {
   type SpeechRecognitionScope,
   type SpeechRecognizer,
   type SpeechResultsEvent,
+  type ServerVoiceState,
   type VoiceState,
 } from '#app/components/voice-input';
 import enCommon from '#app/locales/en/common.json';
@@ -145,6 +147,10 @@ function englishInstance() {
 
 /** The control rendered in one state, as static markup. */
 function renderControl(state: VoiceState): string {
+  // The on-device control no longer accepts `unsupported`: that state is the
+  // server fallback's, and `renderServerControl` below renders it.
+  if (state.kind === 'unsupported') throw new Error('render the unsupported state through renderServerControl');
+
   return renderToStaticMarkup(
     createElement(
       I18nextProvider,
@@ -160,19 +166,49 @@ function renderControl(state: VoiceState): string {
   );
 }
 
+/**
+ * The server fallback rendered in one state, as static markup.
+ *
+ * The fallback is what an unsupported browser gets since M173/02: not a message
+ * with no control, but a record button that posts a clip to the server. It is a
+ * separate component with its own state union, so it needs its own renderer.
+ */
+function renderServerControl(state: ServerVoiceState): string {
+  return renderToStaticMarkup(
+    createElement(
+      I18nextProvider,
+      { i18n: englishInstance() },
+      createElement(ServerVoiceControl, {
+        state,
+        language: 'de',
+        onLanguageChange: () => undefined,
+        onToggle: () => undefined,
+        triggerId: 'voice-language',
+      }),
+    ),
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Feature detection                                                            */
 /* -------------------------------------------------------------------------- */
 
 describe('voice input support detection', () => {
-  it('renders the unsupported message and no button when the browser has neither constructor', () => {
+  it('offers the server fallback, not a dead end, when the browser is unsupported', () => {
     const scope: SpeechRecognitionScope = {};
     assert.equal(detectSpeechRecognition(scope), null);
 
-    const markup = renderControl({ kind: 'unsupported' });
+    const markup = renderServerControl({ kind: 'ready' });
     assert.ok(markup.includes(enCommon.voice.unsupported), `the unsupported sentence is missing from: ${markup}`);
     assert.ok(markup.includes(enCommon.voice.serverFallbackHint), 'the fallback hint is missing');
-    assert.ok(!markup.includes('<button'), `an unsupported browser must get no control, got: ${markup}`);
+    assert.ok(markup.includes(enCommon.voice.serverStart), 'the record button is missing');
+    assert.ok(markup.includes(enCommon.voice.serverPrivacy), 'the reader must be told the clip is not stored');
+  });
+
+  it('tells an unsupported browser that cannot record either to type instead', () => {
+    const markup = renderServerControl({ kind: 'no-recorder' });
+    assert.ok(markup.includes(enCommon.voice.serverUnsupportedRecording), `the dead-end sentence is missing: ${markup}`);
+    assert.ok(!markup.includes('<button'), `a browser that cannot record must get no button, got: ${markup}`);
   });
 
   it('finds the plain constructor, the webkit constructor, and prefers the plain one', () => {

@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { LlmProvider, LlmTokenUsage, ReasoningEffortLevel } from '@sprqvntrs/llm';
 
 import { createLLMClient } from '#app/lib/llm';
@@ -149,6 +149,141 @@ function createRealPort(configured: ConfiguredModel): LlmPort {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Audio in, text out                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * WHY THIS SECTION EXISTS AT ALL.
+ *   @sprqvntrs/llm 3.13.1 has no audio input: every client in it takes a prompt
+ *   string. The voice fallback needs a model to listen to a recording, and the
+ *   rule that the registry is the ONLY place a provider, a model or an API key
+ *   is read still holds. So the audio call is built here, beside the text one,
+ *   rather than in the route or the service, and the key still never leaves
+ *   this file.
+ *
+ * THE WIRE FORMAT IS THE OPENAI CHAT SHAPE.
+ *   OpenRouter and OpenAI both take an `input_audio` content part on
+ *   `/chat/completions`. That covers every catalog entry except the direct
+ *   Anthropic one, whose messages API has no audio part at all; asking it is a
+ *   capability error rather than a silent text-only call.
+ */
+
+/** One recording, on its way to a model. */
+export interface AudioTranscriptionRequest {
+  /** The clip, base64 encoded. It is built once, by the caller, and never written anywhere. */
+  audioBase64: string;
+  /** The container name the provider is told, from `app/lib/voice/limits.ts`. */
+  format: string;
+  /** What the model is asked to do with the clip. Built by the service, never here. */
+  instruction: string;
+  /** Hard ceiling on the call. See `AUDIO_REQUEST_TIMEOUT_MS` for why one is compulsory. */
+  timeoutMs: number;
+}
+
+/** What one transcription call produced. */
+export interface AudioTranscriptionResult {
+  text: string;
+  costUsd: number | null;
+  latencyMs: number;
+  provider: ProviderId;
+  model: string;
+}
+
+/** The owned port over the audio call. The only thing a test needs to replace. */
+export interface AudioPort {
+  transcribe(request: AudioTranscriptionRequest): Promise<{ text: string; costUsd: number | null }>;
+}
+
+/**
+ * The chat completions endpoint for a transport.
+ *
+ * @throws {LlmCapabilityError} for a transport with no audio-capable chat API.
+ */
+function audioEndpoint(transport: LlmProvider): string {
+  if (transport === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
+  if (transport === 'openai') return 'https://api.openai.com/v1/chat/completions';
+  throw new LlmCapabilityError(
+    'The Anthropic messages API carries no audio content part, so this provider cannot transcribe a recording',
+  );
+}
+
+/**
+ * The response this path reads, and nothing more of it.
+ *
+ * PARSED AT THE BOUNDARY, and every field is optional on purpose. A provider
+ * that changed a field this code does not use must not take the voice fallback
+ * down, and a provider that returned no transcript must produce an ordinary
+ * null the caller turns into a polite answer, never a throw from a property
+ * read.
+ */
+const audioCompletionSchema = z.object({
+  choices: z
+    .array(z.object({ message: z.object({ content: z.string().nullish() }).nullish() }))
+    .nullish(),
+  usage: z.object({ cost: z.number().nullish() }).nullish(),
+});
+
+/**
+ * Build the real audio port for a configured model.
+ *
+ * THE TIMEOUT IS EXPLICIT, AND IT IS NOT OPTIONAL. Memory
+ * `reference_node_fetch_hidden_300s_timeout` records undici's hidden 300 second
+ * ceiling: a call left to that default holds a request open for five minutes
+ * and the reader has long since given up. An upload plus a transcription is the
+ * longest single request in this product, which is exactly why it gets the
+ * shortest leash anyone would call generous.
+ */
+function createRealAudioPort(configured: ConfiguredModel, apiKey: string): AudioPort {
+  const endpoint = audioEndpoint(configured.transport);
+  return {
+    async transcribe(request) {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: configured.model,
+          // `usage.include` is an OpenRouter option and is ignored elsewhere. It
+          // is what puts a real price on the call, which is what the day's
+          // budget settles against.
+          usage: { include: true },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: request.instruction },
+                { type: 'input_audio', input_audio: { data: request.audioBase64, format: request.format } },
+              ],
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(request.timeoutMs),
+      });
+
+      if (!response.ok) {
+        // The body is NOT read into the message. A provider error body can echo
+        // the request, and the request here is a recording of a person's voice.
+        throw new Error(`The provider refused the transcription with status ${response.status}`);
+      }
+
+      // Parsed once, here at the boundary, and read from the decoded value
+      // below. Nothing downstream ever sees the raw body.
+      const parsed = audioCompletionSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('The provider answered in a shape this client does not understand');
+
+      const text = parsed.data.choices?.[0]?.message?.content ?? null;
+      if (text === null) throw new Error('The provider returned no transcript');
+      return { text, costUsd: parsed.data.usage?.cost ?? null };
+    },
+  };
+}
+
+/** The injected audio port, or null when the real adapter should be built. See `withAudioPort`. */
+let injectedAudioPort: AudioPort | null = null;
+
 export const registry = {
   /**
    * Is the active provider's key present?
@@ -238,6 +373,53 @@ export const registry = {
       provider: configured.provider,
       model: configured.model,
     };
+  },
+
+  /**
+   * Ask the active model to listen to a recording and write down what it heard.
+   *
+   * The one call the transcription service makes, and it never names a
+   * provider. The clip is passed through, base64 encoded by the caller, and
+   * nothing on this path holds it after the promise settles.
+   *
+   * @param active - the operator's current selection, read per request.
+   * @param request - the clip, its container format, the instruction and a timeout.
+   * @throws {LlmCapabilityError} when the active provider has no audio path.
+   * @throws {LlmNotConfiguredError} when the provider's API key is absent.
+   */
+  async transcribeAudio(active: ActiveModel, request: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
+    const configured = registry.configureActiveModel(active);
+    const entry = providerEntry(configured.provider);
+    // Read again rather than threading the value out of `configureActiveModel`:
+    // the key stays a local in the one function that needs it, and the audio
+    // port is the only other thing in this file that ever sees it.
+    const apiKey = readApiKey(entry.apiKeyEnvVar);
+    if (apiKey === null) {
+      throw new LlmNotConfiguredError(
+        `Provider ${entry.label} needs ${entry.apiKeyEnvVar}, which is not set in the environment`,
+      );
+    }
+
+    const port = injectedAudioPort ?? createRealAudioPort(configured, apiKey);
+    const startedAt = Date.now();
+    const { text, costUsd } = await port.transcribe(request);
+    return {
+      text,
+      costUsd,
+      latencyMs: Date.now() - startedAt,
+      provider: configured.provider,
+      model: configured.model,
+    };
+  },
+
+  /**
+   * TEST SEAM. Inject a fake audio port, or pass null to restore the real one.
+   *
+   * This exists so that no test can reach a live API. Restore it in the test's
+   * teardown, otherwise the injection leaks into whatever runs next in the file.
+   */
+  withAudioPort(port: AudioPort | null): void {
+    injectedAudioPort = port;
   },
 
   /**

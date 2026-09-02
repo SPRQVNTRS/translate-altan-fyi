@@ -1,10 +1,17 @@
 /**
  * voice-input.tsx, speaking a query instead of typing it.
  *
- * NOTHING LEAVES THE DEVICE ON THIS PATH. The browser's own Web Speech API
- * does the recognition, so there is no audio upload, no transcript upload and
- * no request of any kind from this file. That is the whole reason the browser
- * path exists next to the server fallback that arrives later.
+ * NOTHING LEAVES THE DEVICE ON THE WEB SPEECH PATH. The browser's own
+ * recogniser does the work, so there is no audio upload and no transcript
+ * upload. That is the whole reason the browser path exists beside the server
+ * fallback.
+ *
+ * THE SERVER FALLBACK IS THE OTHER HALF, AND IT IS A DIFFERENT BARGAIN. A
+ * browser with no recogniser, which today means Firefox, records a short clip
+ * and sends it to `/api/v1/transcribe`, where a model writes the words down.
+ * That is a real upload and the reader is told so before they press anything.
+ * The request itself lives in `app/lib/voice/recorder.ts`, never in this file:
+ * the one place a recording is posted from is easier to keep honest than two.
  *
  * IT IS A GUESS, AND IT IS PRESENTED AS ONE. The recognised text is written
  * into the ordinary search box, where the reader can correct it, and the
@@ -23,13 +30,24 @@
  * submits the form, rather than through a copy of it written for the test.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Loader2, Mic, MicOff, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '#app/components/ui/button';
 import { Label } from '#app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#app/components/ui/select';
 import type { LanguageCode } from '#app/lib/dictionary/detect-language';
+import {
+  detectAudioRecorder,
+  pickRecordingMimeType,
+  postRecording,
+  recorderScope,
+  startRecording,
+  TRANSCRIPTION_FAILED_KEY,
+  type AudioRecorder,
+  type AudioRecorderConstructor,
+  type RecordingSession,
+} from '#app/lib/voice/recorder';
 import { cn } from '#app/lib/utils';
 
 /* -------------------------------------------------------------------------- */
@@ -214,7 +232,7 @@ const PERMISSION_REFUSALS: ReadonlySet<string> = new Set(['not-allowed', 'servic
  * A refused microphone is its own state, because it is the one failure the
  * reader can fix, and the message that fixes it is different from "try again".
  */
-export function voiceStateForError(code: string): VoiceState {
+export function voiceStateForError(code: string): BrowserVoiceState {
   return PERMISSION_REFUSALS.has(code) ? { kind: 'denied' } : { kind: 'failed' };
 }
 
@@ -328,9 +346,66 @@ export function createVoiceHandlers(targets: SearchFormTargets, updateState: Voi
 /* The control                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Everything the rendered control needs, and nothing it can decide for itself. */
+/**
+ * The spoken language picker, shared by the on-device control and the server
+ * fallback.
+ *
+ * One component rather than two copies: the two paths offer the SAME four
+ * languages, and a list that drifted would make the fallback quietly narrower
+ * than the control it replaces.
+ */
+export function VoiceLanguagePicker({
+  language,
+  onLanguageChange,
+  triggerId,
+}: {
+  language: LanguageCode;
+  onLanguageChange: (code: LanguageCode) => void;
+  triggerId: string;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <Label htmlFor={triggerId} className="sr-only">
+        {t('voice.fieldLabel')}
+      </Label>
+      <Select
+        value={language}
+        onValueChange={(next) => {
+          // Radix hands back a plain string. Narrow it rather than assert it:
+          // an unoffered code would be sent straight to the recogniser.
+          if (isVoiceLanguage(next)) onLanguageChange(next);
+        }}
+      >
+        <SelectTrigger id={triggerId} size="sm" className="w-32" aria-label={t('voice.fieldLabel')}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {VOICE_LANGUAGES.map((option) => (
+            <SelectItem key={option.code} value={option.code}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
+  );
+}
+
+/** Every state the ON-DEVICE control renders. `unsupported` is not one of them: see `VoiceControlProps`. */
+export type BrowserVoiceState = Exclude<VoiceState, { kind: 'unsupported' }>;
+
+/**
+ * Everything the rendered control needs, and nothing it can decide for itself.
+ *
+ * `state` EXCLUDES `unsupported` on purpose. A browser with no recogniser gets
+ * the server fallback below, not a variant of this control, and the narrowed
+ * type is what makes that a compile error rather than a decision somebody has
+ * to remember.
+ */
 export interface VoiceControlProps {
-  state: VoiceState;
+  state: BrowserVoiceState;
   language: LanguageCode;
   onLanguageChange: (code: LanguageCode) => void;
   onToggle: () => void;
@@ -356,16 +431,6 @@ export function VoiceControl({
 }: VoiceControlProps) {
   const { t } = useTranslation();
 
-  if (state.kind === 'unsupported') {
-    return (
-      <output className={cn('flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground', className)}>
-        <MicOff className="size-3.5" aria-hidden="true" />
-        <span>{t('voice.unsupported')}</span>
-        <span>{t('voice.serverFallbackHint')}</span>
-      </output>
-    );
-  }
-
   const isListening = state.kind === 'listening';
   const isChecking = state.kind === 'checking';
   const buttonLabel =
@@ -376,28 +441,7 @@ export function VoiceControl({
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <Label htmlFor={triggerId} className="sr-only">
-          {t('voice.fieldLabel')}
-        </Label>
-        <Select
-          value={language}
-          onValueChange={(next) => {
-            // Radix hands back a plain string. Narrow it rather than assert it:
-            // an unoffered code would be sent straight to the recogniser.
-            if (isVoiceLanguage(next)) onLanguageChange(next);
-          }}
-        >
-          <SelectTrigger id={triggerId} size="sm" className="w-32" aria-label={t('voice.fieldLabel')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {VOICE_LANGUAGES.map((option) => (
-              <SelectItem key={option.code} value={option.code}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <VoiceLanguagePicker language={language} onLanguageChange={onLanguageChange} triggerId={triggerId} />
 
         <Button
           type="button"
@@ -423,6 +467,235 @@ export function VoiceControl({
         {state.kind !== 'denied' && state.kind !== 'failed' && (isListening ? t('voice.listening') : t('voice.bestEffort'))}
       </output>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The server fallback                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the fallback is doing, as one closed set.
+ *
+ * `no-recorder` is the true dead end: a browser with neither a recogniser nor a
+ * usable recorder can only be told to type. It is still a sentence on the
+ * screen, never a missing control.
+ */
+export type ServerVoiceState =
+  | { kind: 'ready' }
+  | { kind: 'no-recorder' }
+  | { kind: 'recording' }
+  | { kind: 'sending' }
+  | { kind: 'transcribed'; model: string; labelKey: string }
+  | { kind: 'refused'; messageKey: string };
+
+/** Everything the rendered fallback needs, and nothing it can decide for itself. */
+export interface ServerVoiceControlProps {
+  state: ServerVoiceState;
+  language: LanguageCode;
+  onLanguageChange: (code: LanguageCode) => void;
+  onToggle: () => void;
+  triggerId: string;
+  className?: string;
+}
+
+/**
+ * The rendered fallback, given a state.
+ *
+ * Free of effects, of feature detection and of any request, exactly like
+ * `VoiceControl`, so a unit test can render every branch without a browser.
+ *
+ * THE UPLOAD IS DISCLOSED BEFORE IT HAPPENS. The first two lines say the
+ * browser cannot recognise speech itself and that a recording will be sent
+ * instead, and the note under the button says the clip is never stored. A
+ * reader deciding whether to press the button is entitled to know all of that
+ * before pressing it, not after.
+ */
+export function ServerVoiceControl({
+  state,
+  language,
+  onLanguageChange,
+  onToggle,
+  triggerId,
+  className,
+}: ServerVoiceControlProps) {
+  const { t } = useTranslation();
+
+  const isRecording = state.kind === 'recording';
+  const isSending = state.kind === 'sending';
+
+  return (
+    <div className={cn('flex flex-col gap-2', className)}>
+      <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+        <MicOff className="size-3.5" aria-hidden="true" />
+        <span>{t('voice.unsupported')}</span>
+        {state.kind !== 'no-recorder' && <span>{t('voice.serverFallbackHint')}</span>}
+      </p>
+
+      {state.kind === 'no-recorder' && (
+        <output className="text-xs text-muted-foreground">{t('voice.serverUnsupportedRecording')}</output>
+      )}
+
+      {state.kind !== 'no-recorder' && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <VoiceLanguagePicker language={language} onLanguageChange={onLanguageChange} triggerId={triggerId} />
+
+            <Button
+              type="button"
+              variant={isRecording ? 'default' : 'outline'}
+              size="sm"
+              onClick={onToggle}
+              disabled={isSending}
+              aria-pressed={isRecording}
+            >
+              {isSending ?
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              : isRecording ?
+                <Square className="size-4" aria-hidden="true" />
+              : <Mic className="size-4" aria-hidden="true" />}
+              {isRecording ? t('voice.serverStop') : t('voice.serverStart')}
+            </Button>
+          </div>
+
+          {/* One line at a time, and it is always the most useful one. */}
+          <output className="text-xs text-muted-foreground">
+            {state.kind === 'recording' && t('voice.serverRecording')}
+            {state.kind === 'sending' && t('voice.serverSending')}
+            {state.kind === 'refused' && t(state.messageKey)}
+            {(state.kind === 'ready' || state.kind === 'transcribed') && t('voice.serverPrivacy')}
+          </output>
+
+          {/* THE DISCLOSURE. A model wrote these words and the reader is told
+              so, under the same catalogue key the enrichment panel uses. See
+              `app/lib/ai-disclosure.ts`: this is EU AI Act Article 50, not
+              decoration, and it must not be deleted. */}
+          {state.kind === 'transcribed' && (
+            <p className="text-xs text-muted-foreground">{t(state.labelKey, { model: state.model })}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What the fallback needs from the screen around it. */
+export interface ServerVoiceFallbackProps {
+  inputRef: RefObject<HTMLInputElement | null>;
+  formRef: RefObject<HTMLFormElement | null>;
+  language: LanguageCode;
+  onLanguageChange: (code: LanguageCode) => void;
+  triggerId: string;
+  className?: string;
+}
+
+/**
+ * Record a clip, send it, and put the words in the search box.
+ *
+ * THE MICROPHONE IS RELEASED THE MOMENT THE RECORDING ENDS, on every path
+ * including the failed ones. A live track left open keeps the browser's
+ * recording indicator lit, which reads as an app that is still listening.
+ */
+export function ServerVoiceFallback({
+  inputRef,
+  formRef,
+  language,
+  onLanguageChange,
+  triggerId,
+  className,
+}: ServerVoiceFallbackProps) {
+  const [state, setState] = useState<ServerVoiceState>({ kind: 'ready' });
+  const constructorRef = useRef<AudioRecorderConstructor | null>(null);
+  const mimeTypeRef = useRef<string | null>(null);
+  const sessionRef = useRef<RecordingSession | null>(null);
+
+  useEffect(() => {
+    const recorderConstructor = detectAudioRecorder(recorderScope());
+    const mimeType = recorderConstructor === null ? null : pickRecordingMimeType(recorderConstructor);
+    constructorRef.current = recorderConstructor;
+    mimeTypeRef.current = mimeType;
+    // A recorder that can only encode formats the endpoint refuses is the same
+    // dead end as no recorder at all, and it is better found here than after an
+    // upload the reader waited for.
+    if (recorderConstructor === null || mimeType === null) setState({ kind: 'no-recorder' });
+
+    return () => {
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+    };
+  }, []);
+
+  const handleToggle = useCallback(() => {
+    const running = sessionRef.current;
+    if (running) {
+      running.stop();
+      return;
+    }
+
+    const recorderConstructor = constructorRef.current;
+    const mimeType = mimeTypeRef.current;
+    if (recorderConstructor === null || mimeType === null) return;
+
+    const scope = recorderScope();
+    const mediaDevices = scope.navigator?.mediaDevices;
+    if (mediaDevices === undefined) {
+      setState({ kind: 'no-recorder' });
+      return;
+    }
+
+    // An async function inside the handler rather than a then-chain: memory
+    // `project_oxlint_promise_always_return` records why the chain form is not
+    // available here.
+    const run = async (): Promise<void> => {
+      let stream: MediaStream;
+      try {
+        stream = await mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        // The one failure the reader can fix, and it gets the same sentence the
+        // Web Speech path uses for it.
+        setState({ kind: 'refused', messageKey: 'voice.denied' });
+        return;
+      }
+
+      const recorder: AudioRecorder = new recorderConstructor(stream, { mimeType });
+      const session = startRecording({
+        recorder,
+        releaseStream: () => {
+          for (const track of stream.getTracks()) track.stop();
+        },
+      });
+      sessionRef.current = session;
+      setState({ kind: 'recording' });
+
+      const clip = await session.clip;
+      sessionRef.current = null;
+      setState({ kind: 'sending' });
+
+      const outcome = await postRecording({ clip, language });
+      if (outcome.kind === 'refused') {
+        setState({ kind: 'refused', messageKey: outcome.messageKey });
+        return;
+      }
+
+      // The same delivery the Web Speech path uses: the words land in the
+      // ordinary search box and the ordinary form submits them, so the query
+      // travels the normal normalisation, fuzzy match and did-you-mean path.
+      deliverTranscript({ input: inputRef.current, form: formRef.current }, { transcript: outcome.text, isFinal: true });
+      setState({ kind: 'transcribed', model: outcome.model, labelKey: outcome.labelKey });
+    };
+
+    void run().catch(() => setState({ kind: 'refused', messageKey: TRANSCRIPTION_FAILED_KEY }));
+  }, [formRef, inputRef, language]);
+
+  return (
+    <ServerVoiceControl
+      state={state}
+      language={language}
+      onLanguageChange={onLanguageChange}
+      onToggle={handleToggle}
+      triggerId={triggerId}
+      className={className}
+    />
   );
 }
 
@@ -503,6 +776,23 @@ export function VoiceInput({
       },
     });
   }, [formRef, inputRef, language]);
+
+  // The two paths are different components, not two branches of one, because
+  // they are different bargains: one keeps the audio on the device and the
+  // other uploads it. The narrowed `BrowserVoiceState` makes this branch
+  // compulsory rather than optional.
+  if (state.kind === 'unsupported') {
+    return (
+      <ServerVoiceFallback
+        inputRef={inputRef}
+        formRef={formRef}
+        language={language}
+        onLanguageChange={handleLanguageChange}
+        triggerId={triggerId}
+        className={className}
+      />
+    );
+  }
 
   return (
     <VoiceControl

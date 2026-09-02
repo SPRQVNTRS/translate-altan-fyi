@@ -61,6 +61,13 @@ export default [
   route('/api/v1/sync/blob', 'routes/api.v1.sync.blob.ts'),
   route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
 
+  // Voice input's server half: a recorded clip in, a line of text out. Public
+  // and free like the search it feeds, and guarded by the same per-IP and
+  // per-session hourly limits and the same daily budget cap as enrichment. It
+  // sits under `/api/v1/` for the flat naming, NOT for the bearer token: the
+  // caller is a browser with no Web Speech API, not an API client.
+  route('/api/v1/transcribe', 'routes/api.v1.transcribe.ts'),
+
   // Public and read only, unlike the bearer-token `/api/v1/*` routes above.
   route('/api/enrichment/:headwordId', 'routes/api.enrichment.$headwordId.ts'),
 
