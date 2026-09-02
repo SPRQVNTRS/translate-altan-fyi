@@ -15,15 +15,30 @@ export const meta: MetaFunction = ({ matches }) => {
 };
 
 /**
- * Whether this browser holds a sync session, and nothing else about it.
+ * Whether this browser holds a sync session, and the handle it holds it under.
  *
- * The handle is deliberately not returned: the settings screen has no copy
- * that names it, and a value that is not rendered is a value that cannot leak
- * into a screenshot or a bug report.
+ * ── THE HANDLE IS RETURNED NOW, AND THIS IS WHY ──────────────────────────
+ *
+ * It used to be withheld, on the reasoning that the screen had no copy that
+ * named it and a value nothing renders cannot leak into a screenshot. That
+ * reasoning has changed on its premise rather than been dropped: the unlock
+ * card needs the handle to re-derive the data key after a reload, because the
+ * key lives in memory only and the handle is gone with it. Without it the card
+ * would have to ask the user to retype an opaque machine-minted name they
+ * never chose, on a screen that already knows it.
+ *
+ * It is acceptable because of what the value is and where it goes: the
+ * account's own identifier, handed to its owner, on a page that only this
+ * session's cookie can load. It is not a credential, and it opens nothing on
+ * its own. Every secret the protocol has stays on the other side of this line,
+ * and the passphrase, the KEK and the data key still never reach a loader.
+ *
+ * IT IS STILL NOT RENDERED. The card reads it and posts it; no element on this
+ * screen prints it, so the screenshot argument above survives intact.
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await getAccountSession(request);
-  return { isSignedIn: account !== null };
+  return { isSignedIn: account !== null, handle: account?.handle ?? null };
 }
 
 export default function SettingsRoute({ loaderData }: Route.ComponentProps) {
@@ -45,7 +60,7 @@ export default function SettingsRoute({ loaderData }: Route.ComponentProps) {
           <LanguageToggle />
         </div>
       </div>
-      <SyncSettingsCards isSignedIn={loaderData.isSignedIn} />
+      <SyncSettingsCards isSignedIn={loaderData.isSignedIn} handle={loaderData.handle} />
     </div>
   );
 }

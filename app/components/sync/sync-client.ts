@@ -468,9 +468,36 @@ async function signUp(input: {
 /**
  * Signs in on a second device, and opens the account's data key.
  *
- * The passphrase is stretched here and the derived `authHash` is what travels.
- * The service answers one `401` for an unknown handle and for a wrong
- * passphrase alike, deliberately, so the caller must not try to say which.
+ * The name the sign-in screen calls {@link unlockSyncSession} by. The
+ * sequence, and every reason behind it, is documented there.
+ */
+export async function signInToSync(input: { handle: string; passphrase: string }): Promise<UnlockedSyncSession> {
+  return unlockSyncSession(input);
+}
+
+/**
+ * Opens the account's data key from a handle and a passphrase, and takes the
+ * session that comes with it.
+ *
+ * THE SAME WIRE SEQUENCE AS A SIGN-IN, because it is the same work: fetch the
+ * account's KDF descriptor, stretch the passphrase once, log in with the
+ * derived hash, and unwrap the DEK from the `passphrase` key record under the
+ * KEK. `signInToSync` above is this function under the name the sign-in screen
+ * calls it by; the difference is the user's intent, not the protocol.
+ *
+ * IT EXISTS SEPARATELY FOR THE UNLOCK CARD. The DEK lives in memory only, so a
+ * reload leaves a browser SIGNED IN AND UNABLE TO SYNC, and the only way back
+ * is Argon2id over the passphrase again. Writing that sequence a second time
+ * in a component would be a second derivation path to keep correct, and the
+ * first one to drift would be the one nobody drives in a browser.
+ *
+ * The login call is not skipped for the unlock case even though the session
+ * cookie would already authenticate the key-records read. It is what checks
+ * the passphrase server side, with the same single `401` for a wrong
+ * passphrase and an unknown handle, and it refreshes the token family the
+ * device will sync under. The service answers that one `401` for an unknown
+ * handle and for a wrong passphrase alike, deliberately, so no caller may try
+ * to say which.
  *
  * ── Why the unwrap belongs in the same call ──────────────────────────────
  *
@@ -481,7 +508,7 @@ async function signUp(input: {
  * beyond this call frame — and there is no such somewhere. So the KEK is used
  * where it is derived, and only the unwrapped DEK leaves.
  */
-export async function signInToSync({
+export async function unlockSyncSession({
   handle,
   passphrase,
 }: {

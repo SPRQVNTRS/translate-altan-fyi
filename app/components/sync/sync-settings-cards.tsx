@@ -4,6 +4,8 @@ import { Link, useRevalidator } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { Button } from '#app/components/ui/button';
 import { signOutOfSync } from '#app/components/sync/sync-client';
+import { SyncUnlockCard } from '#app/components/sync/sync-unlock-card';
+import { getSyncSession } from '#app/lib/sync/sync-session';
 
 /**
  * The sync cards on the settings screen, and the ONLY place in this product
@@ -29,8 +31,27 @@ import { signOutOfSync } from '#app/components/sync/sync-client';
  * record and the verifier together, and it belongs in `openplate-sync` first
  * and is copied here afterwards. It is a tracked follow-up.
  */
-export function SyncSettingsCards({ isSignedIn }: { isSignedIn: boolean }) {
+export function SyncSettingsCards({ isSignedIn, handle }: { isSignedIn: boolean; handle: string | null }) {
+  // THREE STATES, NOT TWO. Being signed in and holding the data key are
+  // different facts: the session cookie survives a reload and the key does
+  // not, so a device can be signed in and unable to sync. The loader answers
+  // the first; only this browser can answer the second.
+  //
+  // Read once at mount rather than watched. The key can only appear while this
+  // screen is open by way of the card below, which says so through
+  // `onUnlocked`, and it renders `null` on the server for every visitor, which
+  // is exactly what a freshly loaded page holds.
+  const [hasDataKey, setHasDataKey] = useState(() => getSyncSession() !== null);
+
   if (!isSignedIn) return <SyncSetupCard />;
+  if (!hasDataKey && handle !== null) {
+    return (
+      <>
+        <SyncUnlockCard handle={handle} onUnlocked={() => setHasDataKey(true)} />
+        <SignOutCard />
+      </>
+    );
+  }
   return <SignOutCard />;
 }
 

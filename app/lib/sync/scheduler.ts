@@ -1,23 +1,40 @@
 /**
  * The sync triggers, and the one place in this feature that touches `window`.
  *
- * Three things start a cycle, and no more: a settled burst of local edits, the
- * tab regaining focus, and the browser coming back online. Each of them does
- * the same thing — put ONE sync intent in the outbox and ask the outbox to
- * drain — so the ordering, the retry backoff and the single-flight guarantee
- * all live in `app/lib/local-store/outbox.ts` rather than being reimplemented
- * per trigger.
+ * Four things start a sync, and no more: the scheduler starting, a session
+ * being established, the tab regaining focus, and the browser coming back
+ * online — plus a settled burst of local edits, which is a different thing and
+ * is handled differently below.
  *
  * This module has no upstream counterpart, so it carries no provenance header.
  *
- * ── Why the outbox and not a bare call ────────────────────────────────────
+ * ── An empty outbox used to mean silence, and that was the bug ────────────
  *
- * A cycle that fails needs to be retried later, in order, without a second
- * cycle jumping ahead of it. That is exactly what the outbox state machine
- * already does for queued intents, and `flushOutboxOnce` is already
- * single-flight — so `focus` and `online` firing together share one run
- * instead of racing. Calling `runSyncCycle` straight from an event handler
- * would need all of that written again, worse.
+ * Every trigger here once did the same thing: put an intent in the outbox and
+ * ask the outbox to drain. That is correct for a WRITE and wrong for
+ * everything else, because THE OUTBOX CARRIES WRITES. A device that has never
+ * made a local edit has an empty outbox, `selectFlushableRecords` picks
+ * nothing, and no cycle ever runs — so a second device signed in with the same
+ * handle sat on "No lists yet" forever while the account's blob was sitting on
+ * the server. A device with nothing to say still needs to listen.
+ *
+ * So the boot, session, `focus` and `online` triggers now run a CYCLE. A cycle
+ * is not a push: `runSyncCycleForCurrentSession` pulls, decrypts, merges,
+ * applies, and pushes only when the merge contributed something
+ * (`orchestrator.ts` skips the push when `payloadsEqual`), so running one on a
+ * device with nothing to contribute costs a pull and no blob version.
+ *
+ * ── Why the outbox is still flushed first ────────────────────────────────
+ *
+ * The debounced local-write trigger keeps its outbox intent, because a failed
+ * push has to be retried later, in order, with backoff, and the outbox state
+ * machine already does exactly that. So each trigger drains the queue first,
+ * in order, and then runs its own cycle. Both paths serialize on the SAME two
+ * mechanisms and no third one is introduced: `flushOutboxOnce` is already
+ * single-flight, and `runSyncCycle` already takes `withSyncOrchestratorLock`.
+ * When the flush has just run a cycle of its own, the trigger's cycle is a
+ * pull that pushes nothing, which is cheaper than a third piece of state
+ * deciding whether it was needed.
  */
 import { reportError } from '#app/lib/report-error';
 // THROUGH THE BARREL, NOT PAST IT. `#app/lib/local-store` is the one seam
@@ -35,7 +52,7 @@ import {
 } from '#app/lib/local-store';
 import { isSyncRequestError } from '#app/lib/e2ee/client/sync-error';
 import { runSyncCycleForCurrentSession } from './orchestrator';
-import { getSyncSession } from './sync-session';
+import { getSyncSession, setSyncSessionListener } from './sync-session';
 
 /** How long a burst of local edits is allowed to settle before a push. */
 export const PUSH_DEBOUNCE_MS = 1_500;
@@ -64,6 +81,23 @@ const syncIntentRunner: OutboxRunner = async () => {
 };
 
 /**
+ * One cycle, with its failures absorbed.
+ *
+ * A dropped connection is the ordinary case for a trigger — `focus` fires on a
+ * tab that came back before the network did — so a transport failure is not
+ * reported: the next trigger retries, and reporting every one of them would
+ * bury the failures that mean something. Anything else is unexpected.
+ */
+async function runCycleAbsorbingTransport(): Promise<void> {
+  try {
+    await runSyncCycleForCurrentSession();
+  } catch (cause) {
+    if (isSyncRequestError(cause) && cause.kind === 'transport') return;
+    reportError(cause, { operation: 'sync-scheduler', step: 'runCycle' });
+  }
+}
+
+/**
  * Starts the sync triggers for this page. Returns a function that stops them.
  *
  * WITH NO SESSION THIS DOES NOTHING AT ALL, and that is the product rule, not
@@ -85,9 +119,16 @@ export function startSyncScheduler(): () => void {
 
   setOutboxRunner(syncIntentRunner);
 
-  const flush = (): void => {
+  /** Queued writes first, in order, then the pull this trigger exists for. */
+  const catchUp = async (): Promise<void> => {
     if (isStopped || getSyncSession() === null) return;
-    void flushOutboxOnce();
+    await flushOutboxOnce();
+    if (isStopped || getSyncSession() === null) return;
+    await runCycleAbsorbingTransport();
+  };
+
+  const onTrigger = (): void => {
+    void catchUp();
   };
 
   const queueAndFlush = async (): Promise<void> => {
@@ -129,15 +170,28 @@ export function startSyncScheduler(): () => void {
     }
   };
 
-  window.addEventListener('focus', flush);
-  window.addEventListener('online', flush);
+  window.addEventListener('focus', onTrigger);
+  window.addEventListener('online', onTrigger);
+  // The vault is the one place that knows a session appeared, and both the
+  // setup ceremony and the sign-in form reach it in the same turn that
+  // produced the key. Listening here is what lets a second device show its
+  // lists straight after it signs in, instead of waiting for the user to
+  // switch tabs and come back. The notification carries NO session: the DEK
+  // stays in the vault, and this module reads it back through
+  // `getSyncSession` like every other trigger.
+  setSyncSessionListener(onTrigger);
   void attachStoreListener();
+  // Boot. Usually a no-op, because a reload loses the DEK and the session is
+  // null a line later — the session trigger above is what covers the case this
+  // one cannot.
+  onTrigger();
 
   return () => {
     isStopped = true;
     if (pendingPush !== null) clearTimeout(pendingPush);
-    window.removeEventListener('focus', flush);
-    window.removeEventListener('online', flush);
+    window.removeEventListener('focus', onTrigger);
+    window.removeEventListener('online', onTrigger);
+    setSyncSessionListener(null);
     detachStoreListener?.();
     setOutboxRunner(null);
   };

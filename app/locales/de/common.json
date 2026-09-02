@@ -53,7 +53,6 @@
     "deleteBody": "Die Wörter in dieser Liste werden mitgelöscht. Das kann nicht rückgängig gemacht werden.",
     "deleteConfirm": "Liste löschen",
     "deleteCancel": "Abbrechen",
-    "itemCount": "{{count}} Wörter",
     "openList": "{{name}} öffnen",
     "detailEmptyTitle": "Keine Wörter in dieser Liste",
     "detailEmptyBody": "Füge ein Wort über seine Eintragsseite hinzu.",
@@ -68,7 +67,9 @@
     "renamedToast": "In {{name}} umbenannt.",
     "deletedToast": "Liste gelöscht.",
     "removedItemToast": "Wort aus der Liste entfernt.",
-    "removeItemPending": "Wort wird entfernt..."
+    "removeItemPending": "Wort wird entfernt...",
+    "itemCount_one": "{{count}} Wort",
+    "itemCount_other": "{{count}} Wörter"
   },
   "history": {
     "metaTitle": "Verlauf",
@@ -239,7 +240,14 @@
       "passphraseTooShort": "Deine Passphrase ist zu kurz. Bitte gib mindestens {{min}} Zeichen ein."
     },
     "pending": "Änderungen werden mit dem Server synchronisiert.",
-    "offline": "Offline. Änderungen werden auf diesem Gerät gespeichert und später synchronisiert."
+    "offline": "Offline. Änderungen werden auf diesem Gerät gespeichert und später synchronisiert.",
+    "lockedTitle": "Synchronisierung pausiert",
+    "lockedBody": "Deine Listen sind weiterhin auf diesem Gerät und funktionieren ganz normal. Gib deine Passphrase ein, um die Synchronisierung fortzusetzen. Dein Schlüssel wird niemals lokal oder auf dem Server gespeichert.",
+    "lockedPassphraseLabel": "Passphrase",
+    "unlockSubmit": "Synchronisierung fortsetzen",
+    "unlockPending": "Schlüssel wird überprüft, das dauert ein paar Sekunden...",
+    "unlockedToast": "Synchronisierung ist aktiv.",
+    "unlockFailed": "Falsche Passphrase."
   },
   "addToList": {
     "trigger": "In Liste speichern",

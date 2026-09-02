@@ -53,7 +53,6 @@
     "deleteBody": "The words in this list will be deleted with it. This cannot be undone.",
     "deleteConfirm": "Delete list",
     "deleteCancel": "Cancel",
-    "itemCount": "{{count}} words",
     "openList": "Open {{name}}",
     "detailEmptyTitle": "No words in this list",
     "detailEmptyBody": "Add a word from its entry page.",
@@ -68,7 +67,9 @@
     "renamedToast": "Renamed to {{name}}.",
     "deletedToast": "List deleted.",
     "removedItemToast": "Word removed from list.",
-    "removeItemPending": "Removing word..."
+    "removeItemPending": "Removing word...",
+    "itemCount_one": "{{count}} word",
+    "itemCount_other": "{{count}} words"
   },
   "history": {
     "metaTitle": "History",
@@ -239,7 +240,14 @@
       "passphraseTooShort": "Your passphrase is too short, so enter at least {{min}} characters."
     },
     "pending": "Syncing changes to the server.",
-    "offline": "Offline. Changes are saved on this device and will sync later."
+    "offline": "Offline. Changes are saved on this device and will sync later.",
+    "lockedTitle": "Sync is paused",
+    "lockedBody": "Your lists are still on this device and work normally. Enter your passphrase to resume syncing. Your key is never stored on disk or on the server.",
+    "lockedPassphraseLabel": "Passphrase",
+    "unlockSubmit": "Resume syncing",
+    "unlockPending": "Checking key, this takes a few seconds...",
+    "unlockedToast": "Sync is active.",
+    "unlockFailed": "Incorrect passphrase."
   },
   "addToList": {
     "trigger": "Save to list",

@@ -29,9 +29,31 @@ export interface SyncSession {
 
 let current: SyncSession | null = null;
 
+/**
+ * Notified when a session is installed. One slot, installed by the scheduler,
+ * mirroring `setOutboxRunner`.
+ *
+ * IT CARRIES NO SESSION, deliberately. The listener is told THAT a session
+ * exists and reads it back through {@link getSyncSession} if it needs it, so
+ * this module keeps its rule that the DEK leaves by exactly one door.
+ *
+ * It exists because this is the only place that sees all three ways in — the
+ * setup ceremony, the second-device sign-in and the unlock card — and a device
+ * that has just been handed a key should pull immediately rather than wait for
+ * the user to switch tabs and come back. The alternative was a trigger call
+ * duplicated in three components, one of which would eventually be forgotten.
+ */
+let sessionListener: (() => void) | null = null;
+
+/** Installs (or with `null`, removes) the notification the scheduler runs when a session appears. */
+export function setSyncSessionListener(listener: (() => void) | null): void {
+  sessionListener = listener;
+}
+
 /** Installs the session the sync engine runs under. Called by the setup and login ceremonies, immediately after the DEK exists. */
 export function setSyncSession(session: SyncSession): void {
   current = session;
+  sessionListener?.();
 }
 
 /** The current session, or `null` when nobody has unlocked on this page. A `null` here means "do not sync", never "sync anonymously". */
