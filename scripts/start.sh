@@ -32,12 +32,24 @@ term() {
   wait "$web_pid" 2>/dev/null || true
 }
 
+# THE HEAP CAPS ARE NOT TUNING, THEY ARE WHAT MAKES TWO PROCESSES FIT.
+#
+# Bay gives this service 512 MB (group_vars/all/services.yml, `translate`).
+# Measured on stage: the web process alone sat at 220 MiB, and adding the worker
+# took the container to 485 MiB, 95% of the limit, with no headroom for the JSON
+# an enrichment response carries. V8 sizes its old space generously when nothing
+# tells it not to, so both processes were holding memory they did not need.
+#
+# Capping old space brings the pair to roughly 400 MiB and leaves real room. The
+# worker gets the smaller cap because its work is one prompt and one parsed
+# response at a time, while the web process holds the React Router server bundle
+# and the connection pool. Raise these together with `mem_limit`, never alone.
 echo "[start] Starting worker..."
-pnpm worker &
+NODE_OPTIONS="--max-old-space-size=128" pnpm worker &
 worker_pid=$!
 
 echo "[start] Starting server..."
-pnpm start &
+NODE_OPTIONS="--max-old-space-size=256" pnpm start &
 web_pid=$!
 
 trap 'term; exit 0' TERM INT
