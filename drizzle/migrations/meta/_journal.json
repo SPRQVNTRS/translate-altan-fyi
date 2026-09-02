@@ -50,6 +50,13 @@
       "when": 1788355468079,
       "tag": "0006_flat_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788356060024,
+      "tag": "0007_colorful_patriot",
+      "breakpoints": true
     }
   ]
 }

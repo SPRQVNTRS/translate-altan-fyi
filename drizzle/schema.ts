@@ -37,6 +37,11 @@ export * from './schema/dictionary';
 // Also NOT tenant-scoped, and re-exported here for the same reason.
 export * from './schema/settings';
 
+// Enrichments (LLM-written study notes, cached per sense).
+// Global as well: an enrichment belongs to the shared dictionary, not to a
+// tenant, so it is not in TENANT_TABLES either.
+export * from './schema/enrichment';
+
 // =============================================================================
 // Organizations (Multi-Tenancy Core)
 // =============================================================================

@@ -10,6 +10,7 @@ import { db } from '#drizzle/db';
 import { CONFIG } from '#config';
 import { createComponentLogger } from '#app/lib/logger';
 import { registerAllWorkflows } from '#app/workflows';
+import { ENRICHMENT_QUEUE } from '#app/lib/enrichment/limits';
 
 const log = createComponentLogger('WorkflowService');
 
@@ -51,12 +52,42 @@ export async function initializeWorkflows(): Promise<WorkflowOrchestrator> {
     queues: [
       { name: 'default', workers: 2, pollingIntervalMs: 2000 },
       { name: 'sequential', workers: 1 }, // For workflows that must run one at a time
+      { name: ENRICHMENT_QUEUE, workers: 2, pollingIntervalMs: 2000 },
     ],
     defaultTimeout: 30000,
     defaultRetryLimit: 3,
     defaultRetryDelay: 5,
     debug: CONFIG.app.isDevelopment,
   });
+
+  /**
+   * Give the enrichment queue a deduping policy. THIS IS THE ONLY PLACE THAT CAN.
+   *
+   * In pg-boss 10.4.2 the `singletonKey` passed to `orchestrator.start()` is
+   * INERT unless the queue it lands on carries a deduping policy. Every unique
+   * index over `singleton_key` is policy-gated (job_i1 needs `short`, job_i2
+   * needs `singleton`, job_i3 needs `stately`), so under the default `standard`
+   * policy the key is stored on the row and enforces nothing: ten concurrent
+   * enqueues make ten jobs, and ten runs can each read an empty cache and pay a
+   * provider.
+   *
+   * `stately` rather than `short` on purpose. `short` only dedupes jobs still in
+   * `created`, so the moment one job goes active a second enqueue queues a
+   * second job and both can pay. `stately` is unique per (queue, state, key) for
+   * every state up to `active`, so there can never be two ACTIVE runs for one
+   * key. A single follow-up job may sit in `created` behind a running one, which
+   * is correct: it runs afterwards, finds the cache full, and costs nothing.
+   *
+   * BOTH CALLS ARE REQUIRED, and this is exactly the trap that produced the bug.
+   * `createQueue` is ON CONFLICT DO NOTHING, so it cannot repair a queue that
+   * already exists with the wrong policy. `updateQueue` cannot create one. Only
+   * the pair is correct on a fresh database AND on an already-deployed one.
+   * @sprqvntrs/workflows 0.2.5 calls `boss.createQueue(name)` with no options,
+   * so neither the library nor a restart can ever set a policy by itself.
+   */
+  const boss = orchestrator.getBoss();
+  await boss.createQueue(ENRICHMENT_QUEUE, { name: ENRICHMENT_QUEUE, policy: 'stately' });
+  await boss.updateQueue(ENRICHMENT_QUEUE, { name: ENRICHMENT_QUEUE, policy: 'stately' });
 
   // Register all templates and operation handlers from app/workflows/
   registerAllWorkflows(orchestrator);

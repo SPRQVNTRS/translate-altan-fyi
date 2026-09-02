@@ -18,6 +18,7 @@
  */
 
 import { logStartHandler, processDataHandler, generateReportHandler } from './dummy';
+import { enrichHeadwordHandler } from './enrichment';
 
 /**
  * Structured operation handlers organized by domain.
@@ -29,7 +30,11 @@ export const operationHandlers = {
     processData: processDataHandler,
     generateReport: generateReportHandler,
   },
+  enrichment: {
+    enrichHeadword: enrichHeadwordHandler,
+  },
 } as const;
 
 // Re-export individual handlers for direct access if needed
 export { logStartHandler, processDataHandler, generateReportHandler } from './dummy';
+export { enrichHeadwordHandler } from './enrichment';
