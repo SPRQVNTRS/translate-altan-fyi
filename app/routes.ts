@@ -54,6 +54,10 @@ export default [
   route('/api/v1/auth/recover', 'routes/api.v1.auth.recover.ts'),
   route('/api/v1/auth/recover-rotate', 'routes/api.v1.auth.recover-rotate.ts'),
   route('/api/v1/auth/account', 'routes/api.v1.auth.account.ts'),
+  // The signed-in devices of one account, and the revoke that ends one of
+  // them. A device here is a TOKEN FAMILY, which is what `logout` already
+  // revokes: there is no device registry to keep in step, and no new column.
+  route('/api/v1/auth/devices', 'routes/api.v1.auth.devices.ts'),
   route('/api/v1/sync/blob', 'routes/api.v1.sync.blob.ts'),
   route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
 

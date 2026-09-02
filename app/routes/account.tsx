@@ -4,6 +4,9 @@ import type { Route } from './+types/account';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { getAccountSession } from '#app/services/account-session.server';
 import { readLatestBlobSizeBytes } from '#app/services/e2ee-blob-usage.server';
+import { listAccountDevicesForRequest, type AccountDeviceSummary } from '#app/services/account-devices.server';
+import { DeviceList } from '#app/components/account/device-list';
+import { ExportDataButton } from '#app/components/account/export-data-button';
 
 const BYTES_PER_KIB = 1024;
 const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB;
@@ -23,25 +26,37 @@ export const meta: MetaFunction = ({ matches }) => {
  * `getAccountSession` returns `null` for a signed-out visitor and never
  * throws, which is exactly the contract this loader needs.
  *
- * ONLY THE HANDLE AND THE STORED BYTE COUNT CROSS THE BOUNDARY. Not the
- * account id, and above all not the tokens the session cookie carries. A
- * loader's return value is serialized into the HTML and readable by any script
- * on the page, which is the precise property the httpOnly cookie exists to
- * deny. The byte count is safe to add because it is a length, not content: the
- * server holds no key for those bytes and this number is the only fact about
- * them it can state.
+ * ONLY THE HANDLE, THE STORED BYTE COUNT AND THE DEVICE LIST CROSS THE
+ * BOUNDARY. Not the account id, not the family id of the current device beyond
+ * the `current` boolean the server already decided, and above all not the
+ * tokens the session cookie carries. A loader's return value is serialized into
+ * the HTML and readable by any script on the page, which is the precise
+ * property the httpOnly cookie exists to deny. The byte count is safe to add
+ * because it is a length, not content: the server holds no key for those bytes
+ * and this number is the only fact about them it can state. A device entry is
+ * safe for the same kind of reason: a family id is a handle for a revoke, and
+ * presenting one proves nothing.
  *
- * A SIGNED-OUT VISITOR IS NOT QUERIED AT ALL. There is no account to attribute
- * a blob to, so the read is skipped rather than run and discarded.
+ * A SIGNED-OUT VISITOR IS NOT QUERIED AT ALL, for either read. There is no
+ * account to attribute a blob or a session to, so both are skipped rather than
+ * run and discarded.
  *
- * @returns the signed-in handle and its stored blob size, or `null` for each.
+ * @returns the signed-in handle, its stored blob size and its live devices.
+ *   `null`, `null` and an empty list for a signed-out visitor.
  */
-export async function loader({
-  request,
-}: Route.LoaderArgs): Promise<{ handle: string | null; vaultSizeBytes: number | null }> {
+export async function loader({ request }: Route.LoaderArgs): Promise<{
+  handle: string | null;
+  vaultSizeBytes: number | null;
+  devices: AccountDeviceSummary[];
+}> {
   const session = await getAccountSession(request);
-  if (!session) return { handle: null, vaultSizeBytes: null };
-  return { handle: session.handle, vaultSizeBytes: await readLatestBlobSizeBytes(session.accountId) };
+  if (!session) return { handle: null, vaultSizeBytes: null, devices: [] };
+
+  const [vaultSizeBytes, devices] = await Promise.all([
+    readLatestBlobSizeBytes(session.accountId),
+    listAccountDevicesForRequest({ request, accountId: session.accountId }),
+  ]);
+  return { handle: session.handle, vaultSizeBytes, devices };
 }
 
 /**
@@ -82,7 +97,7 @@ function formatByteSize(input: { bytes: number; language: string }): string {
  */
 export default function AccountRoute({ loaderData }: Route.ComponentProps) {
   const { t, i18n } = useTranslation();
-  const { handle, vaultSizeBytes } = loaderData;
+  const { handle, vaultSizeBytes, devices } = loaderData;
   const vaultSizeText =
     vaultSizeBytes === null
       ? t('account.vaultSizeEmpty')
@@ -109,6 +124,14 @@ export default function AccountRoute({ loaderData }: Route.ComponentProps) {
           </div>
         )}
       </div>
+
+      {/* Signed in only: a signed-out visitor has no sessions to list, and the
+          empty card would read as an invitation to make some. */}
+      {handle !== null && <DeviceList devices={devices} />}
+
+      {/* Always, in both states. What this exports is the DEVICE'S data, which
+          exists with or without an account. */}
+      <ExportDataButton />
     </div>
   );
 }
