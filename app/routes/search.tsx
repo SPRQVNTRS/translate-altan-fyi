@@ -17,8 +17,6 @@ export const meta: MetaFunction = () => [
 export default function SearchRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Search</h1>
-
       <div className="surface-brand rounded-xl border p-5">
         <label htmlFor="search-word" className="text-sm font-medium">
           Word or phrase

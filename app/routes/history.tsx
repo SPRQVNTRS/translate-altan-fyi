@@ -8,10 +8,9 @@ export const meta: MetaFunction = () => [
 export default function HistoryRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">History</h1>
-
       <div className="surface-brand-soft rounded-xl border border-dashed p-6">
-        <p className="text-sm text-muted-foreground">
+        <h2 className="font-display text-base font-semibold">Recent searches</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
           Every word you look up lands here, so you can find it again. Your first search starts the list.
         </p>
       </div>

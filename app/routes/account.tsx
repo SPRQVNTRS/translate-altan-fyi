@@ -12,10 +12,9 @@ export const meta: MetaFunction = () => [
 export default function AccountRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Account</h1>
-
       <div className="rounded-xl border bg-card p-6">
-        <p className="text-sm text-muted-foreground">
+        <h2 className="font-display text-base font-semibold">Your account and devices</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
           This screen will show the account your words belong to, and the devices signed in to it. The app is free, so
           there is nothing to pay for and no plan to pick.
         </p>
