@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BookMarked, History, Search, Settings, UserRound, type LucideIcon } from 'lucide-react';
+import { BookMarked, History, ScrollText, Search, Settings, UserRound, type LucideIcon } from 'lucide-react';
 import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { cn } from '#app/lib/utils';
@@ -59,6 +59,9 @@ export const navigationItems: NavigationItem[] = [
   { labelKey: 'nav.history', to: '/history', icon: History, group: 'primary', tab: { order: 3 } },
   { labelKey: 'nav.settings', to: '/settings', icon: Settings, group: 'footer' },
   { labelKey: 'nav.account', to: '/account', icon: UserRound, group: 'footer' },
+  // No `tab`: the mobile bar stays three tabs. Sources is a licence
+  // obligation the reader consults once, not a place they go every day.
+  { labelKey: 'nav.attribution', to: '/attribution', icon: ScrollText, group: 'footer' },
 ];
 
 /** The day-to-day destinations, in catalog order: the top block of the drawer and the sidebar. */
