@@ -9,8 +9,10 @@ import { Input } from '#app/components/ui/input';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
+import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords } from '#app/lib/dictionary/search.server';
+import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
 import { getRawDb } from '#drizzle/tenant-db';
 
 // `meta()` runs outside the React tree, so it has no `t`. It goes through the
@@ -68,6 +70,24 @@ export async function loader({ request }: Route.LoaderArgs) {
   // parameters here instead would produce a correct-looking direction label
   // sitting over results drawn from the wrong side of the dictionary.
   const hits = await searchHeadwords(db, { q, from: direction.from, to: direction.to });
+
+  // THE TOP HIT ONLY, AND FIRE AND FORGET.
+  //   Warming the whole result page would multiply the provider spend by ten
+  //   for a reader who opens one word, and the top hit is the one they open.
+  //   The call never awaits and never rejects, so the results render at
+  //   dictionary speed whether or not a job was queued. Nothing on this screen
+  //   changes: the warmed notes show up on the entry page the reader clicks
+  //   through to.
+  const topHit = hits[0];
+  if (topHit) {
+    enqueueEnrichmentInBackground({
+      headwordId: topHit.headwordId,
+      from: direction.from,
+      to: direction.to,
+      promptVersion: PROMPT_VERSION,
+    });
+  }
+
   return { q, direction, hits };
 }
 

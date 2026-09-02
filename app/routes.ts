@@ -40,6 +40,9 @@ export default [
   route('/api/v1/admin/db/describe/:table', 'routes/api.v1.admin.db.describe.$table.ts'),
   route('/api/v1/admin/db/query', 'routes/api.v1.admin.db.query.ts'),
 
+  // Public and read only, unlike the bearer-token `/api/v1/*` routes above.
+  route('/api/enrichment/:headwordId', 'routes/api.enrichment.$headwordId.ts'),
+
   // =============================================================================
   // App Shell (sidebar, mobile drawer, bottom tab bar)
   // =============================================================================

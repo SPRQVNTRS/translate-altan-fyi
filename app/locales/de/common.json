@@ -91,7 +91,18 @@
   "enrichment": {
     "title": "Erklärung und weitere Beispiele",
     "idle": "Erklärungen und weitere Beispiele erscheinen hier, sobald dieser Eintrag erweitert wurde.",
-    "pending": "Erklärung wird verfasst und weitere Beispiele werden gesammelt."
+    "pending": "Erklärung wird verfasst und weitere Beispiele werden gesammelt.",
+    "notConfigured": "Ausführliche Anmerkungen sind nicht verfügbar, da mit diesem Server kein Sprachmodell verbunden ist.",
+    "stillWorking": "Das dauert etwas länger als gewöhnlich. Schauen Sie einfach in Kürze noch einmal vorbei.",
+    "failed": "Diese Erklärung konnte nicht erstellt werden. Bitte versuchen Sie es etwas später noch einmal.",
+    "generatedBy": "Erstellt von {{model}}, nicht von einer Person überprüft.",
+    "sourceCredit": "Über unsere Quellen",
+    "translationLabel": "Übersetzungen",
+    "explanationLabel": "Erklärung",
+    "registerLabel": "Sprachregister",
+    "usageNotesLabel": "Hinweise zur Verwendung",
+    "examplesLabel": "Beispiele",
+    "commonMistakesLabel": "Häufige Fehler"
   },
   "attribution": {
     "metaTitle": "Quellen",

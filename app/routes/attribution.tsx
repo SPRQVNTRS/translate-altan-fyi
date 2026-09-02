@@ -31,6 +31,16 @@ const LICENCE_URLS = new Map<string, string>([
 /** The licence identifier for our own generated content. */
 const GENERATED_LICENCE = 'LLM-GENERATED';
 
+/**
+ * The STABLE anchor for the generated-content card.
+ *
+ * Every enrichment panel carries a credit link to `/attribution#llm-generated`,
+ * and that link must not depend on whatever slug the generated source row
+ * happens to hold. The card keeps its slug anchor as well, so a credit written
+ * against either address lands on it.
+ */
+const GENERATED_ANCHOR = 'llm-generated';
+
 /** One source card's data, with the timestamp already reduced to a stable string. */
 interface SourceCard {
   id: string;
@@ -88,6 +98,10 @@ function SourceCardView({ source }: { source: SourceCard }) {
     // `scroll-mt-24` clears the sticky app header, so a `#slug` jump lands on
     // the card's title rather than behind the chrome.
     <section id={source.slug} className="scroll-mt-24 rounded-lg border bg-card p-4 shadow-sm">
+      {/* `scroll-mt-24` again, because the jump target is this element rather
+          than the card, and the sticky app header would otherwise cover the
+          title the reader was sent here to read. */}
+      {isGenerated && <span id={GENERATED_ANCHOR} className="block scroll-mt-24" aria-hidden="true" />}
       <h2 className="font-display text-base font-semibold">{isGenerated ? t('attribution.generatedTitle') : source.name}</h2>
       {isGenerated && <p className="mt-1 text-sm text-muted-foreground">{t('attribution.generatedBody')}</p>}
       <dl className="mt-3 space-y-1">

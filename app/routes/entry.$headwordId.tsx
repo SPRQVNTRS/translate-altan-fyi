@@ -14,7 +14,10 @@ import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { isServedLanguage, type Direction, type LanguageCode } from '#app/lib/dictionary/detect-language';
 import { EXAMPLE_LIMIT, getEntry } from '#app/lib/dictionary/entry.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
+import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
+import { resolveEnrichmentPanel, type EnrichmentPanel } from '#app/lib/enrichment/state.server';
 import type { TitleHandle } from '#app/lib/route-title';
+import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
 import { getRawDb } from '#drizzle/tenant-db';
 
 export const meta: MetaFunction = ({ matches }) => {
@@ -45,6 +48,19 @@ export const handle = {
 } satisfies TitleHandle;
 
 /**
+ * The panel for a page that shows no entry at all, and for an entry in a
+ * language this dictionary does not serve. Nothing is arriving in either case,
+ * and nobody asked for it, which is exactly what `not-requested` says.
+ */
+const MISSING_ENTRY_PANEL: EnrichmentPanel = {
+  state: 'idle',
+  reason: 'not-requested',
+  model: null,
+  from: null,
+  senses: [],
+};
+
+/**
  * One headword, with its senses and its examples.
  *
  * MISSING IS A 200, RETIRED IS A 302.
@@ -73,29 +89,51 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     return redirect(`/entry/${resolved.replacementId}${url.search}`);
   }
   if (resolved.kind !== 'found' || resolved.entity !== 'headword') {
-    return { entry: null, examples: [], direction: null, to };
+    return { entry: null, examples: [], direction: null, to, panel: MISSING_ENTRY_PANEL };
   }
 
   const entry = await getEntry(db, { headwordId: resolved.id, to });
   if (entry === null) {
-    return { entry: null, examples: [], direction: null, to };
+    return { entry: null, examples: [], direction: null, to, panel: MISSING_ENTRY_PANEL };
   }
-  // Built here rather than in the component so the language code is NARROWED
-  // by a real check instead of an assertion. An entry in a language outside the
-  // served four simply gets no chip.
-  const direction: Direction | null =
-    isServedLanguage(entry.languageCode) ? { from: entry.languageCode, to, detected: false } : null;
+  // Narrowed here rather than in the component, by a real check instead of an
+  // assertion, and narrowed ONCE for the chip, the panel and the job payload.
+  // Both the enrichment cache key and the job payload are keyed on a served
+  // language, so an entry outside the served four gets no chip and no
+  // enrichment rather than a row nothing could ever look up again.
+  const from: LanguageCode | null = isServedLanguage(entry.languageCode) ? entry.languageCode : null;
+  const direction: Direction | null = from === null ? null : { from, to, detected: false };
+
+  const panel: EnrichmentPanel =
+    from === null
+      ? MISSING_ENTRY_PANEL
+      : await resolveEnrichmentPanel(db, {
+          headwordId: entry.headwordId,
+          senseIds: entry.senses.map((sense) => sense.senseId),
+          from,
+          to,
+        });
+
+  // FIRE AND FORGET. A loader NEVER awaits a provider: the dictionary rows are
+  // already in hand, and holding the page open for a model call would trade a
+  // fast entry page for a slow one on every first visit. The job runs behind
+  // the response, and the panel polls the read-only companion route for its
+  // result.
+  if (from !== null && panel.state === 'pending') {
+    enqueueEnrichmentInBackground({ headwordId: entry.headwordId, from, to, promptVersion: PROMPT_VERSION });
+  }
+
   // The cap is applied HERE, not in the component. `EXAMPLE_LIMIT` is a value
   // from a `.server` module, and a value read by any route export other than
   // the loader pulls that whole module into the CLIENT bundle, which
   // `react-router build` rejects. Typecheck and the dev server both let it
   // through, so the production build is the only thing that catches it.
-  return { entry, examples: entry.examples.slice(0, EXAMPLE_LIMIT), direction, to };
+  return { entry, examples: entry.examples.slice(0, EXAMPLE_LIMIT), direction, to, panel };
 }
 
 export default function EntryRoute({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
-  const { entry, examples, direction, to } = loaderData;
+  const { entry, examples, direction, to, panel } = loaderData;
 
   if (entry === null) {
     return (
@@ -163,9 +201,7 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
         )}
       </section>
 
-      {/* `idle` for now: nothing is enriching this entry, and M171 is what makes
-          the other two states reachable. */}
-      <EnrichmentSection state="idle" />
+      <EnrichmentSection panel={panel} headwordId={entry.headwordId} to={to} />
 
       <Link to="/" className="text-sm text-primary hover:underline">
         {t('entry.backToSearch')}
