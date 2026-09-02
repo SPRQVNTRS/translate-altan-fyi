@@ -96,3 +96,49 @@ One thing worth recording rather than fixing here: `Buch` was saved under a
 meaning that has no translation yet, so its card back reads
 `No translation yet for this word.` That is the entry's own state, shown by the
 shared `search.noTranslationYet` string, not a review defect.
+
+## M174/02 browser check
+
+Date: 2026-09-03
+Browser: Chrome 152 (headed, via agent-browser)
+Target: the local production build (`pnpm build` then `pnpm start`) at
+`http://localhost:3210/`, viewport 390 x 844.
+
+Three words were saved through the real screens: `water`, `bread` and `book`,
+each searched, opened, a meaning picked, and saved to a list named
+`Nudge check`. A list review then answered every card `Still learning` once, so
+all three carried `stillLearningCount 1` in the `reviewState` table of the
+`translate-primary` IndexedDB database.
+
+1. **Nothing on the server.** `curl` of `/` returns HTML with no
+   `daily-nudge-title` and no nudge copy. The card exists only after hydration.
+2. **Nothing before there is anything to offer.** On the very first visit, with
+   no saved words, no card rendered and `nudgeShownOn` was not written. The
+   marker is only written when a card is actually shown.
+3. **Three real words.** On the home screen the card read `Daily review`,
+   `Here are 3 saved words from your lists to review today.` and listed `book`,
+   `water` and `bread` with their saved translations. Screenshot:
+   `/tmp/trl-nudge.png`.
+4. **The session holds exactly those three.** `Review words` opened
+   `/review?entries=7bf4a638...,4536733f...,ef6573ff...`. The heading read
+   `Reviewing 3 words`, the progress line `0 of 3`, and three `Got it` presses
+   dealt `book`, `bread` and `water` and then the summary
+   `You reviewed 3 cards.` No fourth card, and no word from outside the three.
+5. **Once per local day.** Returning to `/` after the session, the card was
+   gone. `nudgeShownOn` in the store's values read `2026-09-03`, the device's
+   own local date, not the UTC one (the server logged the same moment as
+   22:11 UTC on 2 September).
+6. **Dismiss, then reload.** With `nudgeShownOn` set back to `2026-09-02` to
+   stand in for the next day, the card returned. `Dismiss for today` removed it,
+   and a reload did not bring it back. The stored date read `2026-09-03` again.
+
+The next local day was simulated by writing `2026-09-02` into the
+`nudgeShownOn` value in IndexedDB and reloading, because waiting for midnight is
+not a check anybody would run. The day boundary itself is asserted in
+`tests/unit/nudge-dismissal.test.ts` against dates rather than against a clock.
+
+Two things worth recording rather than fixing here. `water` and `book` were
+saved under meanings that have no translation yet, so the card lists them with
+the shared `search.noTranslationYet` line, which is the entry's own state. And
+the nudge renders on `/search` as well as on `/`, because both URLs are the same
+route module; that is the index screen either way.

@@ -61,6 +61,23 @@ export const LAST_EXPORT_VALUE = 'lastExportAt';
 export const DEVICE_ID_VALUE = 'deviceId';
 /** Store-level value holding the owner id the migration gate was last cleared for on this device. */
 export const MIGRATION_GATE_CLEARED_FOR_VALUE = 'migrationGateClearedFor';
+/**
+ * Store-level value holding the LOCAL calendar date, `YYYY-MM-DD`, the daily
+ * nudge was last shown on this device.
+ *
+ * A VALUE, NOT A ROW, AND DEVICE-ONLY. It is not an entity, it carries no
+ * {@link SyncStamp}, and it never enters the encrypted blob: `blob-schema.ts`
+ * projects the four synced COLLECTIONS and values are not among them, which is
+ * asserted in `tests/unit/personal/blob-serializer.test.ts`. Syncing it would
+ * mean a phone opened at breakfast silences the laptop opened at lunch, and a
+ * nudge is per device the same way a screen is.
+ *
+ * THE DEVICE'S OWN CALENDAR DATE, NOT AN INSTANT. A day boundary here is the
+ * reader's midnight, wherever they are, and there is no server to ask: the
+ * device may be offline all day. See `nudge.ts` for the formatting and the
+ * comparison.
+ */
+export const NUDGE_SHOWN_ON_VALUE = 'nudgeShownOn';
 
 /** The per-entity ordering stamp, PROTOCOL.md section 3.3. Higher lamport wins; ties break on lexicographic deviceId. */
 export interface SyncStamp {

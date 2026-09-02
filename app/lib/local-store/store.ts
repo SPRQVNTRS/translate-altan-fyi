@@ -27,6 +27,7 @@ export {
   LAST_EXPORT_VALUE,
   DEVICE_ID_VALUE,
   MIGRATION_GATE_CLEARED_FOR_VALUE,
+  NUDGE_SHOWN_ON_VALUE,
 } from './schema';
 
 /**

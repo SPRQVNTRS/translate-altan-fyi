@@ -124,6 +124,19 @@
     "emptyBody": "Add a word from its entry page to start reviewing.",
     "notFound": "This list is not stored on your device."
   },
+  "nudge": {
+    "title": "Daily review",
+    "body": "Here are {{count}} saved words from your lists to review today.",
+    "start": "Review words",
+    "dismiss": "Dismiss for today",
+    "metaTitle": "Daily review",
+    "metaDescription": "Review a few of your saved words as flashcards on your device, with nothing sent anywhere.",
+    "sessionHeading": "Reviewing {{count}} words",
+    "backToSearch": "Back to search",
+    "sessionEmptyTitle": "Saved words were removed",
+    "sessionEmptyBody": "These words were deleted from your list, so save new words to start another review.",
+    "toLists": "View saved lists"
+  },
   "history": {
     "metaTitle": "History",
     "metaDescription": "A record of the words you look up.",

@@ -100,6 +100,10 @@ export default [
     // The flashcard loop over one list. Client only for the same reasons, and
     // for one more: a review session must not stall on a fetch between cards.
     route('/lists/:listId/review', 'routes/lists.$listId.review.tsx'),
+    // The daily nudge's session. The three words it picks come from ANY list,
+    // so there is no list id to hang them off: the entry ids travel in
+    // `?entries=`, and the screen resolves them against the device's own store.
+    route('/review', 'routes/review.tsx'),
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),
     // Sync lives inside the app shell, not in `_public`, because it is a

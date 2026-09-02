@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation, type MetaFunction } from 'react-router';
+import { DailyNudge } from '#app/components/daily-nudge';
 import { DirectionChip } from '#app/components/direction-chip';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
@@ -179,6 +180,13 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
         </Form>
         <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
       </div>
+
+      {/* Today's three words, on the home screen and nowhere else. Client only:
+          it renders nothing on the server and nothing until the device's own
+          store has been read, so the HTML this route sends is unchanged. It
+          sits above the results area, so a reader who came here to look
+          something up sees their answer first. */}
+      <DailyNudge />
 
       {q === '' && <p className="text-sm text-muted-foreground">{t('search.emptyPrompt')}</p>}
 

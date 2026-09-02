@@ -124,6 +124,19 @@
     "emptyBody": "Füge ein Wort von seiner Eintragsseite hinzu, um mit dem Wiederholen zu beginnen.",
     "notFound": "Diese Liste ist nicht auf deinem Gerät gespeichert."
   },
+  "nudge": {
+    "title": "Tägliche Wiederholung",
+    "body": "Hier sind {{count}} gespeicherte Wörter aus deinen Listen, die du heute wiederholen kannst.",
+    "start": "Wörter üben",
+    "dismiss": "Für heute ausblenden",
+    "metaTitle": "Tägliche Wiederholung",
+    "metaDescription": "Übe einige deiner gespeicherten Wörter als Karteikarten auf deinem Gerät, ohne dass Daten übertragen werden.",
+    "sessionHeading": "{{count}} Wörter wiederholen",
+    "backToSearch": "Zurück zur Suche",
+    "sessionEmptyTitle": "Gespeicherte Wörter wurden entfernt",
+    "sessionEmptyBody": "Diese Wörter wurden aus deiner Liste gelöscht. Speichere neue Wörter, um eine neue Wiederholung zu starten.",
+    "toLists": "Gespeicherte Listen ansehen"
+  },
   "history": {
     "metaTitle": "Verlauf",
     "metaDescription": "Eine Übersicht der Wörter, die du nachschlägst.",

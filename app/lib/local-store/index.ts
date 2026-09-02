@@ -189,3 +189,8 @@ export {
   clearMigrationGateStamp,
 } from './migration-gate';
 export { shouldFallbackOffline } from './offline-fallback';
+
+// The daily nudge's device-local day marker. A store VALUE, not an entity: it
+// never enters the encrypted blob, so one device's nudge cannot silence
+// another's. See `nudge.ts`.
+export { localDateKey, shouldShowNudge, getNudgeShownOn, markNudgeShown } from './nudge';
