@@ -33,7 +33,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { mergeSnapshots, stableStringify, toWireMeta, type StampedSnapshot } from '#app/lib/sync/snapshot-sync';
-import type { LocalList, LocalListItem, LocalNote, SyncedSnapshot } from '#app/lib/local-store';
+import type { LocalList, LocalListItem, LocalNote, LocalReviewState, SyncedSnapshot } from '#app/lib/local-store';
 
 /** Wall clock is never an ordering authority (§3.3), so every fixture shares one value for it. */
 const UPDATED_AT = 1_760_000_000_000;
@@ -70,8 +70,32 @@ function note({ id, lamport, deviceId }: { id: string; lamport: number; deviceId
   return { id, headwordId: `hw-${id}`, text: `text-${id}`, lamport, deviceId, updatedAt: UPDATED_AT, deleted: false };
 }
 
+/** A review state, keyed by the list entry it belongs to. */
+function reviewState({
+  id,
+  stillLearningCount,
+  lamport,
+  deviceId,
+}: {
+  id: string;
+  stillLearningCount: number;
+  lamport: number;
+  deviceId: string;
+}): LocalReviewState {
+  return {
+    id,
+    gotItCount: 1,
+    stillLearningCount,
+    lastReviewedAt: UPDATED_AT,
+    lamport,
+    deviceId,
+    updatedAt: UPDATED_AT,
+    deleted: false,
+  };
+}
+
 function emptySnapshot(): SyncedSnapshot {
-  return { lists: [], listItems: [], notes: [] };
+  return { lists: [], listItems: [], notes: [], reviewState: [] };
 }
 
 /**
@@ -175,10 +199,12 @@ describe('merge conflict resolution (PROTOCOL.md §3.3)', () => {
     assert.deepEqual(merged.meta.perEntity['list:l1'], { lamport: 6, deviceId: 'device-b' });
   });
 
-  it('is deterministic across all three collections at once', () => {
-    // Lists, list items and notes share one merge implementation, so an
-    // ordering defect can hide in whichever collection a single-collection
-    // case does not cover.
+  it('is deterministic across all four collections at once', () => {
+    // Lists, list items, notes and review state share one merge
+    // implementation, so an ordering defect can hide in whichever collection a
+    // single-collection case does not cover. Review state is also the one that
+    // SHARES ITS ID with a list entry, so this case is what proves the
+    // namespaced merge key keeps `reviewState:i1` and `listItem:i1` apart.
     const deviceA: SyncedSnapshot = {
       lists: [
         list({ id: 'l2', name: 'a-l2', lamport: 1, deviceId: 'device-a' }),
@@ -189,6 +215,7 @@ describe('merge conflict resolution (PROTOCOL.md §3.3)', () => {
         listItem({ id: 'i1', lamport: 2, deviceId: 'device-a' }),
       ],
       notes: [note({ id: 'n1', lamport: 4, deviceId: 'device-a' })],
+      reviewState: [reviewState({ id: 'i1', stillLearningCount: 1, lamport: 7, deviceId: 'device-a' })],
     };
     const deviceB: SyncedSnapshot = {
       lists: [list({ id: 'l1', name: 'b-l1', lamport: 2, deviceId: 'device-b' })],
@@ -197,6 +224,7 @@ describe('merge conflict resolution (PROTOCOL.md §3.3)', () => {
         listItem({ id: 'i3', lamport: 9, deviceId: 'device-b' }),
       ],
       notes: [note({ id: 'n1', lamport: 4, deviceId: 'device-b' })],
+      reviewState: [reviewState({ id: 'i1', stillLearningCount: 5, lamport: 2, deviceId: 'device-b' })],
     };
 
     const merged = mergeBothDirections(payload(deviceA), payload(deviceB));
@@ -218,6 +246,14 @@ describe('merge conflict resolution (PROTOCOL.md §3.3)', () => {
       merged.snapshot.notes.map((entry) => `${entry.id}:${entry.deviceId}`),
       ['n1:device-b'],
       'the note winners are wrong',
+    );
+    // The higher lamport wins here even though device B wins the list entry
+    // that shares this id, which is what a collision between the two
+    // namespaces would have hidden.
+    assert.deepEqual(
+      merged.snapshot.reviewState.map((entry) => `${entry.id}:${entry.deviceId}:${entry.stillLearningCount}`),
+      ['i1:device-a:1'],
+      'the review-state winners are wrong',
     );
   });
 });

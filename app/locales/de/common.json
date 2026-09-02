@@ -102,6 +102,28 @@
     "itemCount_one": "{{count}} Wort",
     "itemCount_other": "{{count}} Wörter"
   },
+  "review": {
+    "metaTitle": "Karteikarten wiederholen",
+    "metaDescription": "Wiederhole deine gespeicherten Wörter mit Karteikarten auf deinem Gerät.",
+    "start": "Karten wiederholen",
+    "heading": "{{name}} wiederholen",
+    "progress": "{{done}} von {{total}}",
+    "flipToAnswer": "Tippe auf die Karte, um die Bedeutung zu sehen.",
+    "flipBack": "Tippe auf die Karte, um sie wieder umzudrehen.",
+    "cardLabel": "Karteikarte für {{lemma}}",
+    "noteLabel": "Deine Notiz",
+    "gotIt": "Gewusst",
+    "stillLearning": "Noch lernen",
+    "gotItAnnouncement": "Du hast {{lemma}} als gewusst markiert.",
+    "stillLearningAnnouncement": "{{lemma}} kommt später in dieser Sitzung noch einmal dran.",
+    "summaryTitle": "Wiederholung abgeschlossen",
+    "summaryBody": "Du hast {{total}} Karten wiederholt. Du hast {{stillLearning}} markiert, um sie noch einmal zu sehen.",
+    "again": "Erneut wiederholen",
+    "backToList": "Zurück zur Liste",
+    "emptyTitle": "Diese Liste ist leer",
+    "emptyBody": "Füge ein Wort von seiner Eintragsseite hinzu, um mit dem Wiederholen zu beginnen.",
+    "notFound": "Diese Liste ist nicht auf deinem Gerät gespeichert."
+  },
   "history": {
     "metaTitle": "Verlauf",
     "metaDescription": "Eine Übersicht der Wörter, die du nachschlägst.",

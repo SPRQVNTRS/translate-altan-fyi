@@ -1,10 +1,10 @@
 /**
- * The search log never leaves the device — proved on the actual bytes, not on
- * the projection alone.
+ * The search log never leaves the device, and review state does — both proved
+ * on the actual bytes, not on the projection alone.
  *
  * WHAT THIS PROTECTS
  *   `app/lib/e2ee/BLOB-CONTENTS.md` says the encrypted blob carries lists,
- *   list items and notes, and deliberately not the search log. That is a
+ *   list items, notes and review state, and deliberately not the search log. That is a
  *   privacy promise made in copy on `/settings`, and the only thing that keeps
  *   it true is `toSyncedSnapshot` dropping the collection plus nothing
  *   downstream putting it back.
@@ -19,8 +19,14 @@
  *     the round-tripped payload is ALSO checked as serialized text for the
  *     distinctive query strings the fixture puts in the log.
  *   - The reverse failure, a test that passes by serializing nothing: the
- *     three synced collections are asserted to survive the round trip intact,
+ *     four synced collections are asserted to survive the round trip intact,
  *     stamps included.
+ *   - Review state added to the local store but forgotten on one of the four
+ *     seams it has to cross (the projection, the zod reader, the live bridge
+ *     read, the merge). Any one of those omissions would leave a person's
+ *     flashcard record stranded on one device while every other test stayed
+ *     green, so the `review` cases below drive the projection, the encrypted
+ *     round trip AND the live read.
  *   - Drift from PROTOCOL.md §3.2's payload shape, whose keys are transcribed
  *     below as a literal and compared against what the client actually builds.
  *   - A projection that quietly drops soft-deleted rows. A delete that is
@@ -55,6 +61,7 @@ import {
   putLocalList,
   putLocalListItem,
   putLocalNote,
+  putLocalReviewState,
   recordSearch,
   SCHEMA_VERSION,
   syncedSnapshotSchema,
@@ -106,6 +113,19 @@ function deviceSnapshot(): LocalStoreSnapshot {
       // A tombstone, so the wire meta below actually carries one.
       { id: 'n2', headwordId: 'hw-2', text: 'gelöscht', lamport: 6, deviceId: 'device-b', updatedAt: UPDATED_AT, deleted: true },
     ],
+    // Keyed by the LIST ENTRY's id, which is why the merge namespaces it.
+    reviewState: [
+      {
+        id: 'i1',
+        gotItCount: 2,
+        stillLearningCount: 3,
+        lastReviewedAt: UPDATED_AT,
+        lamport: 4,
+        deviceId: 'device-a',
+        updatedAt: UPDATED_AT,
+        deleted: false,
+      },
+    ],
     history: PRIVATE_QUERIES.map((query, index) => ({
       id: `h${index}`,
       query,
@@ -133,7 +153,47 @@ describe('the sync projection drops the search log', () => {
     // ABSENT, not empty: `history: []` would still travel, and would be a
     // container a later write path could fill without anyone noticing.
     assert.ok(!('history' in synced), 'the projection carries a history key');
-    assert.deepEqual(Object.keys(synced).toSorted(), ['listItems', 'lists', 'notes']);
+    assert.deepEqual(Object.keys(synced).toSorted(), ['listItems', 'lists', 'notes', 'reviewState']);
+  });
+});
+
+describe('the sync projection carries review state', () => {
+  it('keeps the flashcard tally and its stamp, so a second device inherits it', () => {
+    const device = deviceSnapshot();
+    assert.ok(device.reviewState.length > 0, 'the fixture must carry review state for this assertion to mean anything');
+
+    const synced = toSyncedSnapshot(device);
+
+    assert.deepEqual(synced.reviewState, device.reviewState, 'the projection dropped or reshaped the review state');
+    const [state] = synced.reviewState;
+    assert.ok(state !== undefined);
+    // The tally AND the ordering pair: a projection that carried the counts
+    // but lost the stamp would sync a row that can never win a merge.
+    assert.equal(state.gotItCount, 2);
+    assert.equal(state.stillLearningCount, 3);
+    assert.equal(state.deviceId, 'device-a');
+    assert.ok(state.lamport > 0);
+  });
+
+  it('carries no scheduling field, because there is no schedule to carry', () => {
+    const [state] = toSyncedSnapshot(deviceSnapshot()).reviewState;
+    assert.ok(state !== undefined);
+
+    assert.deepEqual(
+      Object.keys(state).toSorted(),
+      ['deleted', 'deviceId', 'gotItCount', 'id', 'lamport', 'lastReviewedAt', 'stillLearningCount', 'updatedAt'],
+      'a field the no-scheduling rule did not sanction reached the blob',
+    );
+  });
+
+  it('reads a v1 blob, which had no review state, as an empty collection rather than a refusal', () => {
+    // A peer still on SCHEMA_VERSION 1 writes a payload with three
+    // collections. The reader must not reject it, and must not invent rows.
+    const legacy = { lists: [], listItems: [], notes: [] };
+
+    const parsed = syncedSnapshotSchema.parse(legacy);
+
+    assert.deepEqual(parsed.reviewState, [], 'an older peer’s blob did not read as "no review state"');
   });
 });
 
@@ -160,7 +220,7 @@ describe('the payload shape (PROTOCOL.md §3.2)', () => {
 });
 
 describe('the encrypted round trip', () => {
-  it('carries the three synced collections through intact, stamps included', async () => {
+  it('carries the four synced collections through intact, stamps included', async () => {
     const envelope = await buildEnvelope({ payload: wirePayload(), dek: DEK, aadFields: AAD_FIELDS });
     const parsed = await parseEnvelope({ envelope, dek: DEK, aadFields: AAD_FIELDS });
 
@@ -186,11 +246,33 @@ describe('the encrypted round trip', () => {
     // same serialization.
     assert.ok(serialized.includes('Fahrkarte'), 'the round trip carried no list items, so the checks above prove nothing');
   });
+
+  it('carries the review tally through the ciphertext, read back off the parsed bytes', async () => {
+    const envelope = await buildEnvelope({ payload: wirePayload(), dek: DEK, aadFields: AAD_FIELDS });
+    const parsed = await parseEnvelope({ envelope, dek: DEK, aadFields: AAD_FIELDS });
+
+    const snapshot = syncedSnapshotSchema.parse(parsed.snapshot);
+    assert.deepEqual(
+      snapshot.reviewState,
+      deviceSnapshot().reviewState,
+      'the review state did not survive the encrypted round trip',
+    );
+    // And it is addressable in the wire meta under its own namespace, so a
+    // review state and the list entry that shares its id cannot collide.
+    assert.ok(
+      Object.keys(parsed.syncMeta.perEntity).includes('reviewState:i1'),
+      'the review state is missing from the wire meta, so a merge cannot order it',
+    );
+    assert.ok(
+      Object.keys(parsed.syncMeta.perEntity).includes('listItem:i1'),
+      'the list entry with the same id vanished, so the namespaces are colliding',
+    );
+  });
 });
 
 describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
   /**
-   * A device as the app itself would leave it: three synced collections
+   * A device as the app itself would leave it: four synced collections
    * written through the real helpers, one of the notes then soft-deleted, and
    * a search log beside them. Nothing here builds a snapshot literal — the
    * rows carry whatever stamp the write helpers give them.
@@ -214,6 +296,10 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
     );
     await putLocalNote({ id: 'n1', headwordId: 'hw-1', text: 'mit Umlaut' }, options);
     await putLocalNote({ id: 'n2', headwordId: 'hw-2', text: 'gelöscht' }, options);
+    await putLocalReviewState(
+      { id: 'i1', gotItCount: 2, stillLearningCount: 3, lastReviewedAt: UPDATED_AT },
+      options,
+    );
     // A real deletion, through the real helper: a soft delete that bumps the
     // lamport, which is the only thing that can beat a peer still holding the
     // live row.
@@ -225,7 +311,7 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
     return store;
   }
 
-  it('carries the three synced collections and no search log', async () => {
+  it('carries the four synced collections and no search log', async () => {
     const store = await writtenDevice();
     assert.equal((await listHistory({ store })).length, PRIVATE_QUERIES.length, 'the log must be in the store for this to mean anything');
 
@@ -234,9 +320,10 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
     // ABSENT, not empty — the same rule the projection is held to, asserted on
     // the function a device actually calls.
     assert.ok(!('history' in snapshot), 'the live read carries a history key');
-    assert.deepEqual(Object.keys(snapshot).toSorted(), ['listItems', 'lists', 'notes']);
+    assert.deepEqual(Object.keys(snapshot).toSorted(), ['listItems', 'lists', 'notes', 'reviewState']);
     assert.deepEqual(snapshot.lists.map((list) => list.id), ['l1']);
     assert.deepEqual(snapshot.listItems.map((item) => item.id), ['i1']);
+    assert.deepEqual(snapshot.reviewState.map((state) => state.id), ['i1']);
 
     // And as bytes, which survives a refactor that tucks the queries under
     // another key: a structural check would not.
@@ -245,6 +332,22 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
       assert.ok(!serialized.includes(query), 'a recorded search reached the live sync read');
     }
     assert.ok(serialized.includes('Fahrkarte'), 'the read returned no list items, so the checks above prove nothing');
+  });
+
+  it('carries the review state written through the real helper, stamped by this device', async () => {
+    const store = await writtenDevice();
+
+    const snapshot = await readLocalSnapshot({ store });
+
+    const [state] = snapshot.reviewState;
+    assert.ok(state !== undefined, 'the live read carries no review state');
+    assert.equal(state.gotItCount, 2);
+    assert.equal(state.stillLearningCount, 3);
+    // Written through `putLocalReviewState`, so the stamp is the store's, not
+    // a literal this file made up.
+    assert.equal(state.deviceId, 'device-a');
+    assert.ok(state.lamport > 0, 'the review state left the device unstamped, so it can never win a merge');
+    assert.equal(state.deleted, false);
   });
 
   it('carries the tombstone, so a deletion actually reaches the peer', async () => {

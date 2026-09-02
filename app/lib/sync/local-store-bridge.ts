@@ -22,6 +22,7 @@ import {
   listLocalListItemsIncludingDeleted,
   listLocalListsIncludingDeleted,
   listLocalNotesIncludingDeleted,
+  listLocalReviewStateIncludingDeleted,
   syncedSnapshotSchema,
   toSyncedSnapshot,
   writeMergedSnapshot,
@@ -41,7 +42,7 @@ interface StoreOption {
  * a tombstone travels as an ordinary row with `deleted: true`.
  *
  * WHAT LEAVES THE DEVICE IS `toSyncedSnapshot`'s DECISION, NOT THIS FUNCTION'S.
- * This assembles three reads and hands them to the projection rather than
+ * This assembles four reads and hands them to the projection rather than
  * building the payload itself, so there is one list of synced collection names
  * in the codebase instead of two that can drift. The collection this store
  * holds and the blob deliberately does not carry is named in
@@ -54,20 +55,25 @@ interface StoreOption {
  * a test drives this exact function against an in-memory store.
  */
 export async function readLocalSnapshot({ store }: StoreOption = {}): Promise<SyncedSnapshot> {
-  const [lists, listItems, notes] = await Promise.all([
+  const [lists, listItems, notes, reviewState] = await Promise.all([
     listLocalListsIncludingDeleted({ store }),
     listLocalListItemsIncludingDeleted({ store }),
     listLocalNotesIncludingDeleted({ store }),
+    listLocalReviewStateIncludingDeleted({ store }),
   ]);
-  return toSyncedSnapshot({ lists, listItems, notes });
+  return toSyncedSnapshot({ lists, listItems, notes, reviewState });
 }
 
 /**
  * Validates a snapshot that arrived from another device.
  *
- * A NEWER SCHEMA IS A REFUSAL, NOT A BEST-EFFORT READ. `SCHEMA_VERSION` is 1,
- * so there is no forward migration to run yet and this check is the whole of
- * the version handling. A blob written by a build that knows fields this one
+ * A NEWER SCHEMA IS A REFUSAL, NOT A BEST-EFFORT READ. `SCHEMA_VERSION` is 2,
+ * and the v1 -> v2 bump needed no forward migration: it only ADDED the
+ * review-state collection, and `syncedSnapshotSchema` defaults each collection
+ * to empty, so a v1 blob reads as "the device that wrote this had no review
+ * state". That is true, so this check is still the whole of the version
+ * handling. A bump that reshapes a field would need a step, and it would go in
+ * beside this guard. A blob written by a build that knows fields this one
  * does not cannot be read correctly here — every unknown field would be
  * dropped, and the drop would then be pushed back up as the new truth, so a
  * newer device's data would be silently deleted by an older one. Refusing
@@ -108,7 +114,7 @@ export function parseRemoteSnapshot({
  * ONE. Upstream this function ran deletes first and then upserts, because
  * `importBackup` is upsert-only and an entity another device deleted would
  * otherwise survive here forever and be re-uploaded on the next cycle. Here
- * `writeMergedSnapshot` REPLACES the three synced tables wholesale in one
+ * `writeMergedSnapshot` REPLACES the four synced tables wholesale in one
  * transaction, and a delete is an ordinary `deleted: true` row inside the
  * merge result, so the merged snapshot already says everything there is to say
  * about which rows exist.

@@ -161,6 +161,15 @@ export default function ListDetailRoute({ loaderData }: Route.ComponentProps) {
       )}
 
       {items.length > 0 && (
+        <Link
+          to={`/lists/${list.id}/review`}
+          className="rounded-lg border bg-card px-3 py-2 text-center text-sm font-medium text-primary hover:bg-primary/5"
+        >
+          {t('review.start')}
+        </Link>
+      )}
+
+      {items.length > 0 && (
         <ul className="rounded-lg border bg-card">
           {items.map((item) => (
             <ItemRow key={item.id} item={item} />

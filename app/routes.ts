@@ -97,6 +97,9 @@ export default [
     // worker does not precache it, so a HARD reload here while offline lands
     // on `/offline`; an in-app navigation from `/lists` does not.
     route('/lists/:listId', 'routes/lists.$listId.tsx'),
+    // The flashcard loop over one list. Client only for the same reasons, and
+    // for one more: a review session must not stall on a fetch between cards.
+    route('/lists/:listId/review', 'routes/lists.$listId.review.tsx'),
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),
     // Sync lives inside the app shell, not in `_public`, because it is a

@@ -4,7 +4,8 @@
  * then here. Do not let the two drift.
  *
  * The primary store's read/write surface — CRUD over the durable, authoritative
- * on-device tables (lists, list items, notes). This is the "primary commit"
+ * on-device tables (lists, list items, notes, review state). This is the
+ * "primary commit"
  * every screen writes to and the source the backup (`backup.ts`) and the sync
  * projection (`blob-schema.ts`) read from. The device-only search log has its
  * own module (`history.ts`), because its deletion semantics differ.
@@ -45,17 +46,18 @@ import {
   LISTS_TABLE,
   LIST_ITEMS_TABLE,
   NOTES_TABLE,
+  REVIEW_STATE_TABLE,
   PRIMARY_ENTITY_CELL,
   SCHEMA_VERSION_VALUE,
   DEVICE_ID_VALUE,
 } from './store';
 import { getPrimaryStore, requestPersistentStorage } from './persist';
 import { SCHEMA_VERSION } from './schema';
-import type { LocalList, LocalListItem, LocalNote, SyncStamp } from './schema';
+import type { LocalList, LocalListItem, LocalNote, LocalReviewState, SyncStamp } from './schema';
 import type { SyncedSnapshot } from './blob-schema';
 
 /** Every entity kind this store persists as one JSON cell per row. */
-type PrimaryEntity = LocalList | LocalListItem | LocalNote;
+type PrimaryEntity = LocalList | LocalListItem | LocalNote | LocalReviewState;
 
 /** A list as a caller supplies it — the stamp is this module's to apply, never the caller's. */
 export type LocalListInput = Omit<LocalList, keyof SyncStamp>;
@@ -63,6 +65,8 @@ export type LocalListInput = Omit<LocalList, keyof SyncStamp>;
 export type LocalListItemInput = Omit<LocalListItem, keyof SyncStamp>;
 /** A note as a caller supplies it. */
 export type LocalNoteInput = Omit<LocalNote, keyof SyncStamp>;
+/** A review state as a caller supplies it — the `id` is the list entry's own id. */
+export type LocalReviewStateInput = Omit<LocalReviewState, keyof SyncStamp>;
 
 /** The entity cell as it comes back off the store — a TinyBase cell, not yet JSON text. */
 const entityCellSchema = z.string();
@@ -331,11 +335,63 @@ export async function deleteLocalNote(id: string, options: WriteOption = {}): Pr
 }
 
 // ---------------------------------------------------------------------------
+// Review state
+// ---------------------------------------------------------------------------
+
+/**
+ * Upserts one saved word's review state (keyed by THAT WORD's list entry id),
+ * stamping it for sync.
+ *
+ * The caller supplies the whole tally rather than a "bump this counter" verb,
+ * for the same reason every other write here is an upsert: a read-modify-write
+ * that lives in the caller is visible in one place, and a counter verb would
+ * have to decide what a concurrent second session on another device means.
+ * That question already has an answer everywhere else in this store, which is
+ * last write wins on `(lamport, deviceId)`, and a special case here would be a
+ * second rule.
+ */
+export async function putLocalReviewState(
+  reviewState: LocalReviewStateInput,
+  options: WriteOption = {},
+): Promise<LocalReviewState> {
+  const store = await resolveStore(options.store);
+  const stamped: LocalReviewState = {
+    ...reviewState,
+    ...(await nextStamp(store, REVIEW_STATE_TABLE, reviewState.id, false, options)),
+  };
+  writeEntity(store, REVIEW_STATE_TABLE, reviewState.id, stamped);
+  return stamped;
+}
+
+/** Every live review state, id order. Tombstones are filtered out. */
+export async function listLocalReviewState({ store }: StoreOption = {}): Promise<LocalReviewState[]> {
+  return readEntities<LocalReviewState>(await resolveStore(store), REVIEW_STATE_TABLE)
+    .filter(isLive)
+    .toSorted(byId);
+}
+
+/** Every review state INCLUDING tombstones — the sync path's read. */
+export async function listLocalReviewStateIncludingDeleted({ store }: StoreOption = {}): Promise<LocalReviewState[]> {
+  return readEntities<LocalReviewState>(await resolveStore(store), REVIEW_STATE_TABLE).toSorted(byId);
+}
+
+/** One live review state by list entry id, or null. */
+export async function getLocalReviewState(id: string, { store }: StoreOption = {}): Promise<LocalReviewState | null> {
+  const reviewState = readEntity<LocalReviewState>(await resolveStore(store), REVIEW_STATE_TABLE, id);
+  return reviewState && isLive(reviewState) ? reviewState : null;
+}
+
+/** Soft-deletes one review state by list entry id — see {@link softDelete}. */
+export async function deleteLocalReviewState(id: string, options: WriteOption = {}): Promise<void> {
+  await softDelete(REVIEW_STATE_TABLE, id, options);
+}
+
+// ---------------------------------------------------------------------------
 // Tombstone compaction
 // ---------------------------------------------------------------------------
 
 /**
- * Hard-removes every tombstone last written before `cutoffMs`, across all three
+ * Hard-removes every tombstone last written before `cutoffMs`, across all four
  * synced tables. Returns how many rows went.
  *
  * NOTHING CALLS THIS YET, on purpose. A tombstone may only be dropped once
@@ -354,7 +410,7 @@ export async function deleteLocalNote(id: string, options: WriteOption = {}): Pr
 export async function purgeDeletedBefore(cutoffMs: number, { store }: StoreOption = {}): Promise<number> {
   const resolved = await resolveStore(store);
   let purged = 0;
-  for (const table of [LISTS_TABLE, LIST_ITEMS_TABLE, NOTES_TABLE]) {
+  for (const table of [LISTS_TABLE, LIST_ITEMS_TABLE, NOTES_TABLE, REVIEW_STATE_TABLE]) {
     for (const id of resolved.getRowIds(table)) {
       const entity = readEntity<SyncStamp>(resolved, table, id);
       if (!entity || !entity.deleted || entity.updatedAt >= cutoffMs) continue;
@@ -383,7 +439,7 @@ export async function purgeDeletedBefore(cutoffMs: number, { store }: StoreOptio
  * Tombstones are written too, not skipped. A `deleted` row is how a delete
  * travels, and dropping it here would resurrect the entity on the next push.
  *
- * The three synced tables are replaced WHOLESALE with exactly the rows given —
+ * The four synced tables are replaced WHOLESALE with exactly the rows given —
  * a merge result is a statement about the whole collection, so a row absent
  * from it is a row that must be absent here. All of it happens in ONE TinyBase
  * transaction, so a concurrent read can never observe a half-applied merge, and
@@ -400,6 +456,7 @@ export async function writeMergedSnapshot(snapshot: SyncedSnapshot, { store }: S
     replaceTable(resolved, LISTS_TABLE, snapshot.lists);
     replaceTable(resolved, LIST_ITEMS_TABLE, snapshot.listItems);
     replaceTable(resolved, NOTES_TABLE, snapshot.notes);
+    replaceTable(resolved, REVIEW_STATE_TABLE, snapshot.reviewState);
   });
 }
 

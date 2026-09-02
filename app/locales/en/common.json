@@ -102,6 +102,28 @@
     "itemCount_one": "{{count}} word",
     "itemCount_other": "{{count}} words"
   },
+  "review": {
+    "metaTitle": "Review flashcards",
+    "metaDescription": "Review your saved words with flashcards on your device.",
+    "start": "Review cards",
+    "heading": "Review {{name}}",
+    "progress": "{{done}} of {{total}}",
+    "flipToAnswer": "Tap the card to see the meaning.",
+    "flipBack": "Tap the card to turn it back.",
+    "cardLabel": "Flashcard for {{lemma}}",
+    "noteLabel": "Your note",
+    "gotIt": "Got it",
+    "stillLearning": "Still learning",
+    "gotItAnnouncement": "You marked {{lemma}} as known.",
+    "stillLearningAnnouncement": "{{lemma}} will return later in this session.",
+    "summaryTitle": "Review complete",
+    "summaryBody": "You reviewed {{total}} cards. You marked {{stillLearning}} to see again.",
+    "again": "Review again",
+    "backToList": "Back to list",
+    "emptyTitle": "This list is empty",
+    "emptyBody": "Add a word from its entry page to start reviewing.",
+    "notFound": "This list is not stored on your device."
+  },
   "history": {
     "metaTitle": "History",
     "metaDescription": "A record of the words you look up.",

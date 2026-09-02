@@ -18,16 +18,27 @@
  * pure logic modules (`backup.ts`, `blob-schema.ts`) and their unit tests stay
  * browser- and store-free.
  *
- * THREE OF THE FOUR ENTITIES ARE SYNCED, AND ONE IS NOT. Lists, list items and
- * notes carry a {@link SyncStamp} and are what the encrypted blob transports
- * (`app/lib/e2ee/BLOB-CONTENTS.md`). Search entries are device-only: they carry
- * no stamp, are hard-deleted rather than tombstoned, and are capped on the
- * device. A reader who assumes the fourth table behaves like the first three
- * will get both the deletion semantics and the blob contents wrong.
+ * FOUR OF THE FIVE ENTITIES ARE SYNCED, AND ONE IS NOT. Lists, list items,
+ * notes and review state carry a {@link SyncStamp} and are what the encrypted
+ * blob transports (`app/lib/e2ee/BLOB-CONTENTS.md`). Search entries are
+ * device-only: they carry no stamp, are hard-deleted rather than tombstoned,
+ * and are capped on the device. A reader who assumes the search table behaves
+ * like the other four will get both the deletion semantics and the blob
+ * contents wrong.
  */
 
-/** The on-disk shape version, stamped into every backup envelope. */
-export const SCHEMA_VERSION = 1;
+/**
+ * The on-disk shape version, stamped into every backup envelope AND bound into
+ * the blob's AAD.
+ *
+ * v2 added {@link LocalReviewState}. Nothing else changed, and the addition is
+ * why no upgrade STEP was needed: every collection in `backup.ts` and in
+ * `blob-schema.ts` defaults to empty, so a v1 file or a v1 blob reads as "that
+ * device had no review state", which is exactly true. The orchestrator's
+ * schema probe (`app/lib/sync/orchestrator.ts`) walks the AAD down from here
+ * to 1, so a peer still on v1 stays readable.
+ */
+export const SCHEMA_VERSION = 2;
 
 /** Vocabulary lists table: one row per list, keyed by the list's `id`. */
 export const LISTS_TABLE = 'lists';
@@ -35,6 +46,8 @@ export const LISTS_TABLE = 'lists';
 export const LIST_ITEMS_TABLE = 'listItems';
 /** Personal notes table: one row per note, keyed by the note's `id`. */
 export const NOTES_TABLE = 'notes';
+/** Review state table: one row per reviewed list entry, keyed by THAT ENTRY's id. */
+export const REVIEW_STATE_TABLE = 'reviewState';
 /** Search log table: one row per recorded search, keyed by the entry's `id`. Device-only. */
 export const HISTORY_TABLE = 'history';
 /** The single JSON cell every primary row uses to hold its serialized entity. */
@@ -87,6 +100,31 @@ export interface LocalNote extends SyncStamp {
 }
 
 /**
+ * What a person's flashcard sessions have recorded about one saved word.
+ *
+ * THE `id` IS THE LIST ENTRY'S `id`, NOT A SEPARATE KEY. One saved word has
+ * exactly one review state, so a second identifier would be a second thing
+ * that can disagree with the first. Sharing the id also makes the merge's
+ * namespaced key (`reviewState:<id>`) line up with the entry's own
+ * (`listItem:<id>`) without either colliding.
+ *
+ * THERE ARE NO SCHEDULING FIELDS HERE, AND THAT IS THE DESIGN, NOT A GAP. No
+ * ease factor, no gap length, no due instant. A verdict tally and the last
+ * instant reviewed are all the review loop reads, because the loop reorders
+ * within one session and never schedules a future one. Adding a schedule is a
+ * product decision, and it would arrive with its own migration.
+ *
+ * `lastReviewedAt` is informational, like `updatedAt`: wall clock is never an
+ * ordering authority here either.
+ */
+export interface LocalReviewState extends SyncStamp {
+  id: string;
+  gotItCount: number;
+  stillLearningCount: number;
+  lastReviewedAt: number;
+}
+
+/**
  * One recorded search. CLIENT-ONLY: no {@link SyncStamp}, because this never
  * crosses a device boundary and so has nothing to converge with.
  */
@@ -109,6 +147,7 @@ export interface LocalStoreSnapshot {
   lists: LocalList[];
   listItems: LocalListItem[];
   notes: LocalNote[];
+  reviewState: LocalReviewState[];
   history: LocalHistoryEntry[];
 }
 

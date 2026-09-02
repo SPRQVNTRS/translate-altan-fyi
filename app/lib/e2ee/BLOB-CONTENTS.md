@@ -14,9 +14,24 @@ bump `PROTOCOL_VERSION`.
 - **List items.** The entries in those lists, each referencing a shared-zone
   headword or sense by its immutable UUID.
 - **Notes.** Anything the user wrote for themselves against a word or a list.
+- **Review state.** What the flashcard loop recorded about one saved word: how
+  many times it was answered got-it, how many times still-learning, and when it
+  was last reviewed. Keyed by the list entry's own id, one row per saved word.
 
 Every one of these is a record of what a person does not yet know, which is why
-none of it is stored in plaintext.
+none of it is stored in plaintext. Review state is the sharpest case of that: a
+word answered still-learning twenty times is a precise statement about a
+person's competence, and the server is not the place for it.
+
+Review state carries no schedule. There is no due instant, no gap length and no
+ease factor, so there is nothing in the blob a future scheduling algorithm could
+be mistaken for. That is a product decision (milestone M174), and if it is ever
+reversed the new fields arrive with a `SCHEMA_VERSION` bump like any other.
+
+Review state joined the blob at `SCHEMA_VERSION` 2. Adding it needed no
+migration in either direction: every collection defaults to empty on the way in,
+so a blob written by a v1 device reads as "that device recorded no reviews",
+which is exactly what was true.
 
 Conflicts between two devices are resolved per entity by last write wins on
 `(lamport, deviceId)`. The compare-and-swap on `blobVersion` protects the blob;

@@ -14,11 +14,13 @@ import { createStore, type Store } from 'tinybase';
 // The primary store's structural ids live in `schema.ts` (the versioned schema).
 // They are re-exported here so this module stays the single lookup point for
 // every local-store table/cell id — the primary tables (lists, list items,
-// notes, and the device-only search log) alongside the outbox table below.
+// notes, review state, and the device-only search log) alongside the outbox
+// table below.
 export {
   LISTS_TABLE,
   LIST_ITEMS_TABLE,
   NOTES_TABLE,
+  REVIEW_STATE_TABLE,
   HISTORY_TABLE,
   PRIMARY_ENTITY_CELL,
   SCHEMA_VERSION_VALUE,
@@ -29,7 +31,8 @@ export {
 
 /**
  * IndexedDB database name for the PRIMARY store — the durable, authoritative
- * home for lists, list items, notes, and the device-only search log. Distinct
+ * home for lists, list items, notes, review state, and the device-only search
+ * log. Distinct
  * from the outbox so it is never swept by any cache-eviction path.
  */
 export const PRIMARY_DB_NAME = 'translate-primary';

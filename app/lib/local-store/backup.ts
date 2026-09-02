@@ -5,8 +5,8 @@
  *
  * Schema-versioned backup: a full-fidelity JSON export/import of the primary
  * store, plus the "days since last export" tracking that drives the backup
- * nudge. The whole device — lists, list items, notes, and the search log —
- * round-trips losslessly through a device-local file, and the envelope's
+ * nudge. The whole device — lists, list items, notes, review state, and the
+ * search log — round-trips losslessly through a device-local file, and the envelope's
  * `schemaVersion` lets an export taken on an older build migrate forward on
  * import.
  *
@@ -32,9 +32,11 @@ import {
   listLocalListItemsIncludingDeleted,
   listLocalListsIncludingDeleted,
   listLocalNotesIncludingDeleted,
+  listLocalReviewStateIncludingDeleted,
   putLocalList,
   putLocalListItem,
   putLocalNote,
+  putLocalReviewState,
 } from './primary-store';
 import { importHistoryEntries, listHistory } from './history';
 
@@ -85,6 +87,15 @@ const noteSchema = z.object({
   text: z.string(),
 });
 
+/** What the flashcard loop recorded about one saved word, keyed by the list entry's id. */
+const reviewStateSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  gotItCount: z.number().int().nonnegative(),
+  stillLearningCount: z.number().int().nonnegative(),
+  lastReviewedAt: z.number().int(),
+});
+
 const historyEntrySchema = z.object({
   id: z.string(),
   query: z.string(),
@@ -104,6 +115,7 @@ const snapshotSchema = z.object({
   lists: z.array(listSchema).default([]),
   listItems: z.array(listItemSchema).default([]),
   notes: z.array(noteSchema).default([]),
+  reviewState: z.array(reviewStateSchema).default([]),
   history: z.array(historyEntrySchema).default([]),
 });
 
@@ -166,14 +178,15 @@ export function parseBackupEnvelope(json: string): RawBackupEnvelope {
  * newer-than-supported envelope is rejected up front, since this build can't
  * know how to safely down-convert it. Pure.
  *
- * THE CHAIN HAS NO LINKS YET, AND THE CHAIN IS STILL THE POINT. `SCHEMA_VERSION`
- * is 1, so there is no earlier shape to upgrade from and the function only
- * validates. It exists in this shape now because the alternative — adding it at
- * the moment the first bump lands — means writing the migration and the
- * plumbing that runs it under the pressure of a shape change that is already
- * breaking somebody's file. Per-version steps slot in below, each transforming
- * `migratedData` from the previous version's shape into the next, in turn,
- * BEFORE the final validation.
+ * THE CHAIN STILL HAS NO LINKS, AND THAT IS A PROPERTY OF THE v1 -> v2 BUMP
+ * RATHER THAN AN OVERSIGHT. v2 only ADDED the review-state collection, and
+ * `snapshotSchema` defaults every collection to empty, so a v1 file validates
+ * as it stands and reads as "this device had no review state" — which is
+ * exactly what was true when it was written. A bump that RENAMES or RESHAPES a
+ * field cannot be absorbed that way, and that is the one that gets a step
+ * here. Per-version steps slot in below, each transforming `migratedData` from
+ * the previous version's shape into the next, in turn, BEFORE the final
+ * validation.
  */
 export function migrateEnvelopeForward(envelope: RawBackupEnvelope): BackupEnvelope {
   if (envelope.schemaVersion > SCHEMA_VERSION) {
@@ -211,6 +224,7 @@ async function readSnapshot(store?: Store): Promise<LocalStoreSnapshot> {
     lists: await listLocalListsIncludingDeleted({ store }),
     listItems: await listLocalListItemsIncludingDeleted({ store }),
     notes: await listLocalNotesIncludingDeleted({ store }),
+    reviewState: await listLocalReviewStateIncludingDeleted({ store }),
     history: await listHistory({ store }),
   };
 }
@@ -227,6 +241,7 @@ export async function hasAnyLocalData({ store }: { store?: Store } = {}): Promis
     snapshot.lists.length > 0 ||
     snapshot.listItems.length > 0 ||
     snapshot.notes.length > 0 ||
+    snapshot.reviewState.length > 0 ||
     // A search log alone counts. It is the one thing a person can accumulate
     // without ever having saved anything, and it is still theirs.
     snapshot.history.length > 0
@@ -250,6 +265,7 @@ async function importSnapshot(snapshot: LocalStoreSnapshot, store?: Store): Prom
   for (const list of snapshot.lists) await putLocalList(list, { store });
   for (const item of snapshot.listItems) await putLocalListItem(item, { store });
   for (const note of snapshot.notes) await putLocalNote(note, { store });
+  for (const reviewState of snapshot.reviewState) await putLocalReviewState(reviewState, { store });
   await importHistoryEntries(snapshot.history, { store });
 }
 

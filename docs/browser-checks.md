@@ -48,3 +48,51 @@ Not checked, and why:
   submitted form is covered by `tests/unit/voice-input.test.ts`, which drives
   the real session code with a stubbed recogniser.
 - **Safari.** Not available on this workstation.
+
+## M174/01 browser check
+
+Date: 2026-09-02
+Browser: Chrome 152 (headed, via agent-browser)
+Target: the local production build (`pnpm build` then `pnpm start`) at
+`http://localhost:3311`, viewport 390 x 844.
+
+Headed, because a headless run cannot answer this one honestly: the card and
+both verdict buttons carry `hover:` styles, and `(hover: hover)` is false in
+headless Chrome, so those rules never apply there.
+
+Setup, through the app's own screens rather than a seeded store: three German
+words (Haus, Buch, Wasser) were searched, opened, and saved into a new list
+called `M174 check` from each entry page. `/lists` then reported `3 words`.
+
+What was seen:
+
+1. **The link.** The list page shows `Review cards` above the words, and it
+   opens `/lists/<id>/review`.
+2. **The card.** The chrome renders the one `h1` (`Review flashcards`); the
+   screen's own heading is an `h2` reading `Review M174 check`. The card shows
+   `Haus`, the progress line reads `0 of 3`, and both verdict buttons are in the
+   accessibility tree as `Still learning` and `Got it`.
+3. **The flip, from the keyboard.** With the card focused, Space flipped it. The
+   translation `house` appeared, the hint changed to `Tap the card to turn it
+   back`, and `aria-pressed` on the card read `true`.
+4. **Still learning brings the word back.** Pressing `Still learning` on `Haus`
+   advanced to `Buch` and the live region read
+   `Haus will return later in this session.` Two `Got it` presses later
+   (`Buch`, then `Wasser`, progress `2 of 3`) the card was `Haus` again, inside
+   the same session. The summary then read
+   `You reviewed 3 cards. You marked 1 to see again.`
+5. **Offline.** With the browser set offline, `Review again` started a fresh
+   session and three `Still learning` presses were accepted with no error on the
+   page and no network request. The screen never stalled between cards.
+6. **The verdicts survived a reload.** After the reload, `reviewState` in the
+   `translate-primary` IndexedDB database held one row per saved word, keyed by
+   the list entry's id, each carrying its tally plus `lamport` and `deviceId`.
+   The `Haus` row read `gotItCount 1, stillLearningCount 2` at `lamport 3`,
+   which is the offline session added to the online one.
+
+Screenshot: `/tmp/trl-review.png` (the flipped card at 390 wide).
+
+One thing worth recording rather than fixing here: `Buch` was saved under a
+meaning that has no translation yet, so its card back reads
+`No translation yet for this word.` That is the entry's own state, shown by the
+shared `search.noTranslationYet` string, not a review defect.

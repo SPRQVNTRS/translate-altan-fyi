@@ -76,6 +76,7 @@ import {
   listLocalListItemsIncludingDeleted,
   listLocalListsIncludingDeleted,
   listLocalNotesIncludingDeleted,
+  listLocalReviewStateIncludingDeleted,
   listOutboxRecords,
   putLocalList,
   putLocalListItem,
@@ -308,14 +309,15 @@ function createDevice(input: {
   };
 }
 
-/** The device's synced rows, TOMBSTONES INCLUDED — the same three reads `local-store-bridge.ts` does. */
+/** The device's synced rows, TOMBSTONES INCLUDED — the same four reads `local-store-bridge.ts` does. */
 async function readDeviceSnapshot(device: Device): Promise<SyncedSnapshot> {
-  const [lists, listItems, notes] = await Promise.all([
+  const [lists, listItems, notes, reviewState] = await Promise.all([
     listLocalListsIncludingDeleted({ store: device.store }),
     listLocalListItemsIncludingDeleted({ store: device.store }),
     listLocalNotesIncludingDeleted({ store: device.store }),
+    listLocalReviewStateIncludingDeleted({ store: device.store }),
   ]);
-  return { lists, listItems, notes };
+  return { lists, listItems, notes, reviewState };
 }
 
 /** One full cycle for one device, driving the REAL orchestrator. */

@@ -13,13 +13,14 @@
  * this shape, because the server cannot read it.
  */
 import { z } from 'zod';
-import type { LocalList, LocalListItem, LocalNote } from './schema';
+import type { LocalList, LocalListItem, LocalNote, LocalReviewState } from './schema';
 
-/** The three collections that ride the encrypted blob. See app/lib/e2ee/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
+/** The four collections that ride the encrypted blob. See app/lib/e2ee/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
 export interface SyncedSnapshot {
   lists: LocalList[];
   listItems: LocalListItem[];
   notes: LocalNote[];
+  reviewState: LocalReviewState[];
 }
 
 /**
@@ -28,7 +29,7 @@ export interface SyncedSnapshot {
  *
  * THE PARAMETER IS THE NARROW SHAPE ON PURPOSE, AND THAT IS WHAT MAKES ONE
  * PROJECTION SERVE TWO CALLERS. A full `LocalStoreSnapshot` is assignable to
- * it, and so is the sync bridge's read of the same three collections with
+ * it, and so is the sync bridge's read of the same four collections with
  * tombstones included, so the device export path and the live push path go
  * through this function rather than through two lists of collection names that
  * can drift. `app/lib/sync/local-store-bridge.ts`'s `readLocalSnapshot` is the
@@ -39,7 +40,12 @@ export interface SyncedSnapshot {
  * are stated in `app/lib/e2ee/BLOB-CONTENTS.md`.
  */
 export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
-  return { lists: snapshot.lists, listItems: snapshot.listItems, notes: snapshot.notes };
+  return {
+    lists: snapshot.lists,
+    listItems: snapshot.listItems,
+    notes: snapshot.notes,
+    reviewState: snapshot.reviewState,
+  };
 }
 
 /** The ordering stamp every synced entity carries — PROTOCOL.md section 3.3. */
@@ -76,6 +82,22 @@ const noteSchema = z.object({
 });
 
 /**
+ * What the flashcard loop recorded about one saved word. The `id` is the list
+ * entry's own id.
+ *
+ * The counters are `nonnegative`, not `positive`: a word answered once is a
+ * row with one count at zero, and rejecting that would refuse the ordinary
+ * case. There is no scheduling field to validate, by design.
+ */
+const reviewStateSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  gotItCount: z.number().int().nonnegative(),
+  stillLearningCount: z.number().int().nonnegative(),
+  lastReviewedAt: z.number().int(),
+});
+
+/**
  * A `SyncedSnapshot` arriving from a peer, for `parseRemoteSnapshot` to
  * validate against.
  *
@@ -90,4 +112,5 @@ export const syncedSnapshotSchema = z.object({
   lists: z.array(listSchema).default([]),
   listItems: z.array(listItemSchema).default([]),
   notes: z.array(noteSchema).default([]),
+  reviewState: z.array(reviewStateSchema).default([]),
 });

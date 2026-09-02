@@ -37,13 +37,14 @@ import { mergeEntityMaps, type MergeCandidateMap } from '#app/lib/sync/engine/me
 import type { Tombstone } from '#app/lib/sync/engine/merge/types';
 import type { SyncMetaPayload } from '#app/lib/sync/engine/envelope/types';
 import type { SyncedSnapshot } from '#app/lib/local-store';
-import type { LocalList, LocalListItem, LocalNote, SyncStamp } from '#app/lib/local-store';
+import type { LocalList, LocalListItem, LocalNote, LocalReviewState, SyncStamp } from '#app/lib/local-store';
 
 /** The entity-type tags that appear in tombstones and in namespaced entity keys. */
 export const SYNC_ENTITY_TYPES = {
   list: 'list',
   listItem: 'listItem',
   note: 'note',
+  reviewState: 'reviewState',
 } as const;
 
 /** A stamped payload, ready to encrypt (or just merged out of two others). */
@@ -57,8 +58,8 @@ export function entityKey(entityType: string, entityId: string): string {
   return `${entityType}:${entityId}`;
 }
 
-/** The three record kinds the blob carries. Every one of them extends `SyncStamp`. */
-type SyncEntityValue = LocalList | LocalListItem | LocalNote;
+/** The four record kinds the blob carries. Every one of them extends `SyncStamp`. */
+type SyncEntityValue = LocalList | LocalListItem | LocalNote | LocalReviewState;
 
 interface FlatEntity {
   key: string;
@@ -67,12 +68,15 @@ interface FlatEntity {
   value: SyncEntityValue;
 }
 
-/** Flattens a snapshot into one addressable list, so the merge is written once rather than three times. */
+/** Flattens a snapshot into one addressable list, so the merge is written once rather than four times. */
 function flattenSnapshot(snapshot: SyncedSnapshot): FlatEntity[] {
   return [
     ...snapshot.lists.map((list) => toFlat(SYNC_ENTITY_TYPES.list, list.id, list)),
     ...snapshot.listItems.map((item) => toFlat(SYNC_ENTITY_TYPES.listItem, item.id, item)),
     ...snapshot.notes.map((note) => toFlat(SYNC_ENTITY_TYPES.note, note.id, note)),
+    // A review state is keyed by its list entry's id, so the `reviewState`
+    // namespace here is what keeps `reviewState:i1` and `listItem:i1` apart.
+    ...snapshot.reviewState.map((state) => toFlat(SYNC_ENTITY_TYPES.reviewState, state.id, state)),
   ];
 }
 
@@ -170,11 +174,12 @@ function toRowMap(payload: StampedSnapshot): MergeCandidateMap<FlatEntity> {
   return rows;
 }
 
-/** The three collections a merge rebuilds, passed around as one so the append helper stays a single function. */
+/** The four collections a merge rebuilds, passed around as one so the append helper stays a single function. */
 interface MergedCollections {
   lists: LocalList[];
   listItems: LocalListItem[];
   notes: LocalNote[];
+  reviewState: LocalReviewState[];
 }
 
 /** The stamp fields a merge winner imposes on the row it rebuilds. `updatedAt` is NOT among them — it is never an ordering authority. */
@@ -199,9 +204,14 @@ function appendEntity({ entity, stamp, into }: { entity: FlatEntity; stamp: Winn
     into.listItems.push({ ...(entity.value as LocalListItem), ...stamp });
     return;
   }
-  // SAFETY: the `note` tag is the only remaining member of `SYNC_ENTITY_TYPES`,
-  // and it is only ever attached to a `LocalNote`.
-  into.notes.push({ ...(entity.value as LocalNote), ...stamp });
+  if (entity.entityType === SYNC_ENTITY_TYPES.note) {
+    // SAFETY: the `note` tag is only ever attached to a `LocalNote`.
+    into.notes.push({ ...(entity.value as LocalNote), ...stamp });
+    return;
+  }
+  // SAFETY: the `reviewState` tag is the only remaining member of
+  // `SYNC_ENTITY_TYPES`, and it is only ever attached to a `LocalReviewState`.
+  into.reviewState.push({ ...(entity.value as LocalReviewState), ...stamp });
 }
 
 /**
@@ -222,7 +232,7 @@ export function mergeSnapshots({ local, remote }: { local: StampedSnapshot; remo
   const merged = mergeEntityMaps(toCandidateMap(local), toCandidateMap(remote));
   const rows = mergeEntityMaps(toRowMap(local), toRowMap(remote));
 
-  const collections: MergedCollections = { lists: [], listItems: [], notes: [] };
+  const collections: MergedCollections = { lists: [], listItems: [], notes: [], reviewState: [] };
   const perEntity: SyncMetaPayload['perEntity'] = {};
   const tombstones: Tombstone[] = [];
 
@@ -272,6 +282,7 @@ function canonicalize(payload: StampedSnapshot) {
       lists: byId(payload.snapshot.lists),
       listItems: byId(payload.snapshot.listItems),
       notes: byId(payload.snapshot.notes),
+      reviewState: byId(payload.snapshot.reviewState),
     },
     meta: {
       perEntity: payload.meta.perEntity,

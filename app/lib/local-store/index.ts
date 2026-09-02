@@ -56,9 +56,18 @@ export {
   LISTS_TABLE,
   LIST_ITEMS_TABLE,
   NOTES_TABLE,
+  REVIEW_STATE_TABLE,
   HISTORY_TABLE,
 } from './schema';
-export type { SyncStamp, LocalList, LocalListItem, LocalNote, LocalHistoryEntry, LocalStoreSnapshot } from './schema';
+export type {
+  SyncStamp,
+  LocalList,
+  LocalListItem,
+  LocalNote,
+  LocalReviewState,
+  LocalHistoryEntry,
+  LocalStoreSnapshot,
+} from './schema';
 
 // Store factories and database names — what a test or a server-side caller
 // needs to build a store instead of resolving the browser singleton.
@@ -85,12 +94,22 @@ export {
   listLocalNotesIncludingDeleted,
   getLocalNote,
   deleteLocalNote,
+  putLocalReviewState,
+  listLocalReviewState,
+  listLocalReviewStateIncludingDeleted,
+  getLocalReviewState,
+  deleteLocalReviewState,
   purgeDeletedBefore,
   writeMergedSnapshot,
   resolveDeviceId,
   nextLamport,
 } from './primary-store';
-export type { LocalListInput, LocalListItemInput, LocalNoteInput } from './primary-store';
+export type {
+  LocalListInput,
+  LocalListItemInput,
+  LocalNoteInput,
+  LocalReviewStateInput,
+} from './primary-store';
 
 // The device-only search log, capped on every write and never synced.
 export { recordSearch, listHistory, clearHistory, pruneHistory, importHistoryEntries } from './history';
@@ -98,15 +117,15 @@ export type { RecordSearchInput } from './history';
 
 // The projection onto what the encrypted blob carries.
 // `toSyncedSnapshot` is the ONLY projection: `app/lib/sync/local-store-bridge.ts`
-// reads the three synced collections and hands them here rather than naming
+// reads the four synced collections and hands them here rather than naming
 // them a second time, so the search log's exclusion is decided in one function
 // and a unit test that drives that function covers the live push path too.
 // THERE IS NO INVERSE HERE, AND ITS ABSENCE IS DELIBERATE. A `withSyncedSnapshot`
-// that put the three collections back onto a full device snapshot existed with
+// that put the synced collections back onto a full device snapshot existed with
 // zero callers and was removed: an unexercised second projection is a second
 // shape that has to stay correct with nothing checking that it does, which is
 // exactly the defect this seam was just repaired for. The merge path writes
-// through `writeMergedSnapshot`, which replaces those three tables and leaves
+// through `writeMergedSnapshot`, which replaces those four tables and leaves
 // the search log alone. If a full-snapshot write is ever needed, write it then,
 // against a real caller and a test.
 export { toSyncedSnapshot, syncedSnapshotSchema } from './blob-schema';
