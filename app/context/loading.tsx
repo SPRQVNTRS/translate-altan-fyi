@@ -12,7 +12,7 @@ const LoadingContext = createContext<LoadingContextType>({
 
 export function LoadingProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
-  // Stable identity — an inline object would re-render every consumer on each
+  // Stable identity: an inline object would re-render every consumer on each
   // provider render, regardless of whether `isLoading` actually changed.
   const value = useMemo(() => ({ isLoading, setIsLoading }), [isLoading]);
 

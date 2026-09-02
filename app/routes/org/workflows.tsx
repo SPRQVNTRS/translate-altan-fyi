@@ -87,7 +87,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   const orchestrator = getOrchestrator();
 
-  // Same JSONB filter the loader uses — every purge is scoped to this org.
+  // Same JSONB filter the loader uses, so every purge is scoped to this org.
   const orgFilter = sql`${workflowsTable.context}->>'organizationId' = ${organizationId}`;
   const db = getRawDb();
   const purgeByStatus = (status: string) =>

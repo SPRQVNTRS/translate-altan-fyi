@@ -106,7 +106,7 @@ async function main(): Promise<void> {
 
 function handleCliError(cause: unknown): number {
   if (cause instanceof CliAuthError) {
-    printError(`invalid or missing API key — ${cause.message}`);
+    printError(`invalid or missing API key: ${cause.message}`);
     return 2;
   }
   if (cause instanceof CliApiError) {

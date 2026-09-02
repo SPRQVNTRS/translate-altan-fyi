@@ -205,7 +205,7 @@ export const dbCheckSchema = z.object({
   database: z.string(),
   user: z.string(),
   // `SELECT NOW()` arrives as a Date from the pg driver and as an ISO string
-  // over HTTP — same reconciliation as every other timestamp here.
+  // over HTTP, the same reconciliation as every other timestamp here.
   serverTime: timestamp,
 });
 
@@ -233,7 +233,7 @@ export const dbDescribeSchema = z.object({
 
 /**
  * `db query` runs operator-supplied SQL, so a cell can hold anything the
- * driver decodes — text, numbers, dates, bytea. The CLI never interprets a
+ * driver decodes: text, numbers, dates, bytea. The CLI never interprets a
  * cell, it only renders it, so the schema deliberately does not constrain one:
  * narrowing here would reject valid queries rather than catch a contract break.
  */

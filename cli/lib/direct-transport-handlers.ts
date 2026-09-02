@@ -4,12 +4,12 @@
  * These mirror the HTTP API surface for local CLI use (no --remote flag).
  * Registered once at startup when DirectTransport is active (from cli/index.ts preAction).
  *
- * DirectTransport is trusted in-process — no auth checks are performed here.
+ * DirectTransport is trusted in-process, so no auth checks are performed here.
  * The CLI entry point is the trust boundary; these handlers assume the caller
  * is a local operator with legitimate access.
  *
  * Keep this file as the single source of truth for DirectTransport registrations.
- * Command files must NOT inline direct.register() calls — those run at command
+ * Command files must NOT inline direct.register() calls, because those run at command
  * registration time against the initial transport singleton, which gets replaced
  * by the preAction hook before any action runs.
  */
@@ -121,7 +121,7 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
       return { data: rows, total, limit: pagination.limit, offset: pagination.offset };
     }
 
-    // Global view (no org) — DirectTransport is trusted in-process; no superadmin check needed
+    // Global view (no org). DirectTransport is trusted in-process; no superadmin check needed
     const conditions: SQL[] = [];
     if (source) conditions.push(eq(metricEvents.source, source));
     if (type) conditions.push(eq(metricEvents.eventType, type));
@@ -145,7 +145,7 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
   });
 
   // ---------------------------------------------------------------------------
-  // Workflow routes — static routes MUST be registered before dynamic :id routes
+  // Workflow routes: static routes MUST be registered before dynamic :id routes
   // ---------------------------------------------------------------------------
 
   // GET /api/v1/workflows
@@ -207,7 +207,7 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
   });
 
   // ---------------------------------------------------------------------------
-  // User routes (superadmin — DirectTransport is trusted, no auth check needed)
+  // User routes (superadmin; DirectTransport is trusted, no auth check needed)
   // ---------------------------------------------------------------------------
 
   // GET /api/v1/users
@@ -250,7 +250,7 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
   });
 
   // ---------------------------------------------------------------------------
-  // Org routes (superadmin — DirectTransport is trusted, no auth check needed)
+  // Org routes (superadmin; DirectTransport is trusted, no auth check needed)
   // Static :idOrSlug/members before :idOrSlug to avoid member slug collision
   // ---------------------------------------------------------------------------
 
@@ -297,7 +297,7 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
   });
 
   // ---------------------------------------------------------------------------
-  // DB admin routes (DirectTransport — trusted in-process, no auth check)
+  // DB admin routes (DirectTransport is trusted in-process, no auth check)
   // ---------------------------------------------------------------------------
 
   // GET /api/v1/admin/db/check
@@ -360,14 +360,14 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
     }
   });
 
-  // POST /api/v1/admin/db/query — read-only enforced at session level
+  // POST /api/v1/admin/db/query, read-only enforced at session level
   direct.register('POST', '/api/v1/admin/db/query', async ({ body }) => {
     const parsed = sqlQueryBodySchema.safeParse(body);
     const sqlQuery = parsed.success ? parsed.data.sql.trim() : '';
     if (!sqlQuery) throw new CliApiError('sql must not be empty', 400);
     const client = await pool.connect();
     try {
-      // Transaction-scoped, never session-scoped — see the note in
+      // Transaction-scoped, never session-scoped. See the note in
        // app/routes/api.v1.admin.db.query.ts. A session-level setting would
        // ride the pooled connection into the next handler.
       await client.query('BEGIN');

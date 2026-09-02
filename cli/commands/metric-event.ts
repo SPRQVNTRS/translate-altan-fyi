@@ -15,7 +15,7 @@ export function registerMetricEventCommands(program: Command): void {
   metricEvent
     .command('list')
     .description(
-      'List metric events. --org optional; omitting requires a superadmin key — without one you will get 403.',
+      'List metric events. --org optional; omitting requires a superadmin key, and without one you will get 403.',
     )
     .option('-f, --format <format>', 'Output format: table, json, ids', 'table')
     .option('-l, --limit <n>', 'Limit results', '20')

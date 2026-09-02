@@ -34,7 +34,7 @@ interface ConfirmActionProps {
   onError?: (error: string) => void;
 }
 
-/** Stable identity for the default — an inline `{}` is a new object every render. */
+/** Stable identity for the default, since an inline `{}` is a new object every render. */
 const EMPTY_FORM_DATA: Record<string, string | number> = {};
 
 export function ConfirmAction({

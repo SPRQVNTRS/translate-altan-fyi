@@ -95,7 +95,7 @@ async function createKey(options: { org: string; name: string }): Promise<void> 
   );
 
   printSuccess(`API key created: ${record.name}`);
-  printWarning('Store this key securely — it will not be shown again:');
+  printWarning('Store this key securely, it will not be shown again:');
   console.log(`\n  ${key}\n`);
 }
 

@@ -89,7 +89,7 @@ export default function CreateOrg({ loaderData, actionData }: Route.ComponentPro
   const prevState = useRef(navigation.state);
   useEffect(() => {
     if (prevState.current === 'loading' && navigation.state === 'idle') {
-      // Navigation completed — if we were redirected, form was successful
+      // Navigation completed. If we were redirected, the form was successful.
     }
     if (navigation.state === 'loading' && navigation.formAction) {
       clearForm();

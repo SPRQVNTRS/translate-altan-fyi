@@ -1,7 +1,7 @@
 /**
  * `pnpm cli data-migration run` / `pnpm cli data-migration list`
  *
- * Apply all pending data migrations. Uses direct DB access (getRawDb) — this
+ * Apply all pending data migrations. Uses direct DB access (getRawDb), because this
  * is a deploy-time bootstrap command that runs before the API server is up.
  * Per ADR-0001, this is an explicit exception to the "CLI wraps the API" rule.
  */
@@ -15,7 +15,7 @@ import { desc } from 'drizzle-orm';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-// Path to migrations relative to the project root — used for `list` command
+// Path to migrations relative to the project root, used for `list` command
 const MIGRATIONS_DIR = join(
   process.cwd(),
   'drizzle/data-migrations/migrations',
@@ -81,7 +81,7 @@ async function listCmd(options: { format: string }): Promise<void> {
       .toSorted()
       .map((f) => f.replace(/\.ts$/, ''));
   } catch {
-    // no migrations dir yet — empty list
+    // no migrations dir yet, so the list is empty
   }
 
   const rows = files.map((name) => {

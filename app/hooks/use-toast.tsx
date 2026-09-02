@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 /**
  * A fetcher payload that really is a toast. Unlike `ToastSchema`, `id` and
- * `type` are required — a fetcher returning some other object must not be
+ * `type` are required, so a fetcher returning some other object must not be
  * mistaken for a toast just because the schema would default those fields in.
  */
 const fetcherToastSchema = ToastSchema.extend({
@@ -34,7 +34,7 @@ export function useFetcherWithToast<T>() {
   const fetcher = useFetcher<T>();
 
   useEffect(() => {
-    // A fetcher's payload is whatever its action returned — decode it against
+    // A fetcher's payload is whatever its action returned, so decode it against
     // the toast contract instead of probing its shape.
     const parsed = fetcherToastSchema.safeParse(fetcher.data);
     if (parsed.success) {

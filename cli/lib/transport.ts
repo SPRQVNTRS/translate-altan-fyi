@@ -11,10 +11,10 @@
  *
  * Every call names the schema its response must satisfy. The transport is the
  * single I/O boundary where a wire payload (HTTP JSON) or an in-process domain
- * object (Drizzle rows) becomes a validated, typed value — commands never see
+ * object (Drizzle rows) becomes a validated, typed value, so commands never see
  * an unparsed response and never hand-roll shape checks.
  *
- * Command files never branch on which transport is active — they always
+ * Command files never branch on which transport is active, they always
  * call `transport.get/post/patch/delete(...)`. The active instance is set
  * once by `cli/index.ts` before commander parses argv, and imported as a
  * live binding by every command file.
@@ -38,7 +38,7 @@ export type QueryParams = Record<
 
 /**
  * Schema a caller supplies to describe the response it expects. Zod's input is
- * `unknown` by design — that is precisely the boundary this schema closes.
+ * `unknown` by design, and that is precisely the boundary this schema closes.
  */
 export type ResponseSchema<TValue> = z.ZodType<TValue>;
 

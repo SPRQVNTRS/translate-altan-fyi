@@ -214,7 +214,7 @@ async function listOperationsCmd(
 
 async function getWorkflowContextCmd(id: string): Promise<void> {
   const context = await transport.get(`/api/v1/workflows/${id}/context`, workflowContextSchema);
-  // Response body IS the context object directly — print it as-is
+  // Response body IS the context object directly, so print it as-is
   console.log(JSON.stringify(context, null, 2));
 }
 
