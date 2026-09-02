@@ -283,8 +283,15 @@ export function buildKeyRecordRequest(input: {
  * unwrap below does not need it: the descriptor this device derived its KEK
  * from came from `POST /v1/auth/kdf`, which is the account's own, and reading
  * a second copy here would only create a second thing that could disagree.
+ *
+ * EXPORTED SO A TEST CAN REACH IT. `sync-ui.test.ts` parses a literal
+ * transcribed from section 5.3 through this schema, the same treatment
+ * `kdfResponseSchema` and `sessionSchema` get for 5.7 and 5.8. Nothing else
+ * would catch a re-drift: this schema is reached only through `signInToSync`,
+ * behind Argon2 and three endpoints, and the port already answered
+ * `{keyRecords: ...}` here once.
  */
-const keyRecordsResponseSchema = z.object({
+export const keyRecordsResponseSchema = z.object({
   records: z.array(
     z.object({
       kind: z.string(),
@@ -300,8 +307,13 @@ const keyRecordsResponseSchema = z.object({
  * The stored record echoed back by a successful `PUT` (`PROTOCOL.md` section
  * 5.4). BARE, with no wrapper key: 5.4 says the body is "the stored record,
  * same shape as a `GET /key-records` entry".
+ *
+ * EXPORTED SO A TEST CAN REACH IT, for the same reason as the schema above:
+ * `sync-ui.test.ts` pins it against a literal transcribed from section 5.4,
+ * and that pin is the only thing standing between this client and a silent
+ * re-drift back to the `{keyRecord: ...}` wrapper the port wrote.
  */
-const keyRecordResponseSchema = z.object({
+export const keyRecordResponseSchema = z.object({
   kind: z.string(),
   wrappedDek: z.string(),
   updatedAt: z.string(),

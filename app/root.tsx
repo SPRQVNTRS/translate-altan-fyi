@@ -22,7 +22,14 @@ import { useToast } from '#app/hooks/use-toast';
 import { LoadingProvider } from '#app/context/loading';
 import { reportError } from '#app/lib/report-error';
 import { I18nProvider } from '#app/i18n/I18nProvider';
-import { DEFAULT_LANGUAGE, resolveRequestLanguage, type LanguageCode } from '#app/i18n/language-prefs';
+import {
+  DEFAULT_LANGUAGE,
+  readLanguageCookie,
+  readStoredLanguage,
+  resolveRequestLanguage,
+  type LanguageCode,
+} from '#app/i18n/language-prefs';
+import { shouldFallbackOffline } from '#app/lib/local-store';
 
 // The two variable body faces are self-hosted through fontsource, so the app
 // makes no request to a third-party font host. Fraunces, the display face, is
@@ -65,6 +72,82 @@ export async function loader({ request }: Route.LoaderArgs) {
     language,
     headers: combineHeaders(toastHeaders),
   };
+}
+
+/** Exactly what `serverLoader()` hands back, so the offline answer cannot drift from the loader above. */
+type RootData = Awaited<ReturnType<Route.ClientLoaderArgs['serverLoader']>>;
+
+/**
+ * The last root payload the server actually answered with. Module scope, so it
+ * survives every navigation within the tab and is discarded on a real reload,
+ * which is when the server is asked again anyway.
+ */
+let lastServedRootData: RootData | null = null;
+
+/**
+ * The root loader's `headers` field as the CLIENT sees it. Single fetch cannot
+ * serialize methods, so a `Headers` instance arrives as an object whose every
+ * method is `undefined`. This value is what an empty one looks like: nothing to
+ * set, which is the truth offline, where no cookie is being handed back.
+ */
+const NO_SERIALIZED_HEADERS = {
+  append: undefined,
+  delete: undefined,
+  get: undefined,
+  getSetCookie: undefined,
+  has: undefined,
+  set: undefined,
+  forEach: undefined,
+  [Symbol.iterator]: undefined,
+  entries: undefined,
+  keys: undefined,
+  values: undefined,
+} satisfies RootData['headers'];
+
+/**
+ * Offline survival for the root route, and through it for every client-only
+ * mutation in the app.
+ *
+ * The lists, history and notes screens write through a `clientAction`, so the
+ * write itself never touches the network. React Router still REVALIDATES after
+ * every action, and because this route has a server `loader`, that revalidation
+ * issues a single-fetch `/<path>.data` request for the whole route tree.
+ * `public/sw.js` never caches `.data` BY DESIGN, not by oversight: a cached
+ * loader response would be served as a live answer, and this app must never
+ * present a stale translation as a current one. Offline that fetch therefore
+ * rejects with a `TypeError`, and before this `clientLoader` existed nothing
+ * caught it, so the root error boundary replaced a page whose own write had
+ * ALREADY SUCCEEDED on the device.
+ *
+ * Only a NETWORK failure is absorbed. `shouldFallbackOffline` returns true for
+ * an offline navigator or a `TypeError` and nothing else, so an application
+ * error still reaches the boundary: the trailing-slash `redirect` the server
+ * loader throws, a 500, any thrown `Response`. Swallowing those would render a
+ * silently wrong page, which is worse than the crash this replaces.
+ *
+ * `clientLoader.hydrate` is deliberately NOT set. The default reuses the
+ * server-rendered root data on hydration, so a cold load costs no extra fetch.
+ */
+export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Promise<RootData> {
+  try {
+    const data = await serverLoader();
+    lastServedRootData = data;
+    return data;
+  } catch (cause) {
+    if (!shouldFallbackOffline(cause)) throw cause;
+    if (lastServedRootData) return lastServedRootData;
+    // First run offline: the shell came from the service worker cache and this
+    // loader has never seen a server answer. `user` and `toast` are unknowable
+    // without the server, so they are null rather than invented. The language
+    // is a device preference, so the client already holds it, in the cookie
+    // with a localStorage mirror.
+    return {
+      toast: null,
+      user: null,
+      language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
+      headers: NO_SERIALIZED_HEADERS,
+    };
+  }
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

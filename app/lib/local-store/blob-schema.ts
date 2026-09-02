@@ -22,8 +22,23 @@ export interface SyncedSnapshot {
   notes: LocalNote[];
 }
 
-/** Projects a device snapshot onto the collections the blob carries. */
-export function toSyncedSnapshot(snapshot: LocalStoreSnapshot): SyncedSnapshot {
+/**
+ * Projects a snapshot onto the collections the blob carries, and is the ONE
+ * place that names them.
+ *
+ * THE PARAMETER IS THE NARROW SHAPE ON PURPOSE, AND THAT IS WHAT MAKES ONE
+ * PROJECTION SERVE TWO CALLERS. A full `LocalStoreSnapshot` is assignable to
+ * it, and so is the sync bridge's read of the same three collections with
+ * tombstones included, so the device export path and the live push path go
+ * through this function rather than through two lists of collection names that
+ * can drift. `app/lib/sync/local-store-bridge.ts`'s `readLocalSnapshot` is the
+ * caller on the live path; it assembles the reads and hands them here, so what
+ * leaves a device is whatever this returns and nothing else.
+ *
+ * The collections the blob carries, and the one it deliberately leaves behind,
+ * are stated in `app/lib/e2ee/BLOB-CONTENTS.md`.
+ */
+export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
   return { lists: snapshot.lists, listItems: snapshot.listItems, notes: snapshot.notes };
 }
 

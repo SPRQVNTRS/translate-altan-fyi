@@ -17,25 +17,49 @@
  * Keeping the seam in one small file also makes the blast radius of a
  * local-store refactor exactly one import list.
  */
+import type { Store } from 'tinybase';
 import {
   listLocalListItemsIncludingDeleted,
   listLocalListsIncludingDeleted,
   listLocalNotesIncludingDeleted,
   syncedSnapshotSchema,
+  toSyncedSnapshot,
   writeMergedSnapshot,
   SCHEMA_VERSION,
   type SyncedSnapshot,
 } from '#app/lib/local-store';
 import { SyncRequestError } from '#app/lib/e2ee/client/sync-error';
 
-/** The device's synced rows, TOMBSTONES INCLUDED. A delete that is filtered out here never reaches the peer. */
-export async function readLocalSnapshot(): Promise<SyncedSnapshot> {
+/** Options accepted by the reads here, the same shape every `local-store` function takes — the store defaults to the browser singleton. */
+interface StoreOption {
+  store?: Store;
+}
+
+/**
+ * The device's synced rows, TOMBSTONES INCLUDED. A delete that is filtered out
+ * here never reaches the peer, so the reads are the `IncludingDeleted` ones and
+ * a tombstone travels as an ordinary row with `deleted: true`.
+ *
+ * WHAT LEAVES THE DEVICE IS `toSyncedSnapshot`'s DECISION, NOT THIS FUNCTION'S.
+ * This assembles three reads and hands them to the projection rather than
+ * building the payload itself, so there is one list of synced collection names
+ * in the codebase instead of two that can drift. The collection this store
+ * holds and the blob deliberately does not carry is named in
+ * `app/lib/e2ee/BLOB-CONTENTS.md`; it is never read here, and could not survive
+ * the projection if it were.
+ *
+ * `store` defaults to the browser IndexedDB singleton. It is injectable for one
+ * reason: without it this function resolves that singleton and cannot run
+ * outside a browser at all, so a test could only MIRROR the live path. With it,
+ * a test drives this exact function against an in-memory store.
+ */
+export async function readLocalSnapshot({ store }: StoreOption = {}): Promise<SyncedSnapshot> {
   const [lists, listItems, notes] = await Promise.all([
-    listLocalListsIncludingDeleted(),
-    listLocalListItemsIncludingDeleted(),
-    listLocalNotesIncludingDeleted(),
+    listLocalListsIncludingDeleted({ store }),
+    listLocalListItemsIncludingDeleted({ store }),
+    listLocalNotesIncludingDeleted({ store }),
   ]);
-  return { lists, listItems, notes };
+  return toSyncedSnapshot({ lists, listItems, notes });
 }
 
 /**

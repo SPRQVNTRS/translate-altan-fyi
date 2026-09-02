@@ -97,6 +97,10 @@ export { recordSearch, listHistory, clearHistory, pruneHistory, importHistoryEnt
 export type { RecordSearchInput } from './history';
 
 // The projection onto what the encrypted blob carries, and its inverse.
+// `toSyncedSnapshot` is the ONLY projection: `app/lib/sync/local-store-bridge.ts`
+// reads the three synced collections and hands them here rather than naming
+// them a second time, so the search log's exclusion is decided in one function
+// and a unit test that drives that function covers the live push path too.
 export { toSyncedSnapshot, withSyncedSnapshot, syncedSnapshotSchema } from './blob-schema';
 export type { SyncedSnapshot } from './blob-schema';
 
