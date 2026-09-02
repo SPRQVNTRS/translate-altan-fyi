@@ -1,0 +1,1 @@
+ALTER TABLE "examples" ADD CONSTRAINT "examples_source_external_id_unique" UNIQUE("source_id","external_id");

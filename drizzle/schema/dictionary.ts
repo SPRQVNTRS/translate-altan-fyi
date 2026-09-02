@@ -1,5 +1,16 @@
 import { relations, sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
-import { pgTable, text, integer, real, timestamp, uuid, unique, index, check } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  integer,
+  real,
+  timestamp,
+  uuid,
+  unique,
+  index,
+  check,
+  primaryKey,
+} from 'drizzle-orm/pg-core';
 
 // =============================================================================
 // Shared Dictionary (Global — NOT tenant-scoped)
@@ -103,7 +114,17 @@ export const headwords = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    unique('headwords_language_lemma_pos_unique').on(table.languageCode, table.lemma, table.pos),
+    // The importers upsert a headword on its natural key: (language, lemma, pos).
+    // `pos` is nullable, because a source that records no part of speech writes
+    // NULL there. Postgres treats every NULL as distinct in a UNIQUE constraint,
+    // so without NULLS NOT DISTINCT the row ('en', 'run', NULL) could be inserted
+    // an unlimited number of times and no upsert could ever match an existing one.
+    // Every re-run of an importer would then add a fresh duplicate, and
+    // idempotency would be impossible. NULLS NOT DISTINCT makes the NULL compare
+    // equal to itself, which is what the natural key means here.
+    unique('headwords_language_lemma_pos_unique')
+      .on(table.languageCode, table.lemma, table.pos)
+      .nullsNotDistinct(),
     index('headwords_language_code_idx').on(table.languageCode),
     index('headwords_source_id_idx').on(table.sourceId),
   ],
@@ -123,6 +144,7 @@ export const headwordsRelations = relations(headwords, ({ one, many }) => ({
   }),
   senses: many(senses),
   examples: many(examples),
+  exampleHeadwords: many(exampleHeadwords),
   linksFrom: many(headwordLinks, { relationName: 'headwordLinkFrom' }),
   linksTo: many(headwordLinks, { relationName: 'headwordLinkTo' }),
 }));
@@ -143,9 +165,23 @@ export const senses = pgTable(
     sourceId: uuid('source_id')
       .notNull()
       .references(() => sources.id),
+    /** Upstream identifier for this sense, e.g. a Wikidata sense id such as `L123-S1`. Null for senses we mint ourselves. */
+    externalId: text('external_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    // This constraint keeps its DEFAULT nulls-distinct behaviour, which is the
+    // OPPOSITE choice from the headwords natural key above, for the opposite
+    // reason. There, a NULL `pos` is part of the key and two rows that both omit
+    // it are the same headword. Here, a NULL `external_id` means "this sense has
+    // no upstream identity, we minted it ourselves", and many senses from the
+    // same source will legitimately carry NULL. Under NULLS NOT DISTINCT they
+    // would all collide with each other and only one could exist per source. So
+    // the constraint pins down only the senses that DO carry an upstream id: one
+    // sense per (source, external id), and any number of id-less senses beside
+    // them. The constraint also provides the index the upsert needs, so there is
+    // no separate index on `external_id`.
+    unique('senses_source_external_id_unique').on(table.sourceId, table.externalId),
     index('senses_headword_id_idx').on(table.headwordId),
     index('senses_source_id_idx').on(table.sourceId),
   ],
@@ -350,10 +386,45 @@ export const examples = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    check(
-      'examples_attachment_check',
-      sql`${table.senseId} IS NOT NULL OR ${table.headwordId} IS NOT NULL`,
-    ),
+    // WHY THERE IS NO ATTACHMENT CHECK CONSTRAINT HERE
+    //
+    // An example is attached in one of three ways now: through `sense_id`,
+    // through `headword_id`, or through one or more rows in
+    // `example_headwords`. The third way is the one a Tatoeba sentence uses,
+    // because one sentence mentions several headwords at once.
+    //
+    // A CHECK constraint can only see the row it is defined on. It cannot see
+    // whether a junction row exists, because answering that needs a subquery,
+    // and Postgres forbids subqueries in CHECK. A trigger can read other
+    // tables, but it does not help either: the junction rows are written AFTER
+    // the example row, since the junction needs the example's id. A row-level
+    // trigger would therefore fire before any attachment exists and reject
+    // every legal insert. A deferred constraint trigger would see the finished
+    // state and would work, and it would then fire once per row on an import of
+    // several million sentences.
+    //
+    // So attachment is enforced in two places instead. The importer never
+    // writes an `examples` row it does not immediately attach, in the same
+    // transaction. The query boundary only ever reaches `examples` through a
+    // join from a sense or from a headword, so an unattached row is never
+    // selected. An orphan example is invisible rather than illegal.
+    //
+    // This is a real weakening, and it should be read as one: the database will
+    // now accept an `examples` row with no attachment of any kind, and nothing
+    // but our own code stops it from being written.
+
+    // The natural key an importer upserts on. Tatoeba writes `external_id` as
+    // the sentence id paired with its translation id, so a re-import updates the
+    // row it already wrote instead of adding a second one. Without this
+    // constraint there is nothing to upsert on, and every run inserts the whole
+    // corpus again.
+    //
+    // It stays NULLS DISTINCT deliberately, which is the OPPOSITE choice from
+    // the headwords natural key above. Rows we mint ourselves, the
+    // LLM-generated examples of a later milestone, carry a NULL `external_id`,
+    // and there will be many of them. Under NULLS NOT DISTINCT the second such
+    // row would collide with the first.
+    unique('examples_source_external_id_unique').on(table.sourceId, table.externalId),
     index('examples_sense_id_idx').on(table.senseId),
     index('examples_headword_id_idx').on(table.headwordId),
     index('examples_language_code_idx').on(table.languageCode),
@@ -365,7 +436,7 @@ export const examples = pgTable(
 export type InsertExample = InferInsertModel<typeof examples>;
 export type SelectExample = InferSelectModel<typeof examples>;
 
-export const examplesRelations = relations(examples, ({ one }) => ({
+export const examplesRelations = relations(examples, ({ one, many }) => ({
   sense: one(senses, {
     fields: [examples.senseId],
     references: [senses.id],
@@ -387,6 +458,56 @@ export const examplesRelations = relations(examples, ({ one }) => ({
   source: one(sources, {
     fields: [examples.sourceId],
     references: [sources.id],
+  }),
+  exampleHeadwords: many(exampleHeadwords),
+}));
+
+// =============================================================================
+// Example headwords (an example mentions many headwords)
+// =============================================================================
+// One sentence mentions several words. A Tatoeba sentence like "The dog runs"
+// belongs to `dog` and to `run` at the same time, and the single
+// `examples.headwordId` column cannot say that: it holds one id. This junction
+// table is the many-to-many form of the same attachment.
+//
+// The composite primary key on (example_id, headword_id) is what makes the
+// attachment idempotent. A second import run re-attaches the same pair, the key
+// already holds that pair, and `ON CONFLICT DO NOTHING` writes zero rows. No
+// bookkeeping is needed to tell a re-run from a first run.
+//
+// The extra index on `headword_id` is not redundant with that key. The read
+// direction is "give me the examples for this headword", which starts from the
+// headword; the composite key's leading column is `example_id`, so it cannot
+// serve a lookup that does not know the example.
+
+export const exampleHeadwords = pgTable(
+  'example_headwords',
+  {
+    exampleId: uuid('example_id')
+      .notNull()
+      .references(() => examples.id),
+    headwordId: uuid('headword_id')
+      .notNull()
+      .references(() => headwords.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.exampleId, table.headwordId], name: 'example_headwords_pkey' }),
+    index('example_headwords_headword_id_idx').on(table.headwordId),
+  ],
+);
+
+export type InsertExampleHeadword = InferInsertModel<typeof exampleHeadwords>;
+export type SelectExampleHeadword = InferSelectModel<typeof exampleHeadwords>;
+
+export const exampleHeadwordsRelations = relations(exampleHeadwords, ({ one }) => ({
+  example: one(examples, {
+    fields: [exampleHeadwords.exampleId],
+    references: [examples.id],
+  }),
+  headword: one(headwords, {
+    fields: [exampleHeadwords.headwordId],
+    references: [headwords.id],
   }),
 }));
 

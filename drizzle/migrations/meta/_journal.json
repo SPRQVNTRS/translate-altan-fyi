@@ -15,6 +15,20 @@
       "when": 1788345152638,
       "tag": "0001_mean_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788347082409,
+      "tag": "0002_mighty_scream",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788347375860,
+      "tag": "0003_clammy_king_bedlam",
+      "breakpoints": true
     }
   ]
 }
