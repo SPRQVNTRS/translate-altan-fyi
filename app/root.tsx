@@ -1,3 +1,5 @@
+import '@fontsource-variable/inter';
+import '@fontsource-variable/victor-mono';
 import {
   isRouteErrorResponse,
   Links,
@@ -18,19 +20,10 @@ import { useToast } from '#app/hooks/use-toast';
 import { LoadingProvider } from '#app/context/loading';
 import { reportError } from '#app/lib/report-error';
 
-export const links: Route.LinksFunction = () => [
-  { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-  {
-    rel: 'preconnect',
-    href: 'https://fonts.gstatic.com',
-    crossOrigin: 'anonymous',
-  },
-  {
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap',
-  },
-  { rel: 'stylesheet', href: stylesheet },
-];
+// The two variable body faces are self-hosted through fontsource, so the app
+// makes no request to a third-party font host. Fraunces, the display face, is
+// declared as an `@font-face` in `app.css` over a file in `public/fonts`.
+export const links: Route.LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet }];
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { pathname, search } = new URL(request.url);
@@ -81,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           }}
         />
       </head>
-      <body>
+      <body className="font-sans">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -96,7 +89,10 @@ export default function App() {
   return (
     <LoadingProvider>
       <Outlet />
-      <Toaster closeButton position="bottom-right" theme={'light'} />
+      {/* `system`, not a hardcoded `light`. The app has a class-based dark
+          mode, so a fixed light value gave a dark-mode user a white toast on a
+          dark page. */}
+      <Toaster closeButton position="bottom-right" theme="system" />
     </LoadingProvider>
   );
 }

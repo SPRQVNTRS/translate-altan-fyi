@@ -14,7 +14,7 @@ export default [
   route('/api/v1/data-sources', 'routes/api.v1.data-sources.ts'),
   route('/api/v1/metric-events', 'routes/api.v1.metric-events.ts'),
 
-  // Workflow endpoints — static routes MUST precede dynamic :id routes
+  // Workflow endpoints, static routes MUST precede dynamic :id routes
   route('/api/v1/workflows', 'routes/api.v1.workflows.ts'),
   route('/api/v1/workflows/stats', 'routes/api.v1.workflows.stats.ts'),
   route('/api/v1/workflows/audit-tenancy', 'routes/api.v1.workflows.audit-tenancy.ts'),
@@ -23,12 +23,12 @@ export default [
   route('/api/v1/workflows/:id/context', 'routes/api.v1.workflows.$id.context.ts'),
   route('/api/v1/workflows/:id/cancel', 'routes/api.v1.workflows.$id.cancel.ts'),
 
-  // User endpoints (superadmin only) — static before dynamic
+  // User endpoints (superadmin only), static before dynamic
   route('/api/v1/users', 'routes/api.v1.users.ts'),
   route('/api/v1/users/by-email/:email', 'routes/api.v1.users.by-email.$email.ts'),
   route('/api/v1/users/:id', 'routes/api.v1.users.$id.ts'),
 
-  // Org endpoints (superadmin only) — static before dynamic
+  // Org endpoints (superadmin only), static before dynamic
   route('/api/v1/orgs', 'routes/api.v1.orgs.ts'),
   route('/api/v1/orgs/:idOrSlug', 'routes/api.v1.orgs.$idOrSlug.ts'),
   route('/api/v1/orgs/:idOrSlug/members', 'routes/api.v1.orgs.$idOrSlug.members.ts'),
@@ -40,8 +40,18 @@ export default [
   route('/api/v1/admin/db/describe/:table', 'routes/api.v1.admin.db.describe.$table.ts'),
   route('/api/v1/admin/db/query', 'routes/api.v1.admin.db.query.ts'),
 
+  // =============================================================================
+  // App Shell (sidebar, mobile drawer, bottom tab bar)
+  // =============================================================================
+  layout('routes/_app.tsx', { id: '_app' }, [
+    index('routes/search.tsx'),
+    route('/lists', 'routes/lists.tsx'),
+    route('/history', 'routes/history.tsx'),
+    route('/settings', 'routes/settings.tsx'),
+    route('/account', 'routes/account.tsx'),
+  ]),
+
   layout('routes/_public.tsx', { id: '_public' }, [
-    index('routes/index.tsx'),
     route('/login', 'routes/login.tsx'),
     route('/logout', 'routes/logout.tsx'),
     route('/register', 'routes/register.tsx'),

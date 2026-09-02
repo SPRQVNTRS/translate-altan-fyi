@@ -1,23 +1,115 @@
-import { useLoading } from '#app/context/loading';
-import { Link, useNavigation, Form } from 'react-router';
-import { cn } from '#app/lib/utils';
-import { ArrowLeft, User, LogOut, Settings } from 'lucide-react';
-import { AppSidebar } from './app-sidebar';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from './ui/sidebar';
-import { Separator } from './ui/separator';
-import { ThemeToggle } from './theme-toggle';
-import { useUser } from '#app/hooks/use-user';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { Button } from './ui/button';
-import { Avatar, AvatarFallback } from './ui/avatar';
 import * as React from 'react';
+import { useLocation, useNavigation } from 'react-router';
+import { ArrowLeft, Menu } from 'lucide-react';
+import { Link } from '#app/components/link';
+import { ThemeToggle } from '#app/components/theme-toggle';
+import { cn } from '#app/lib/utils';
+import {
+  activeNavigationHref,
+  AppSidebar,
+  footerNavigationItems,
+  navigationItems,
+  primaryNavigationItems,
+  type NavigationItem,
+} from './app-sidebar';
+import { BottomNav } from './bottom-nav';
+import { Button } from './ui/button';
+import { Separator } from './ui/separator';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from './ui/sidebar';
+
+/** The product name, a lowercase wordmark and a proper noun. */
+const APP_NAME = 'translate';
+
+/**
+ * A thin navigation indicator across the top of the chrome, shown only while a
+ * navigation is in flight. The bar itself is the `--animate-loading-bar` token
+ * from `app.css`, so its timing is set once for the whole app.
+ */
+function ProgressBar() {
+  const navigation = useNavigation();
+  if (navigation.state === 'idle') return null;
+
+  return (
+    <div className="fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden" aria-hidden="true">
+      <div className="h-full w-1/3 animate-loading-bar bg-primary" />
+    </div>
+  );
+}
+
+/** One drawer row's classes. Active rows carry the brand the same way the sidebar's do. */
+function drawerItemClasses(isActive: boolean): string {
+  return cn(
+    'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors',
+    isActive ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
+  );
+}
+
+/** One drawer destination, the drawer's counterpart to the sidebar's row. */
+function DrawerRow({
+  item,
+  isActive,
+  onNavigate,
+}: {
+  item: NavigationItem;
+  isActive: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      to={item.to}
+      onClick={onNavigate}
+      aria-current={isActive ? 'page' : undefined}
+      className={drawerItemClasses(isActive)}
+    >
+      <item.icon className="h-4 w-4" aria-hidden="true" />
+      <span>{item.label}</span>
+    </Link>
+  );
+}
+
+/**
+ * The mobile navigation drawer. It renders the same catalog the desktop sidebar
+ * does, in the same order and with the same footer separation, so a phone user
+ * and a laptop user see one map of the app rather than two.
+ *
+ * `md:hidden`, because at md and up the sidebar is already on screen. There is
+ * no logo image to tap yet, so the trigger is a real button with an accessible
+ * label rather than a decorative mark.
+ */
+function NavDrawer() {
+  const location = useLocation();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const close = (): void => setIsOpen(false);
+  const activeHref = activeNavigationHref(location.pathname);
+
+  return (
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-9 shrink-0 md:hidden" aria-label="Open navigation menu">
+          <Menu className="size-5" aria-hidden="true" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-72 gap-0 p-0 md:hidden">
+        <SheetHeader className="border-b">
+          <SheetTitle className="font-display text-lg">{APP_NAME}</SheetTitle>
+          <SheetDescription className="sr-only">Everywhere you can go in the app.</SheetDescription>
+        </SheetHeader>
+        <nav className="flex flex-col gap-1 p-2">
+          {primaryNavigationItems.map((item) => (
+            <DrawerRow key={item.to} item={item} isActive={activeHref === item.to} onNavigate={close} />
+          ))}
+          {/* The same footer separation the sidebar draws: the things you set
+              once sit below a rule, not among the places you go every day. */}
+          <Separator className="my-2" />
+          {footerNavigationItems.map((item) => (
+            <DrawerRow key={item.to} item={item} isActive={activeHref === item.to} onNavigate={close} />
+          ))}
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 export default function AppWrapper({
   title,
@@ -28,15 +120,11 @@ export default function AppWrapper({
   backTo?: string;
   children: React.ReactNode;
 }) {
-  const navigation = useNavigation();
-  const { isLoading } = useLoading();
-  const showLoadingBar = navigation.state === 'loading' || isLoading;
-
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <InnerContent title={title} backTo={backTo} showLoadingBar={showLoadingBar}>
+        <InnerContent title={title} backTo={backTo}>
           {children}
         </InnerContent>
       </SidebarInset>
@@ -44,100 +132,69 @@ export default function AppWrapper({
   );
 }
 
-// Inner content component that can use useSidebar hook
-function InnerContent({
-  title,
-  backTo,
-  showLoadingBar,
-  children,
-}: {
-  title?: string;
-  backTo?: string;
-  showLoadingBar: boolean;
-  children: React.ReactNode;
-}) {
-  const user = useUser();
+function InnerContent({ title, backTo, children }: { title?: string; backTo?: string; children: React.ReactNode }) {
+  const location = useLocation();
+  // When a route passes no title, the nav catalog already knows the name of the
+  // screen the user is on, so the header reads it from there rather than making
+  // every route repeat its own label.
+  const activeHref = activeNavigationHref(location.pathname);
+  const activeLabel = navigationItems.find((item) => item.to === activeHref)?.label;
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 h-1 bg-transparent z-50 pointer-events-none">
-        <div
-          className={cn(
-            'absolute inset-0 overflow-hidden',
-            showLoadingBar ? 'opacity-100' : 'opacity-0',
-            'transition-opacity duration-200',
-          )}
-        >
-          <div
-            className={cn(
-              'h-full bg-linear-to-r from-blue-500 via-purple-500 to-pink-500',
-              'absolute top-0 left-0 w-1/3',
-              'animate-loading-bar',
-            )}
-          />
-        </div>
-      </div>
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background">
-        <div className="flex items-center gap-2 px-4 w-full">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+      <ProgressBar />
+      {/* The chrome sits on `bg-card`, not `bg-background`, so the header is a
+          treated surface rather than the same fill as the page under it.
+          `border-primary/20` tints the closing hairline the way the active tab
+          is tinted, and `AppSidebar`'s header carries the same value so the two
+          rules read as one line across the chrome at md and up. */}
+      <header className="flex min-h-16 shrink-0 items-center gap-2 border-b border-primary/20 bg-card">
+        <div className="flex w-full items-center gap-2.5 px-4">
+          {/* Desktop only. Below md the drawer trigger beside it opens the same
+              list, and two triggers for one sheet is one too many. */}
+          <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
+          <Separator orientation="vertical" className="mr-2 hidden h-4 md:block" />
+          <NavDrawer />
           <div className="flex flex-1 items-center justify-between">
-            <h1 className="text-xl font-semibold">{title || 'Dashboard'}</h1>
+            <div className="flex min-w-0 flex-col justify-center gap-px">
+              {/* The wordmark, mobile only. At md and up the sidebar's own logo
+                  renders this exact word a few pixels away, and a second one
+                  there is a duplicate rather than emphasis. Decorative: the
+                  page title below names the screen for assistive tech. */}
+              <span
+                aria-hidden="true"
+                className="font-display text-xs font-semibold leading-none text-primary md:hidden"
+              >
+                {APP_NAME}
+              </span>
+              {/* `truncate`, because a long title would otherwise wrap the
+                  header to a second line on a narrow phone. */}
+              <h1 className="truncate font-display text-lg font-semibold leading-tight tracking-tight md:text-xl">
+                {title ?? activeLabel ?? APP_NAME}
+              </h1>
+            </div>
             <div className="flex items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-sm">
-                        {user.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden sm:inline text-sm">{user.name}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center cursor-pointer">
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard" className="flex items-center cursor-pointer">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="p-0">
-                    <Form action="/logout" method="post" className="w-full">
-                      <button className="flex items-center w-full px-2 py-1.5 text-sm cursor-pointer">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Logout
-                      </button>
-                    </Form>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
               <ThemeToggle />
             </div>
           </div>
         </div>
       </header>
       {backTo && (
-        <div className="bg-muted/50 border-b px-4 py-2 sm:px-6 lg:px-8">
+        <div className="border-b bg-muted/50 px-4 py-2 sm:px-6 lg:px-8">
           <Link
             to={backTo}
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
             Back
           </Link>
         </div>
       )}
-      <div className="flex-1 p-4 md:p-6">{children}</div>
+      {/* The bottom padding clears the mobile tab bar, so page content is never
+          hidden behind it. The sidebar owns navigation at md and up, where the
+          bar is gone and the padding drops back to normal. */}
+      <div className="flex-1 p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:p-6 md:pb-6">{children}</div>
+      <BottomNav />
     </>
   );
 }

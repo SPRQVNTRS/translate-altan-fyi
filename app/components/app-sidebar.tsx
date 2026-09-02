@@ -1,217 +1,183 @@
 import * as React from 'react';
-import {
-  HomeIcon,
-  Settings,
-  Users,
-  Layers,
-  Workflow,
-  Building2,
-  Shield,
-  ArrowLeft,
-  type LucideIcon,
-} from 'lucide-react';
-import { useUser } from '#app/hooks/use-user';
-import { useOptionalTenant, isOrgAdmin } from '#app/hooks/use-tenant';
+import { BookMarked, History, Search, Settings, UserRound, type LucideIcon } from 'lucide-react';
+import { useLocation } from 'react-router';
+import { cn } from '#app/lib/utils';
+import { Link } from '#app/components/link';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
   SidebarGroup,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
   SidebarSeparator,
   useSidebar,
 } from '#app/components/ui/sidebar';
-import { Link, useLocation, useParams } from 'react-router';
 
-type NavigationItem = {
-  name: string;
+/**
+ * Where a destination sits in the drawer and the sidebar: with the day-to-day
+ * destinations, or in the visually separated footer group that carries the
+ * things you set once (Settings, Account).
+ */
+export type NavigationGroup = 'primary' | 'footer';
+
+export type NavigationItem = {
+  /**
+   * A literal English label. There is no i18n in this app, so the catalog
+   * carries the words themselves rather than a translation key.
+   */
+  label: string;
   to: string;
-  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>> | LucideIcon;
-  /** Only show for org admins (owner/admin role in org) */
-  orgAdminOnly?: boolean;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>> | LucideIcon;
+  group: NavigationGroup;
+  /**
+   * Present only for the destinations the mobile tab bar also carries. The
+   * `order` is the tab-bar slot, kept here so the bar and the drawer can never
+   * drift into two different labels for one destination.
+   */
+  tab?: { order: number };
 };
 
-/** Navigation items scoped to the current organization */
-function getOrgNavigationItems(orgSlug: string): NavigationItem[] {
-  return [
-    { name: 'Dashboard', to: `/org/${orgSlug}/dashboard`, icon: HomeIcon },
-    { name: 'Workflows', to: `/org/${orgSlug}/workflows`, icon: Workflow },
-    { name: 'Users', to: `/org/${orgSlug}/users`, icon: Users, orgAdminOnly: true },
-  ];
-}
-
-/** Superadmin navigation items (cross-tenant platform management) */
-const superadminItems: NavigationItem[] = [
-  { name: 'Organizations', to: '/super/orgs', icon: Building2 },
-  { name: 'Users', to: '/super/users', icon: Users },
+/**
+ * The whole map of the app, in one place. Three surfaces read it: the desktop
+ * sidebar below, the mobile drawer in `app-wrapper.tsx`, and the mobile tab bar
+ * in `bottom-nav.tsx`. A wording or href change lands in one entry and all
+ * three move together.
+ *
+ * The three primary entries are equal. This app has no flagship verb, so the
+ * tab bar is three flat tabs, with no raised centre button.
+ */
+export const navigationItems: NavigationItem[] = [
+  { label: 'Search', to: '/', icon: Search, group: 'primary', tab: { order: 1 } },
+  { label: 'Lists', to: '/lists', icon: BookMarked, group: 'primary', tab: { order: 2 } },
+  { label: 'History', to: '/history', icon: History, group: 'primary', tab: { order: 3 } },
+  { label: 'Settings', to: '/settings', icon: Settings, group: 'footer' },
+  { label: 'Account', to: '/account', icon: UserRound, group: 'footer' },
 ];
 
-function Logo({ orgSlug, isSuperContext }: { orgSlug?: string; isSuperContext?: boolean }) {
+/** The day-to-day destinations, in catalog order: the top block of the drawer and the sidebar. */
+export const primaryNavigationItems: NavigationItem[] = navigationItems.filter((item) => item.group === 'primary');
+
+/** The separated group at the bottom of the drawer and the sidebar. */
+export const footerNavigationItems: NavigationItem[] = navigationItems.filter((item) => item.group === 'footer');
+
+/**
+ * The mobile tab bar's destinations, in bar order. Derived rather than
+ * re-listed, so the bar cannot label a destination differently from the drawer.
+ */
+export const tabNavigationItems: NavigationItem[] = navigationItems
+  .filter((item) => item.tab !== undefined)
+  .toSorted((a, b) => (a.tab?.order ?? 0) - (b.tab?.order ?? 0));
+
+/**
+ * Which nav item, if any, the current URL belongs to. The longest matching
+ * href wins, so a future `/settings/theme` highlights that row rather than
+ * both it and `/settings`.
+ *
+ * The root href needs its own rule. Search lives at `/`, and a plain
+ * `startsWith` would mark it active on every page in the app, because every
+ * path starts with a slash. `/` therefore matches only when the pathname is
+ * exactly `/`, which is what the first branch below expresses.
+ *
+ * Pure and exported, so the sidebar, the drawer and a unit test share one rule.
+ *
+ * @param pathname - the current `location.pathname`.
+ * @returns the winning item's `to`, or `null` when the URL is outside the catalog.
+ */
+export function activeNavigationHref(
+  pathname: string,
+  items: readonly NavigationItem[] = navigationItems,
+): string | null {
+  return items.reduce<string | null>((best, item) => {
+    const isMatch = item.to === '/' ? pathname === '/' : pathname === item.to || pathname.startsWith(item.to + '/');
+    if (!isMatch) return best;
+    return best === null || item.to.length > best.length ? item.to : best;
+  }, null);
+}
+
+/**
+ * The brand mark. There is no icon asset in `public/` yet, so the expanded rail
+ * shows a wordmark set in the display face, and the collapsed rail shows a
+ * compact square mark, which keeps the icon rail from reading as empty chrome.
+ */
+function Logo() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
 
-  // Logo links to: org dashboard > super orgs > select org
-  const linkTo = orgSlug
-    ? `/org/${orgSlug}/dashboard`
-    : isSuperContext
-      ? '/super/orgs'
-      : '/select-org';
-
   return (
-    <Link to={linkTo} className="flex items-center gap-3 transition-all duration-200 ease-in-out hover:opacity-80 px-4">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
-        <Layers className="h-5 w-5 text-sidebar-primary-foreground" />
-      </div>
-      {!isCollapsed && <span className="text-lg font-semibold text-sidebar-foreground">AppName</span>}
+    <Link
+      to="/"
+      className={cn(
+        'flex items-center gap-3 px-4 transition-all duration-200 ease-in-out hover:opacity-80',
+        // The collapsed rail is `--sidebar-width-icon` (3rem) minus the
+        // header's own padding, which leaves exactly the 2rem the mark
+        // occupies. Any leftover padding or gap here squeezes it, so both
+        // collapse to zero and the mark centers.
+        isCollapsed && 'justify-center gap-0 px-0',
+      )}
+    >
+      {isCollapsed ?
+        <span
+          aria-hidden="true"
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary font-display text-sm font-semibold text-primary-foreground"
+        >
+          t
+        </span>
+      : <span className="font-display text-lg font-semibold text-sidebar-foreground">translate</span>}
     </Link>
   );
 }
 
+/** One sidebar row, shared by the primary group and the footer group. */
+function NavigationRow({ item, isActive }: { item: NavigationItem; isActive: boolean }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={isActive}>
+        <Link to={item.to}>
+          <item.icon />
+          <span>{item.label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
-  const user = useUser();
-  const tenant = useOptionalTenant();
   const location = useLocation();
-  const params = useParams();
-  const orgSlug = params['orgSlug'];
-
-  // Detect if we're in superadmin context (on /super/* routes)
-  const isSuperContext = location.pathname.startsWith('/super');
-
-  // Check if user is superadmin
-  const isSuperadmin = user.isSuperadmin;
-
-  // Check if user is org admin (owner/admin role in current org)
-  const isAdmin = isOrgAdmin(tenant?.orgRole) || isSuperadmin;
-
-  // Get org-scoped navigation if we have an org context
-  const orgNavigationItems = orgSlug ? getOrgNavigationItems(orgSlug) : [];
+  const activeHref = activeNavigationHref(location.pathname);
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="h-16 border-b px-0">
+      {/* The same brand-tinted hairline the app header closes with. At md and
+          up the two rules sit at the same height and meet in the middle of the
+          screen, so an untinted one here would show as a colour break. */}
+      <SidebarHeader className="h-16 border-b border-primary/20 px-0">
         <div className="flex h-full items-center">
-          <Logo orgSlug={orgSlug} isSuperContext={isSuperContext} />
+          <Logo />
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {/* Superadmin Navigation (when on /super/* routes) */}
-        {isSuperContext && isSuperadmin && (
-          <>
-            {/* Back to Org button */}
-            <SidebarGroup>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link to="/dashboard" className="text-muted-foreground">
-                      <ArrowLeft />
-                      <span>Back to Dashboard</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroup>
-            <SidebarSeparator />
-            <SidebarGroup>
-              <SidebarGroupLabel>
-                <Shield className="h-3 w-3 mr-1" />
-                Platform Admin
-              </SidebarGroupLabel>
-              <SidebarMenu>
-                {superadminItems.map((item) => {
-                  const isActive = location.pathname === item.to;
-                  return (
-                    <SidebarMenuItem key={item.name}>
-                      <SidebarMenuButton asChild isActive={isActive}>
-                        <Link to={item.to}>
-                          {item.icon && <item.icon />}
-                          <span>{item.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroup>
-          </>
-        )}
-
-        {/* Organization Navigation (when on /org/:orgSlug/* routes) */}
-        {orgSlug && orgNavigationItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarMenu>
-              {orgNavigationItems.map((item) => {
-                // Skip org admin items for non-admins
-                if (item.orgAdminOnly && !isAdmin) return null;
-                const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
-                return (
-                  <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <Link to={item.to}>
-                        {item.icon && <item.icon />}
-                        <span>{item.name}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-
-        {/* Superadmin menu items (visible to superadmins when in org context) */}
-        {orgSlug && isSuperadmin && (
-          <>
-            <SidebarSeparator />
-            <SidebarGroup>
-              <SidebarGroupLabel>
-                <Shield className="h-3 w-3 mr-1" />
-                Superadmin
-              </SidebarGroupLabel>
-              <SidebarMenu>
-                {superadminItems.map((item) => {
-                  const isActive = location.pathname === item.to;
-                  return (
-                    <SidebarMenuItem key={item.name}>
-                      <SidebarMenuButton asChild isActive={isActive}>
-                        <Link to={item.to}>
-                          {item.icon && <item.icon />}
-                          <span>{item.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroup>
-          </>
-        )}
+        <SidebarGroup>
+          <SidebarGroupLabel>Your words</SidebarGroupLabel>
+          <SidebarMenu>
+            {primaryNavigationItems.map((item) => (
+              <NavigationRow key={item.to} item={item} isActive={activeHref === item.to} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
+      {/* Settings and Account are things you set once, not places you go every
+          day, so they sit below a rule rather than as two more equal rows. */}
       <SidebarFooter>
+        <SidebarSeparator className="mx-0" />
         <SidebarMenu>
-          {orgSlug && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={location.pathname === `/org/${orgSlug}/settings`}>
-                <Link to={`/org/${orgSlug}/settings`}>
-                  <Settings />
-                  <span>Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link to="/dashboard">
-                <Building2 />
-                <span>Switch Org</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {footerNavigationItems.map((item) => (
+            <NavigationRow key={item.to} item={item} isActive={activeHref === item.to} />
+          ))}
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
