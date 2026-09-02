@@ -22,4 +22,6 @@
 - [sync-client schemas pin the document](project_sync_client_schemas_pin_the_document.md) — all four wire schemas are exported so a test can parse a PROTOCOL.md literal through them
 - [root's clientLoader keeps offline mutations alive](project_root_clientloader_offline_revalidation.md) — every clientAction revalidates root's server loader over uncacheable `.data`; only a network failure is absorbed
 - [root data's `headers` is an all-undefined method bag on the client](project_root_data_headers_serialized.md) — single fetch strips methods, so a fallback cannot return `combineHeaders()`
+- [A public /api/v1 route needs a bearer-guard exemption](project_api_v1_bearer_guard_exemptions.md) — an Express 401 lands before the router; route-level tests never see it
+- [The LLM registry owns the audio call too](project_llm_registry_owns_the_audio_call.md) — @sprqvntrs/llm has no audio input; use registry.transcribeAudio, fake it with withAudioPort
 - [Sync triggers, and the locked-but-signed-in state](project_sync_triggers_and_locked_state.md) — an empty outbox never pulls, and a reload leaves a device signed in with no data key
