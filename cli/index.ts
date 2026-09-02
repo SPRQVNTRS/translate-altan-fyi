@@ -33,6 +33,7 @@ import { registerApiKeyCommands } from './commands/api-key';
 import { registerDataSourceCommands } from './commands/data-source';
 import { registerDataMigrationCommands } from './commands/data-migration/run';
 import { registerImportCommands } from './commands/import/index';
+import { registerDictionaryCommands } from './commands/dictionary';
 
 interface GlobalCliOptions {
   color?: boolean;
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
   registerDataSourceCommands(program);
   registerDataMigrationCommands(program);
   registerImportCommands(program);
+  registerDictionaryCommands(program);
 
   await program.parseAsync(process.argv);
 }

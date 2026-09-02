@@ -34,7 +34,7 @@ Concretely:
 
 Everything else goes through HTTP. Adding to this list requires a new ADR amendment.
 
-## Amendment, 2026-09-02: the open-data importers are a fourth bootstrap exception
+## Amendment, 2026-09-02: the open-data importers, and their verification counterpart
 
 `pnpm cli import wikidata-lexemes`, `import panlex` and `import tatoeba` talk to
 Postgres directly. They are added to the exception list above.
@@ -64,6 +64,16 @@ migration runs once, automatically, at container start. An import must be
 re-runnable on demand by an operator, must never run at boot, and takes flags
 (`--file`, `--languages`, `--max-rows`, `--dry-run`) that a boot-time runner has
 no way to supply.
+
+`pnpm cli dictionary stats` is on the list for the same reason, as the import's
+verification counterpart. An import is an offline operator action against a
+local dump, run with no server up. A check that could only be reached through
+the HTTP API would be unable to verify the thing that just happened. It is
+read-only, it reads the same global tables, and it reports aggregate counts
+only.
+
+That is the whole exception, and it does not widen. Reading dictionary rows to
+show a user goes through the ordinary API path, with the licence filter in SQL.
 
 ## Alternatives Considered
 
