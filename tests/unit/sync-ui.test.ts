@@ -19,6 +19,8 @@ import {
   buildKeyRecordRequest,
   buildSignupRequest,
   kdfResponseSchema,
+  keyRecordResponseSchema,
+  keyRecordsResponseSchema,
   sessionSchema,
 } from '#app/components/sync/sync-client';
 import { SyncRequestError, errorKindForStatus } from '#app/lib/e2ee/client/sync-error';
@@ -284,6 +286,90 @@ describe('wire contract: PROTOCOL.md is the source', () => {
     it('rejects a session response with no account', () => {
       assert.equal(sessionSchema.safeParse({ tokens: documented.tokens }).success, false);
       assert.equal(sessionSchema.safeParse({ account: { handle: 'qr7k4m2p' } }).success, false);
+    });
+  });
+
+  /**
+   * WHAT THESE TWO PROTECT: the envelope around a key record, which is what
+   * carries the wrapped DEK. Section 5.3 lists the records under `records`,
+   * and section 5.4 answers with the stored record BARE.
+   *
+   * THE DEFECT THEY CATCH: the port shipped `{"keyRecords": [...]}` and
+   * `{"keyRecord": {...}}`, because the client schemas were transcribed from
+   * this repo's own route instead of from the document. Both sides agreed with
+   * each other and disagreed with `PROTOCOL.md`, so the whole gate was green
+   * over an account that could sign in and never unwrap its DEK. It was fixed
+   * in `14bf27f`; until these cases existed, nothing would have caught it
+   * coming back.
+   *
+   * Each case pairs the documented literal with the wrapper the port used, so
+   * a schema loose enough to ignore the envelope fails the negative half
+   * instead of passing both.
+   */
+  describe('GET /key-records (section 5.3)', () => {
+    // Transcribed from section 5.3's example body: the `records` envelope and
+    // both entries, including the `recovery` entry's `kdfDescriptor: null`
+    // exactly as the document writes it. `<base64>` and `<iso>` stand in as
+    // real values, because a placeholder cannot be decoded or parsed.
+    const documented = {
+      records: [
+        {
+          kind: 'passphrase',
+          kdfDescriptor: {
+            salt: 'AAECAwQFBgcICQoLDA0ODw==',
+            params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
+          },
+          wrappedDek: 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGw==',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        { kind: 'recovery', kdfDescriptor: null, wrappedDek: 'HB0eHyAhIiMkJSYnKCkqKywtLi8wMTIz', updatedAt: '2026-01-02T00:00:00.000Z' },
+      ],
+    };
+
+    it('accepts the documented list, recovery record and its null descriptor included', () => {
+      const parsed = keyRecordsResponseSchema.safeParse(documented);
+      assert.ok(parsed.success, 'the documented 200 body must parse');
+      // BOTH records must survive. The recovery path is HKDF-only and so has
+      // no descriptor to record; a schema that rejected the null would drop
+      // every account's second authenticator, which is the one a second device
+      // and every lost-passphrase recovery goes through.
+      assert.deepEqual(
+        parsed.data.records.map((record) => record.kind),
+        ['passphrase', 'recovery'],
+      );
+      assert.equal(parsed.data.records[1]?.wrappedDek, 'HB0eHyAhIiMkJSYnKCkqKywtLi8wMTIz');
+    });
+
+    it('rejects the array under a keyRecords key, the envelope the port shipped', () => {
+      const asThePortAnswered = { keyRecords: documented.records };
+      assert.equal(keyRecordsResponseSchema.safeParse(asThePortAnswered).success, false);
+    });
+  });
+
+  describe('PUT /key-records/:kind 200 (section 5.4)', () => {
+    // Section 5.4 says the 200 body is "the stored record, same shape as a
+    // `GET /key-records` entry" — so this is section 5.3's first entry, BARE,
+    // with no wrapper key around it.
+    const documented = {
+      kind: 'passphrase',
+      kdfDescriptor: {
+        salt: 'AAECAwQFBgcICQoLDA0ODw==',
+        params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
+      },
+      wrappedDek: 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGw==',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    it('accepts the stored record bare', () => {
+      const parsed = keyRecordResponseSchema.safeParse(documented);
+      assert.ok(parsed.success, 'the documented 200 body must parse');
+      assert.equal(parsed.data.kind, 'passphrase');
+      assert.equal(parsed.data.updatedAt, '2026-01-01T00:00:00.000Z');
+    });
+
+    it('rejects the record wrapped under a keyRecord key, the shape the port shipped', () => {
+      const asThePortAnswered = { keyRecord: documented };
+      assert.equal(keyRecordResponseSchema.safeParse(asThePortAnswered).success, false);
     });
   });
 });

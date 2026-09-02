@@ -23,30 +23,45 @@
  *     stamps included.
  *   - Drift from PROTOCOL.md §3.2's payload shape, whose keys are transcribed
  *     below as a literal and compared against what the client actually builds.
+ *   - A projection that quietly drops soft-deleted rows. A delete that is
+ *     filtered out of the read never reaches the peer, so the other device
+ *     keeps the row and pushes it back: the deletion is undone in the field
+ *     while every naive test stays green. The last describe writes a tombstone
+ *     and asserts it survives.
  *
- * WHAT THIS FILE DOES NOT PROVE, AND WHERE THE PROOF ACTUALLY IS
- *   `toSyncedSnapshot` has NO CALLERS in the application today. The live sync
- *   path builds the projection by hand instead, in
- *   `app/lib/sync/local-store-bridge.ts`'s `readLocalSnapshot`, which reads the
- *   three synced collections and never touches the search log. That function
- *   resolves the browser IndexedDB singleton and so cannot be driven from a
- *   unit test at all — `tests/integration/personal-sync-push.test.ts` mirrors
- *   it and asserts against the ciphertext column, which is the on-path proof.
- *   This file covers the exported projection and the envelope; do not read it
- *   as covering the path a real device takes.
+ * THE PATH A REAL DEVICE TAKES IS COVERED HERE, NOT ONLY MIRRORED
+ *   `app/lib/sync/local-store-bridge.ts`'s `readLocalSnapshot` is the live push
+ *   path's read, and it hands its three reads to `toSyncedSnapshot` rather than
+ *   naming the collections a second time. It takes `{ store }`, so the last
+ *   describe drives THAT function against a real in-memory store, written
+ *   through the app's own write helpers so the rows carry the stamps the app
+ *   stamps. This matters because the arrangement used to be the other way
+ *   round: the bridge built the projection by hand and `toSyncedSnapshot` had
+ *   no callers, so this file was green over a guarantee nothing on the live
+ *   path was keeping. `tests/integration/personal-sync-push.test.ts` asserts
+ *   the same promise one layer further out, against the stored ciphertext.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import type { Store } from 'tinybase';
 
 import { buildEnvelope, parseEnvelope } from '#app/lib/sync/engine/envelope/build-envelope';
 import type { SyncPayload } from '#app/lib/sync/engine/envelope/types';
 import { toWireMeta } from '#app/lib/sync/snapshot-sync';
 import {
+  createPrimaryStore,
+  deleteLocalNote,
+  listHistory,
+  putLocalList,
+  putLocalListItem,
+  putLocalNote,
+  recordSearch,
   SCHEMA_VERSION,
   syncedSnapshotSchema,
   toSyncedSnapshot,
   type LocalStoreSnapshot,
 } from '#app/lib/local-store';
+import { readLocalSnapshot } from '#app/lib/sync/local-store-bridge';
 
 /**
  * A fixed, throwaway DEK. Not derived from anything and not a secret: this
@@ -170,5 +185,83 @@ describe('the encrypted round trip', () => {
     // And the check is not vacuous: the lists DID make the trip through the
     // same serialization.
     assert.ok(serialized.includes('Fahrkarte'), 'the round trip carried no list items, so the checks above prove nothing');
+  });
+});
+
+describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
+  /**
+   * A device as the app itself would leave it: three synced collections
+   * written through the real helpers, one of the notes then soft-deleted, and
+   * a search log beside them. Nothing here builds a snapshot literal — the
+   * rows carry whatever stamp the write helpers give them.
+   */
+  async function writtenDevice(): Promise<Store> {
+    const store = createPrimaryStore();
+    const options = { store, deviceId: 'device-a', now: () => UPDATED_AT };
+
+    await putLocalList({ id: 'l1', name: 'Reise', languagePair: 'de-en' }, options);
+    await putLocalListItem(
+      {
+        id: 'i1',
+        listId: 'l1',
+        headwordId: 'hw-1',
+        senseId: 'sense-1',
+        lemma: 'Fahrkarte',
+        translationSnapshot: 'ticket',
+        note: 'am Automaten',
+      },
+      options,
+    );
+    await putLocalNote({ id: 'n1', headwordId: 'hw-1', text: 'mit Umlaut' }, options);
+    await putLocalNote({ id: 'n2', headwordId: 'hw-2', text: 'gelöscht' }, options);
+    // A real deletion, through the real helper: a soft delete that bumps the
+    // lamport, which is the only thing that can beat a peer still holding the
+    // live row.
+    await deleteLocalNote('n2', options);
+
+    for (const query of PRIVATE_QUERIES) {
+      await recordSearch({ query, from: 'de', to: 'en', headwordId: null }, { store, now: () => UPDATED_AT });
+    }
+    return store;
+  }
+
+  it('carries the three synced collections and no search log', async () => {
+    const store = await writtenDevice();
+    assert.equal((await listHistory({ store })).length, PRIVATE_QUERIES.length, 'the log must be in the store for this to mean anything');
+
+    const snapshot = await readLocalSnapshot({ store });
+
+    // ABSENT, not empty — the same rule the projection is held to, asserted on
+    // the function a device actually calls.
+    assert.ok(!('history' in snapshot), 'the live read carries a history key');
+    assert.deepEqual(Object.keys(snapshot).toSorted(), ['listItems', 'lists', 'notes']);
+    assert.deepEqual(snapshot.lists.map((list) => list.id), ['l1']);
+    assert.deepEqual(snapshot.listItems.map((item) => item.id), ['i1']);
+
+    // And as bytes, which survives a refactor that tucks the queries under
+    // another key: a structural check would not.
+    const serialized = JSON.stringify(snapshot);
+    for (const query of PRIVATE_QUERIES) {
+      assert.ok(!serialized.includes(query), 'a recorded search reached the live sync read');
+    }
+    assert.ok(serialized.includes('Fahrkarte'), 'the read returned no list items, so the checks above prove nothing');
+  });
+
+  it('carries the tombstone, so a deletion actually reaches the peer', async () => {
+    const store = await writtenDevice();
+    const snapshot = await readLocalSnapshot({ store });
+
+    assert.deepEqual(snapshot.notes.map((note) => note.id), ['n1', 'n2'], 'the deleted note was filtered out of the push');
+
+    const [live, tombstone] = snapshot.notes;
+    assert.ok(live !== undefined && tombstone !== undefined);
+    // The pair together: the tombstone travels marked dead, and the live row
+    // travels marked alive, so this is a real distinction and not a reader
+    // that stamps everything the same.
+    assert.equal(tombstone.deleted, true, 'the tombstone lost its deleted flag');
+    assert.equal(live.deleted, false);
+    // A tombstone only wins a merge if it outranks the peer's live copy, so
+    // the bumped lamport is part of what has to survive the read.
+    assert.ok(tombstone.lamport > live.lamport, 'the tombstone did not carry the bumped lamport');
   });
 });

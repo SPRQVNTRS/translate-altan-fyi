@@ -1,6 +1,6 @@
 /**
  * The projection of a device snapshot onto the collections that ride the
- * encrypted blob, and its inverse.
+ * encrypted blob.
  *
  * This module has no upstream counterpart, so it carries no provenance header.
  *
@@ -13,7 +13,7 @@
  * this shape, because the server cannot read it.
  */
 import { z } from 'zod';
-import type { LocalList, LocalListItem, LocalNote, LocalStoreSnapshot } from './schema';
+import type { LocalList, LocalListItem, LocalNote } from './schema';
 
 /** The three collections that ride the encrypted blob. See app/lib/e2ee/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
 export interface SyncedSnapshot {
@@ -40,17 +40,6 @@ export interface SyncedSnapshot {
  */
 export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
   return { lists: snapshot.lists, listItems: snapshot.listItems, notes: snapshot.notes };
-}
-
-/**
- * The inverse: `base` with its three synced collections replaced by what
- * arrived. Every other collection on `base` passes through untouched — which is
- * the whole point, and the reason this takes a base snapshot rather than
- * rebuilding one. A merge result must never be able to blank a device-only
- * collection just by not carrying it.
- */
-export function withSyncedSnapshot(base: LocalStoreSnapshot, synced: SyncedSnapshot): LocalStoreSnapshot {
-  return { ...base, lists: synced.lists, listItems: synced.listItems, notes: synced.notes };
 }
 
 /** The ordering stamp every synced entity carries — PROTOCOL.md section 3.3. */
