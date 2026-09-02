@@ -1,0 +1,1 @@
+CREATE INDEX "headwords_language_lemma_normalized_idx" ON "headwords" USING btree ("language_code","lemma_normalized");

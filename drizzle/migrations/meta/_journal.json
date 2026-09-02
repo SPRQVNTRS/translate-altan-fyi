@@ -29,6 +29,13 @@
       "when": 1788347375860,
       "tag": "0003_clammy_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788348419202,
+      "tag": "0004_wooden_mac_gargan",
+      "breakpoints": true
     }
   ]
 }

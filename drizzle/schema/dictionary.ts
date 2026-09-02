@@ -126,6 +126,29 @@ export const headwords = pgTable(
       .on(table.languageCode, table.lemma, table.pos)
       .nullsNotDistinct(),
     index('headwords_language_code_idx').on(table.languageCode),
+    // The btree the importers join against. It serves EQUALITY on
+    // (language_code, lemma_normalized). The GIN trigram index beside it,
+    // `headwords_lemma_normalized_trgm_idx`, serves SIMILARITY for the forgiving
+    // search. The two are not alternatives and neither one replaces the other.
+    //
+    // Its absence was invisible, because a trigram index CAN answer an equality.
+    // The query worked, it returned the correct rows, and it was quietly slow.
+    // Nothing failed. Measured with EXPLAIN (ANALYZE, BUFFERS) on the real
+    // 383,185-row table, resolving ONE token cost a bitmap scan of 52 candidate
+    // rows, 47 of which were then thrown away by the index recheck, plus 45 heap
+    // blocks. The Tatoeba example attachment does that lookup for every word of
+    // every sentence, millions of times per import, so this index sits on the hot
+    // path of the whole import.
+    //
+    // Column order: `language_code` first. Both columns are equality predicates,
+    // so either order answers the join, but the leading column is also useful on
+    // its own for a language-scoped scan.
+    //
+    // That makes `headwords_language_code_idx` above redundant with this one, since
+    // a composite btree already serves its leading column. It is a candidate for
+    // removal, and it is deliberately left in place here: dropping an index is a
+    // separate decision from adding one, and it deserves its own change.
+    index('headwords_language_lemma_normalized_idx').on(table.languageCode, table.lemmaNormalized),
     index('headwords_source_id_idx').on(table.sourceId),
   ],
 );
