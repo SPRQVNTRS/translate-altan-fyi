@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 @plugin "@tailwindcss/typography";
@@ -8,11 +8,38 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+/*
+ * Fraunces, the self-hosted display serif. It carries the wordmark, the page
+ * titles and the card titles. It never carries a live figure: this subset has
+ * no tabular-figure feature, so digits change width as they update. Numbers
+ * stay in the sans face with `tabular-nums`.
+ *
+ * Inter Variable and Victor Mono Variable load from the
+ * `@fontsource-variable/*` packages, imported in `root.tsx`. Every face is
+ * self-hosted. No Google Fonts, no third-party font host.
+ */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/fraunces-latin-var.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
 @theme {
   --radius: 0.5rem;
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: 'Inter Variable', sans-serif;
+  --font-mono: 'Victor Mono Variable', monospace;
+  /* Display serif for the wordmark, page titles and card titles. Exposed as
+     the `font-display` Tailwind utility. */
+  --font-display: 'Fraunces', serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -60,6 +87,7 @@
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
   --animate-loading-bar: loading-bar 1.5s ease-in-out infinite;
+  --animate-indeterminate: indeterminate 1s ease-in-out infinite;
 
   @keyframes loading-bar {
     0% {
@@ -69,6 +97,15 @@
       transform: translateX(100%);
     }
     100% {
+      transform: translateX(400%);
+    }
+  }
+
+  @keyframes indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
       transform: translateX(400%);
     }
   }
@@ -94,72 +131,87 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* Teal-tinted light surface family. Hue 192 is the brand teal's own hue.
+       The page sits at a readable pale teal, `--card` stays pure white so
+       cards lift off it, and the greys carry the same hue so nothing reads as
+       a cold, unrelated grey beside a warm teal one.
+
+       Contrast: `--foreground` is a near-black, so body text clears 15:1 on
+       both the card and the tinted page. `--muted-foreground` clears ~7.6:1
+       on white. */
+    --background: 192 34% 96%;
+    --foreground: 200 18% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 200 18% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
+    --popover-foreground: 200 18% 8%;
+    --primary: 179 92% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 192 26% 93%;
+    --secondary-foreground: 200 20% 14%;
+    --muted: 192 26% 93%;
+    --muted-foreground: 197 14% 38%;
+    --accent: 192 30% 91%;
+    --accent-foreground: 200 20% 14%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 192 22% 85%;
+    --input: 192 22% 85%;
+    --ring: 179 92% 25%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 192 30% 97%;
+    --sidebar-foreground: 197 14% 30%;
+    --sidebar-primary: 179 92% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 192 30% 91%;
+    --sidebar-accent-foreground: 200 20% 14%;
+    --sidebar-border: 192 22% 86%;
+    --sidebar-ring: 179 92% 25%;
   }
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Teal-tinted near-black. Hue 192 with real chroma makes the dark theme
+       read as deep teal-black rather than grey-black, and the greys around it
+       share the hue so the tint does not cancel out.
+
+       `--card` sits ~3.5 lightness points above `--background` so cards keep
+       reading as elevated. `--foreground` clears 17:1 on both.
+       `--muted-foreground` clears 7:1. */
+    --background: 192 24% 4.5%;
+    --foreground: 180 12% 97%;
+    --card: 192 20% 8%;
+    --card-foreground: 180 12% 97%;
+    --popover: 192 20% 8%;
+    --popover-foreground: 180 12% 97%;
+    --primary: 172 70% 52%;
+    --primary-foreground: 187 90% 8%;
+    --secondary: 192 16% 15%;
+    --secondary-foreground: 180 12% 97%;
+    --muted: 192 16% 15%;
+    --muted-foreground: 190 12% 68%;
+    --accent: 192 18% 17%;
+    --accent-foreground: 180 12% 97%;
+    --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 192 16% 17%;
+    --input: 192 16% 17%;
+    --ring: 172 70% 52%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 192 22% 7%;
+    --sidebar-foreground: 190 12% 88%;
+    --sidebar-primary: 172 70% 52%;
+    --sidebar-primary-foreground: 187 90% 8%;
+    --sidebar-accent: 192 18% 15%;
+    --sidebar-accent-foreground: 180 12% 97%;
+    --sidebar-border: 192 16% 15%;
+    --sidebar-ring: 172 70% 52%;
   }
 }
 
@@ -169,35 +221,33 @@
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
+/*
+ * These `hsl()`-wrapped sidebar variables are the ones the shadcn sidebar
+ * actually renders from: the `@theme inline` block below maps `--color-sidebar-*`
+ * to them and overrides the mapping in the first `@theme` block. Both sets are
+ * kept in sync deliberately, so whichever mapping wins, the chrome stays on the
+ * same teal-tinted family as the page.
+ */
 :root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar: hsl(192 30% 97%);
+  --sidebar-foreground: hsl(197 14% 30%);
+  --sidebar-primary: hsl(179 92% 25%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(192 30% 91%);
+  --sidebar-accent-foreground: hsl(200 20% 14%);
+  --sidebar-border: hsl(192 22% 86%);
+  --sidebar-ring: hsl(179 92% 25%);
 }
 
 .dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar: hsl(192 22% 7%);
+  --sidebar-foreground: hsl(190 12% 88%);
+  --sidebar-primary: hsl(172 70% 52%);
+  --sidebar-primary-foreground: hsl(187 90% 8%);
+  --sidebar-accent: hsl(192 18% 15%);
+  --sidebar-accent-foreground: hsl(180 12% 97%);
+  --sidebar-border: hsl(192 16% 15%);
+  --sidebar-ring: hsl(172 70% 52%);
 }
 
 @theme inline {
@@ -216,6 +266,121 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    /* Inter reads crisper anti-aliased, and this is a no-op for the mono
+       stack, so it is safe to apply globally. */
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  /*
+   * The two branded surface treatments. Both are pure gradients over whatever
+   * background the element already has, expressed entirely through the
+   * `--primary` token. Swapping the brand hue re-tints them for free, and both
+   * themes get the treatment because `--primary` is itself themed.
+   */
+
+  /* Hero card wash: brightest at the top-left corner, fading across the card.
+     A flat fill reads as a muddy panel. A directional wash gives the card a
+     light source. Exactly one per screen. */
+  .surface-brand {
+    background-image: linear-gradient(
+      140deg,
+      hsl(var(--primary) / 0.18) 0%,
+      hsl(var(--primary) / 0.07) 45%,
+      hsl(var(--primary) / 0.02) 100%
+    );
+  }
+
+  /* Quieter sibling for secondary branded panels, such as an empty state.
+     Same direction, roughly a third of the strength. */
+  .surface-brand-soft {
+    background-image: linear-gradient(140deg, hsl(var(--primary) / 0.09) 0%, hsl(var(--primary) / 0.015) 70%);
+  }
+
+  /* A soft elliptical brand glow behind a hero composition, so the page has
+     depth behind the wordmark. */
+  .brand-glow {
+    background-image: radial-gradient(60% 55% at 50% 38%, hsl(var(--primary) / 0.2) 0%, transparent 72%);
+  }
+}
+
+/*
+ * ===========================================================================
+ * View transitions
+ * ===========================================================================
+ * The whole document is captured in the `root` snapshot and cross-faded. That
+ * is the entire effect on purpose: the chrome is near-identical between
+ * routes, so only the page body visibly changes, and an opacity-only fade
+ * keeps the fixed elements from jumping. 200ms is deliberately short. This is
+ * a tool people open several times a day.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+  animation-timing-function: ease;
+}
+
+/* Honor reduced motion: swap pages instantly, no cross-fade, no exceptions.
+   The app has no in-app motion toggle, so this media query is the only
+   switch. The wildcard also neutralizes any future named transition that
+   forgets its own reduced-motion rule. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Toasts settle instantly for anyone who asked for less motion. The library
+   animates enter and exit with its own transitions rather than a named
+   keyframe, so this has to reach both. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast],
+  [data-sonner-toast] * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/*
+ * ===========================================================================
+ * Waiting vocabulary
+ * ===========================================================================
+ * Two classes, used only where the app is genuinely waiting on something,
+ * never as decoration on static content.
+ *
+ * Motion is opt-in, not opt-out: the base rule carries no animation at all, so
+ * the server rendering settles static, and the animation is added only under
+ * `prefers-reduced-motion: no-preference`.
+ */
+@keyframes pulse-soft {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Soft opacity breath, for a single mark standing in for content that has
+     not arrived. Keyframe and timing mirror Tailwind's own `animate-pulse` so
+     it reads as the same idiom, just quieter. */
+  .pulse-soft {
+    animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Three dots breathing in sequence. The children share `pulse-soft`'s
+     keyframe and timing and differ only by phase, so the row reads as one
+     travelling wave rather than three independent blinks. */
+  .loading-dots > * {
+    animation: pulse-soft 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .loading-dots > *:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+
+  .loading-dots > *:nth-child(3) {
+    animation-delay: 0.32s;
   }
 }
