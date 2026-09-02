@@ -36,6 +36,18 @@
     "emptyPrompt": "Type a word above to search.",
     "submitting": "Searching..."
   },
+  "voice": {
+    "fieldLabel": "Spoken language",
+    "start": "Start listening",
+    "stop": "Stop listening",
+    "listening": "Listening now",
+    "bestEffort": "Speech recognition varies by browser and device, and you can edit the text before searching.",
+    "unsupported": "This browser does not support speech recognition.",
+    "serverFallbackHint": "A free server alternative is coming soon.",
+    "denied": "Microphone access was denied, but you can allow it in your browser settings and try again.",
+    "failed": "Speech recognition did not work, so try again or type the word.",
+    "checking": "Checking browser support"
+  },
   "lists": {
     "metaTitle": "Lists",
     "metaDescription": "Words you save for study will collect here.",

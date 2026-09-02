@@ -36,6 +36,18 @@
     "emptyPrompt": "Oben ein Wort eingeben, um zu suchen.",
     "submitting": "Wird gesucht..."
   },
+  "voice": {
+    "fieldLabel": "Gesprochene Sprache",
+    "start": "Zuhören starten",
+    "stop": "Zuhören beenden",
+    "listening": "Hört zu",
+    "bestEffort": "Die Spracherkennung variiert je nach Browser und Gerät. Du kannst den Text vor der Suche bearbeiten.",
+    "unsupported": "Dieser Browser unterstützt keine Spracherkennung.",
+    "serverFallbackHint": "Eine kostenlose Server-Alternative folgt bald.",
+    "denied": "Der Mikrofonzugriff wurde verweigert. Du kannst ihn in den Browsereinstellungen erlauben und es erneut versuchen.",
+    "failed": "Die Spracherkennung hat nicht funktioniert. Versuche es erneut oder tippe das Wort ein.",
+    "checking": "Browserunterstützung wird geprüft"
+  },
   "lists": {
     "metaTitle": "Listen",
     "metaDescription": "Wörter, die du zum Lernen speicherst, sammeln sich hier.",

@@ -1,4 +1,5 @@
 import type { Route } from './+types/search';
+import { useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation, type MetaFunction } from 'react-router';
@@ -7,6 +8,7 @@ import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchResults } from '#app/components/search-results';
 import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
+import { VoiceInput } from '#app/components/voice-input';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
@@ -101,6 +103,11 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
   const { q, direction, hits } = loaderData;
   const navigation = useNavigation();
   const isSearching = navigation.state !== 'idle';
+  // The voice control writes into THIS box and submits THIS form. It owns no
+  // query state of its own, so a spoken word and a typed one reach the loader
+  // by exactly the same route.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   // A detected direction is a guess, so it is NOT pinned into the next
   // submission: retyping should let the guess change. A direction the reader
   // chose by flipping the chip IS pinned, because they asked for it.
@@ -111,12 +118,13 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
       <div className="surface-brand rounded-2xl border p-5">
         {/* GET, so the query lands in the URL and the results page is a place
             rather than the outcome of a POST nobody can link to. */}
-        <Form method="get">
+        <Form method="get" ref={formRef}>
           <label htmlFor="search-word" className="text-sm font-medium">
             {t('search.fieldLabel')}
           </label>
           <div className="mt-2 flex gap-2">
             <Input
+              ref={inputRef}
               id="search-word"
               name="q"
               type="text"
@@ -138,6 +146,12 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
               {isSearching ? t('search.submitting') : t('search.submit')}
             </Button>
           </div>
+          <VoiceInput
+            className="mt-3"
+            inputRef={inputRef}
+            formRef={formRef}
+            sourceLanguage={direction.from}
+          />
         </Form>
         <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
       </div>
