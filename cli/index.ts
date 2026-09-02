@@ -32,6 +32,7 @@ import { registerMetricEventCommands } from './commands/metric-event';
 import { registerApiKeyCommands } from './commands/api-key';
 import { registerDataSourceCommands } from './commands/data-source';
 import { registerDataMigrationCommands } from './commands/data-migration/run';
+import { registerImportCommands } from './commands/import/index';
 
 interface GlobalCliOptions {
   color?: boolean;
@@ -100,6 +101,7 @@ async function main(): Promise<void> {
   registerApiKeyCommands(program);
   registerDataSourceCommands(program);
   registerDataMigrationCommands(program);
+  registerImportCommands(program);
 
   await program.parseAsync(process.argv);
 }

@@ -69,6 +69,58 @@ pnpm cli operation find <workflowId>
 pnpm cli operation stats
 ```
 
+### Dictionary imports
+
+Load an open-data dump into the shared dictionary zone. These commands talk to
+Postgres directly, which is a documented exception to ADR-0001; the amendment in
+`.adr/0001-cli-wraps-the-api.md` says why.
+
+The importers NEVER download. Fetch the dump yourself into `.data/` (gitignored)
+and pass the path.
+
+```bash
+# Wikidata lexemes, CC0. About 1.58 million lexemes in the full dump.
+pnpm cli import wikidata-lexemes --file .data/latest-lexemes.json.bz2
+
+# Tatoeba, CC BY 2.0 FR, plus a second CC0 source row for the relicensed list.
+pnpm cli import tatoeba \
+  --file .data/sentences_detailed.tar.bz2 \
+  --links .data/links.tar.bz2 \
+  --cc0 .data/sentences_CC0.tar.bz2
+
+```
+
+Shared options:
+
+| Option | Meaning |
+|--------|---------|
+| `-f, --file <path>` | Local dump. Required. |
+| `-l, --languages <codes>` | Comma separated, default `en,de,tr,es`. Anything else is a hard drop. |
+| `-m, --max-rows <n>` | Stop after N source rows. This is the memory bound, not just a smoke-test flag. |
+| `--dry-run` | Parse and count, write nothing. |
+| `--json` | Print the summary as JSON. Progress still goes to stderr. |
+
+Every importer is idempotent: it upserts on a natural key, so a second run over
+the same dump writes zero new rows. Each prints a summary of rows read, rows
+written, and rows dropped with a count per reason.
+
+**Memory.** Tatoeba holds a map of every kept sentence, about 4.0 million rows
+for the four languages. `--max-rows` caps pass 1, which is what bounds that map.
+It does NOT cap pass 2, which always streams all 28.4 million links.
+
+Where the dumps come from:
+
+- Wikidata: `https://dumps.wikimedia.org/wikidatawiki/entities/latest-lexemes.json.bz2`
+- Tatoeba: `https://tatoeba.org/en/downloads`
+There were three importers. PanLex was dropped by operator decision: its upstream
+is gone. `db.panlex.org` and `api.panlex.org` both answer NXDOMAIN, and
+`panlex.org/snapshot/` soft-404s to the homepage. The Internet Archive's last
+capture of the listing is 2025-11-13, showing snapshots up to
+`panlex-20251101-csv.zip`, and it does not hold the zips. A CC0 mirror exists at
+`cointegrated/panlex-meanings` on Hugging Face, from the 2024-03-01 snapshot, if
+the decision is revisited. The `headword_links` table and its `panlex-fallback`
+kind stay in the schema.
+
 ## CLI Maintenance
 
 When modifying `drizzle/schema.ts`:
@@ -89,11 +141,16 @@ cli/
 │   ├── user.ts
 │   ├── organization.ts
 │   ├── workflow.ts
-│   └── operation.ts
+│   ├── operation.ts
+│   └── import/        # Open-data dictionary importers
+│       ├── index.ts
+│       ├── wikidata-lexemes.ts
+│       └── tatoeba.ts
 └── lib/
     ├── output.ts      # Formatting utilities
     ├── types.ts       # Shared types
-    └── formatters/    # Entity-specific formatters
+    ├── formatters/    # Entity-specific formatters
+    └── importers/     # Importer contract, streaming, normalizing, upserts
 ```
 
 ## Adding Commands

@@ -34,6 +34,37 @@ Concretely:
 
 Everything else goes through HTTP. Adding to this list requires a new ADR amendment.
 
+## Amendment, 2026-09-02: the open-data importers are a fourth bootstrap exception
+
+`pnpm cli import wikidata-lexemes`, `import panlex` and `import tatoeba` talk to
+Postgres directly. They are added to the exception list above.
+
+The reason is not convenience. It is that the operation cannot be expressed as an
+HTTP call at all:
+
+- The dumps are 450 MB (Wikidata lexemes, bzip2) and 300 MB (Tatoeba sentences,
+  bzip2), decompressing to several gigabytes. Sending that through a REST endpoint
+  means either uploading a multi-gigabyte body or asking the server to fetch and
+  hold it, and both are worse than a local file path.
+- The write is millions of rows in bulk-upserted chunks inside one long-running
+  process. An HTTP request has a timeout; this run does not fit inside one.
+- It is an operator action against a dump the operator downloaded by hand. There
+  is no tenant to scope: the dictionary tables are global and carry no
+  `organizationId`, so the tenancy enforcement that ADR-0001 exists to centralise
+  has nothing to enforce here.
+- Nothing about the import is per-user or auditable in the sense the ADR means. It
+  loads public, CC0 and CC BY reference data.
+
+What stays true: reading the dictionary is NOT an exception. Every query surface
+that serves this data to a user goes through the ordinary API path, with the
+licence filter in SQL (`app/lib/dictionary/queries.server.ts`).
+
+The importers are also deliberately NOT data migrations (ADR-0002). A data
+migration runs once, automatically, at container start. An import must be
+re-runnable on demand by an operator, must never run at boot, and takes flags
+(`--file`, `--languages`, `--max-rows`, `--dry-run`) that a boot-time runner has
+no way to supply.
+
 ## Alternatives Considered
 
 - **Keep direct-DB CLI, add HTTP for web only.** Maintains two code paths permanently; agents still locked out of prod. Rejected.
