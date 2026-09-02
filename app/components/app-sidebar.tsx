@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { BookMarked, History, Search, Settings, UserRound, type LucideIcon } from 'lucide-react';
 import { useLocation } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { cn } from '#app/lib/utils';
 import { Link } from '#app/components/link';
 import {
@@ -27,10 +28,11 @@ export type NavigationGroup = 'primary' | 'footer';
 
 export type NavigationItem = {
   /**
-   * A literal English label. There is no i18n in this app, so the catalog
-   * carries the words themselves rather than a translation key.
+   * A key into the `common` catalog under `app/locales`, not a word.
+   * Every surface that renders a row resolves it through `t()`, so the three
+   * navs and the header title are translated from one entry rather than four.
    */
-  label: string;
+  labelKey: string;
   to: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>> | LucideIcon;
   group: NavigationGroup;
@@ -52,11 +54,11 @@ export type NavigationItem = {
  * tab bar is three flat tabs, with no raised centre button.
  */
 export const navigationItems: NavigationItem[] = [
-  { label: 'Search', to: '/', icon: Search, group: 'primary', tab: { order: 1 } },
-  { label: 'Lists', to: '/lists', icon: BookMarked, group: 'primary', tab: { order: 2 } },
-  { label: 'History', to: '/history', icon: History, group: 'primary', tab: { order: 3 } },
-  { label: 'Settings', to: '/settings', icon: Settings, group: 'footer' },
-  { label: 'Account', to: '/account', icon: UserRound, group: 'footer' },
+  { labelKey: 'nav.search', to: '/', icon: Search, group: 'primary', tab: { order: 1 } },
+  { labelKey: 'nav.lists', to: '/lists', icon: BookMarked, group: 'primary', tab: { order: 2 } },
+  { labelKey: 'nav.history', to: '/history', icon: History, group: 'primary', tab: { order: 3 } },
+  { labelKey: 'nav.settings', to: '/settings', icon: Settings, group: 'footer' },
+  { labelKey: 'nav.account', to: '/account', icon: UserRound, group: 'footer' },
 ];
 
 /** The day-to-day destinations, in catalog order: the top block of the drawer and the sidebar. */
@@ -134,12 +136,14 @@ function Logo() {
 
 /** One sidebar row, shared by the primary group and the footer group. */
 function NavigationRow({ item, isActive }: { item: NavigationItem; isActive: boolean }) {
+  const { t } = useTranslation();
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link to={item.to}>
           <item.icon />
-          <span>{item.label}</span>
+          <span>{t(item.labelKey)}</span>
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -147,6 +151,7 @@ function NavigationRow({ item, isActive }: { item: NavigationItem; isActive: boo
 }
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const { t } = useTranslation();
   const location = useLocation();
   const activeHref = activeNavigationHref(location.pathname);
 
@@ -162,7 +167,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Your words</SidebarGroupLabel>
+          <SidebarGroupLabel>{t('nav.groupLabel')}</SidebarGroupLabel>
           <SidebarMenu>
             {primaryNavigationItems.map((item) => (
               <NavigationRow key={item.to} item={item} isActive={activeHref === item.to} />

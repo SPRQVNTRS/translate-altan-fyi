@@ -49,6 +49,10 @@ export default [
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),
     route('/account', 'routes/account.tsx'),
+    // Inside `_app` so the offline fallback carries the same chrome as the
+    // other shell routes the service worker precaches. It has no loader and no
+    // action, so it renders with no network at all.
+    route('/offline', 'routes/offline.tsx'),
   ]),
 
   layout('routes/_public.tsx', { id: '_public' }, [

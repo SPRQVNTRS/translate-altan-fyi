@@ -1,0 +1,62 @@
+{
+  "nav": {
+    "search": "Suche",
+    "lists": "Listen",
+    "history": "Verlauf",
+    "settings": "Einstellungen",
+    "account": "Konto",
+    "groupLabel": "Navigation",
+    "openMenu": "Navigationsmenü öffnen",
+    "drawerDescription": "Navigationslinks für die App.",
+    "bottomBarLabel": "Hauptnavigation",
+    "back": "Zurück"
+  },
+  "theme": {
+    "selector": "Farbschema",
+    "system": "System",
+    "light": "Hell",
+    "dark": "Dunkel"
+  },
+  "search": {
+    "metaTitle": "Suche",
+    "metaDescription": "Schlage ein Wort oder einen Ausdruck nach, um Bedeutung und Beispiele zu sehen.",
+    "fieldLabel": "Wort oder Ausdruck",
+    "placeholder": "Gib ein Wort ein, zum Beispiel: Feierabend",
+    "submit": "Suchen",
+    "note": "Das Suchfeld ist deaktiviert, während das Wörterbuch aufgebaut wird. Diese Ansicht zeigt, wo deine Suchanfragen stattfinden werden, zusammen mit Übersetzung, Erklärung und Beispielsätzen, die du erhältst."
+  },
+  "lists": {
+    "metaTitle": "Listen",
+    "metaDescription": "Wörter, die du zum Lernen speicherst, sammeln sich hier.",
+    "emptyTitle": "Gespeicherte Wörter",
+    "emptyBody": "Wörter, die du speicherst, sammeln sich hier, sobald die Speicherfunktion bereit ist. Du wirst jedes nachgeschlagene Wort zu einer Liste hinzufügen können."
+  },
+  "history": {
+    "metaTitle": "Verlauf",
+    "metaDescription": "Eine Übersicht der Wörter, die du nachschlägst.",
+    "emptyTitle": "Suchverlauf",
+    "emptyBody": "Hier sammeln sich die Wörter, die du nachschlägst, sobald das Suchfeld verbunden ist. Deine Suchanfragen bleiben hier sichtbar, damit du sie in Ruhe wiederholen kannst."
+  },
+  "settings": {
+    "metaTitle": "Einstellungen",
+    "metaDescription": "Passe die App-Sprache und das Farbschema an.",
+    "appearanceTitle": "Sprachen und Design",
+    "appearanceBody": "Das Farbschema kannst du oben im Kopfbereich bereits anpassen. Die Einstellungen für deine Übersetzungssprachen findest du hier, sobald sie fertig sind.",
+    "languageTitle": "App-Sprache",
+    "languageBody": "Wähle die Sprache für die Schaltflächen und Texte in der App. Das ändert nichts an den Sprachen, die du übersetzt.",
+    "languageFieldLabel": "App-Sprache"
+  },
+  "account": {
+    "metaTitle": "Konto",
+    "metaDescription": "Details zu deinem Konto und verknüpften Geräten.",
+    "title": "Kontodetails",
+    "body": "Die Anmeldung ist noch in Arbeit. Sobald sie fertig ist, siehst du hier dein Profil und die Geräte, die mit deinen gespeicherten Wörtern verknüpft sind."
+  },
+  "offline": {
+    "metaTitle": "Offline",
+    "metaDescription": "Die App läuft offline direkt auf deinem Gerät.",
+    "title": "Keine Internetverbindung",
+    "body": "Dein Gerät hat die Verbindung verloren, daher lädt diese Seite aus dem lokalen Speicher. Bereiche, die du schon besucht hast, funktionieren weiterhin. Alles andere lädt, sobald du wieder online bist.",
+    "retry": "Erneut versuchen"
+  }
+}

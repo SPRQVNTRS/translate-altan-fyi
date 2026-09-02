@@ -17,7 +17,7 @@ process.env.LOG_LEVEL = 'error';
 
 import 'dotenv/config';
 import { Command } from 'commander';
-import { pool } from '#drizzle/db';
+import { closePool } from '#drizzle/db';
 import { setColorsEnabled, printError } from './lib/output';
 import { CliApiError, CliAuthError, DirectTransport, createTransport, setTransport } from './lib/transport';
 import { registerDirectTransportHandlers } from './lib/direct-transport-handlers';
@@ -126,6 +126,9 @@ main()
     process.exitCode = handleCliError(cause);
   })
   .finally(async () => {
-    // Clean up database pool
-    await pool.end();
+    // Must be closePool(), not pool.end(). In production the pool also starts a
+    // stats timer, which pool.end() leaves running, so the CLI never exits.
+    // scripts/start.sh then parks on this process forever and never reaches
+    // `exec pnpm start`, so the server never listens and the container 502s.
+    await closePool();
   });

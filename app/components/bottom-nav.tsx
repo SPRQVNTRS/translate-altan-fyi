@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { NavLink } from '#app/components/link';
 import { cn } from '#app/lib/utils';
 import { tabNavigationItems, type NavigationItem } from './app-sidebar';
@@ -12,8 +13,8 @@ import { tabNavigationItems, type NavigationItem } from './app-sidebar';
  * has no single flagship verb, and a raised tab would claim one.
  *
  * The entries come from the shared catalog, pre-ordered by each item's
- * `tab.order`, so this file lists no labels or hrefs of its own and the bar
- * cannot disagree with the drawer about a destination.
+ * `tab.order`, so this file lists no catalog keys or hrefs of its own and the
+ * bar cannot disagree with the drawer about a destination.
  */
 const BOTTOM_NAV_TABS: readonly NavigationItem[] = tabNavigationItems;
 
@@ -23,6 +24,8 @@ const BOTTOM_NAV_TABS: readonly NavigationItem[] = tabNavigationItems;
  * alone.
  */
 function FlatTab({ tab }: { tab: NavigationItem }) {
+  const { t } = useTranslation();
+
   return (
     <NavLink
       to={tab.to}
@@ -39,7 +42,7 @@ function FlatTab({ tab }: { tab: NavigationItem }) {
       }
     >
       <tab.icon className="h-5 w-5" aria-hidden="true" />
-      <span>{tab.label}</span>
+      <span>{t(tab.labelKey)}</span>
     </NavLink>
   );
 }
@@ -51,9 +54,11 @@ function FlatTab({ tab }: { tab: NavigationItem }) {
  * content is never hidden behind the bar.
  */
 export function BottomNav() {
+  const { t } = useTranslation();
+
   return (
     <nav
-      aria-label="Main"
+      aria-label={t('nav.bottomBarLabel')}
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
       <div className="flex h-14 items-stretch">

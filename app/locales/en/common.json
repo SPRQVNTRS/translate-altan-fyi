@@ -1,0 +1,62 @@
+{
+  "nav": {
+    "search": "Search",
+    "lists": "Lists",
+    "history": "History",
+    "settings": "Settings",
+    "account": "Account",
+    "groupLabel": "Navigation",
+    "openMenu": "Open navigation menu",
+    "drawerDescription": "Navigation links for the app.",
+    "bottomBarLabel": "Main navigation",
+    "back": "Back"
+  },
+  "theme": {
+    "selector": "Color theme",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "search": {
+    "metaTitle": "Search",
+    "metaDescription": "Look up a word or phrase to see its meaning and examples.",
+    "fieldLabel": "Word or phrase",
+    "placeholder": "Type a word, for example: Feierabend",
+    "submit": "Search",
+    "note": "The search field is disabled while the dictionary is being built. This screen shows where your lookups will happen, along with the translation, explanation, and example sentences you will get back."
+  },
+  "lists": {
+    "metaTitle": "Lists",
+    "metaDescription": "Words you save for study will collect here.",
+    "emptyTitle": "Saved words",
+    "emptyBody": "Words you save will collect here once saving is built. You will be able to add any word you look up to a list."
+  },
+  "history": {
+    "metaTitle": "History",
+    "metaDescription": "A record of the words you look up.",
+    "emptyTitle": "Search history",
+    "emptyBody": "Words you look up will collect here once the search field is connected. Your searches will stay on this screen so you can review them."
+  },
+  "settings": {
+    "metaTitle": "Settings",
+    "metaDescription": "Change the app language and color theme.",
+    "appearanceTitle": "Languages and theme",
+    "appearanceBody": "The theme switch in the header works today. Controls for your translation languages will live here once they are built.",
+    "languageTitle": "App language",
+    "languageBody": "Choose the language for the buttons and labels in the app. This does not change the languages you translate.",
+    "languageFieldLabel": "App language"
+  },
+  "account": {
+    "metaTitle": "Account",
+    "metaDescription": "Details about your account and connected devices.",
+    "title": "Account details",
+    "body": "Account sign-in is not built yet. When it is ready, this screen will show your profile and the devices linked to your saved words."
+  },
+  "offline": {
+    "metaTitle": "Offline",
+    "metaDescription": "The app is running offline from your device.",
+    "title": "No internet connection",
+    "body": "Your device lost its connection, so this page is loading from local storage. Screens you already visited still work. Other screens will load when your connection returns.",
+    "retry": "Try again"
+  }
+}

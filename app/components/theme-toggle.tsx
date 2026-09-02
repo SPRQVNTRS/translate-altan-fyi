@@ -1,5 +1,6 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { cn } from '#app/lib/utils';
 
@@ -20,6 +21,7 @@ function getStoredTheme(): Theme {
 }
 
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,20 +62,22 @@ export function ThemeToggle() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  // Built inside the component, not at module scope: the labels are translated,
+  // so they have to be resolved per render rather than frozen once at import.
   const themes = [
-    { value: 'system' as const, label: 'System', icon: Monitor },
-    { value: 'light' as const, label: 'Light', icon: Sun },
-    { value: 'dark' as const, label: 'Dark', icon: Moon },
+    { value: 'system' as const, label: t('theme.system'), icon: Monitor },
+    { value: 'light' as const, label: t('theme.light'), icon: Sun },
+    { value: 'dark' as const, label: t('theme.dark'), icon: Moon },
   ];
 
-  const currentTheme = themes.find((t) => t.value === theme) || themes[0];
+  const currentTheme = themes.find((option) => option.value === theme) || themes[0];
 
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative inline-flex items-center justify-center h-8 w-8 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
-        aria-label="Theme selector"
+        aria-label={t('theme.selector')}
         aria-expanded={isOpen}
       >
         <currentTheme.icon className="h-4 w-4" />

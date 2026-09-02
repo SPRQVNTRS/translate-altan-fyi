@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useLocation, useNavigation } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Menu } from 'lucide-react';
 import { Link } from '#app/components/link';
 import { ThemeToggle } from '#app/components/theme-toggle';
@@ -18,7 +19,11 @@ import { Separator } from './ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from './ui/sidebar';
 
-/** The product name, a lowercase wordmark and a proper noun. */
+/**
+ * The product name, a lowercase wordmark and a proper noun. It stays literal in
+ * every language: a name is not copy, and translating it would give the app two
+ * identities.
+ */
 const APP_NAME = 'translate';
 
 /**
@@ -55,6 +60,8 @@ function DrawerRow({
   isActive: boolean;
   onNavigate: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Link
       to={item.to}
@@ -63,7 +70,7 @@ function DrawerRow({
       className={drawerItemClasses(isActive)}
     >
       <item.icon className="h-4 w-4" aria-hidden="true" />
-      <span>{item.label}</span>
+      <span>{t(item.labelKey)}</span>
     </Link>
   );
 }
@@ -78,6 +85,7 @@ function DrawerRow({
  * label rather than a decorative mark.
  */
 function NavDrawer() {
+  const { t } = useTranslation();
   const location = useLocation();
   const [isOpen, setIsOpen] = React.useState(false);
   const close = (): void => setIsOpen(false);
@@ -86,14 +94,14 @@ function NavDrawer() {
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 shrink-0 md:hidden" aria-label="Open navigation menu">
+        <Button variant="ghost" size="icon" className="size-9 shrink-0 md:hidden" aria-label={t('nav.openMenu')}>
           <Menu className="size-5" aria-hidden="true" />
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 gap-0 p-0 md:hidden">
         <SheetHeader className="border-b">
           <SheetTitle className="font-display text-lg">{APP_NAME}</SheetTitle>
-          <SheetDescription className="sr-only">Everywhere you can go in the app.</SheetDescription>
+          <SheetDescription className="sr-only">{t('nav.drawerDescription')}</SheetDescription>
         </SheetHeader>
         <nav className="flex flex-col gap-1 p-2">
           {primaryNavigationItems.map((item) => (
@@ -133,12 +141,14 @@ export default function AppWrapper({
 }
 
 function InnerContent({ title, backTo, children }: { title?: string; backTo?: string; children: React.ReactNode }) {
+  const { t } = useTranslation();
   const location = useLocation();
   // When a route passes no title, the nav catalog already knows the name of the
   // screen the user is on, so the header reads it from there rather than making
   // every route repeat its own label.
   const activeHref = activeNavigationHref(location.pathname);
-  const activeLabel = navigationItems.find((item) => item.to === activeHref)?.label;
+  const activeItem = navigationItems.find((item) => item.to === activeHref);
+  const activeLabel = activeItem && t(activeItem.labelKey);
 
   return (
     <>
@@ -186,7 +196,7 @@ function InnerContent({ title, backTo, children }: { title?: string; backTo?: st
             className="inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-            Back
+            {t('nav.back')}
           </Link>
         </div>
       )}
