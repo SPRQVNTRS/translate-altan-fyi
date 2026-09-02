@@ -142,3 +142,128 @@ export function tokenizeForLanguage(sentence: string, languageCode: string): str
 
   return tokens;
 }
+
+/**
+ * Punctuation and quotes sitting at the START or the END of a string.
+ *
+ * A reader pastes `"Haus"`, types `Haus?`, or a speech recogniser hands back
+ * `Haus.` with a full stop it invented. None of those characters belong to the
+ * word, and none of them are in the stored lemma, so an exact lookup with them
+ * attached finds nothing at all.
+ *
+ * INNER punctuation is deliberately NOT matched. `don't` and `Sankt-Peter` are
+ * one word each, and a rule that stripped their apostrophe or hyphen would turn
+ * a lookup into two lookups for neither of them.
+ */
+const SURROUNDING_PUNCTUATION = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
+
+/**
+ * The result of reading a raw search box into something the query can use.
+ *
+ * `normalized` and `tokens` are two different answers to two different
+ * questions, and the difference matters:
+ *
+ *   - `normalized` is the SINGLE-WORD SEARCH KEY, compared with `=` against
+ *     `headwords.lemma_normalized`. It is stripped only at the two ends of the
+ *     whole query, because the stored form was written by
+ *     `normalizeForLanguage`, which strips nothing, and every extra repair
+ *     applied to one side and not the other moves rows out of reach.
+ *   - `tokens` is the PHRASE BRANCH's word list, and each entry is looked up as
+ *     a headword on its own. A word there carries no punctuation from its
+ *     neighbours, so `hello, world` yields `hello` and `world` rather than
+ *     `hello,`.
+ */
+export interface NormalizedQuery {
+  /** The text exactly as the reader typed or spoke it. Never shown as a suggestion. */
+  readonly raw: string;
+  /** The folded single-word search key. Empty when the query held no letters at all. */
+  readonly normalized: string;
+  /** The folded words of the query, each cleaned of punctuation at its own edges. */
+  readonly tokens: readonly string[];
+  /** True when the query holds more than one word, which is the phrase branch's condition. */
+  readonly isPhrase: boolean;
+}
+
+/**
+ * Split a value into its words, cleaning punctuation off each word's edges.
+ *
+ * This is the ONE token splitter, and both `isPhrase` and `normalizeQuery` go
+ * through it. Two splitters that agreed today would disagree eventually, and
+ * the visible symptom would be a query routed down the single-word branch while
+ * the phrase branch counted two words, or the reverse.
+ */
+function splitTokens(value: string): string[] {
+  const tokens: string[] = [];
+  for (const piece of value.split(WHITESPACE_RUN)) {
+    const token = piece.replace(SURROUNDING_PUNCTUATION, '');
+    if (token === '') continue;
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+/**
+ * Whether a value is a PHRASE rather than a single word.
+ *
+ * Folding never changes how many words a string has, so this answers the same
+ * for the raw text and for the folded text, and a caller may pass either.
+ *
+ * @param value A search box's contents, raw or already folded.
+ * @returns True when the value holds two or more words.
+ */
+export function isPhrase(value: string): boolean {
+  return splitTokens(value).length > 1;
+}
+
+/**
+ * Read a raw search box into the forms the search path needs.
+ *
+ * WHY THE QUERY GETS ITS OWN FUNCTION AND NOT JUST `normalizeForLanguage`
+ *   `normalizeForLanguage` is the function that WROTE `lemma_normalized`, and
+ *   it must keep doing exactly what it did, byte for byte, or every stored row
+ *   moves out of reach. So the query-side repairs a reader needs, dropping the
+ *   quotes they pasted and the question mark they typed, cannot go in there.
+ *   They go here, on the query side only, and the divergence they create is
+ *   named rather than hidden: a lemma that genuinely ENDS in punctuation is no
+ *   longer reachable by exact match, and reaches the reader through the fuzzy
+ *   branch instead.
+ *
+ * IT NEVER REPAIRS SPELLING, AND THAT IS THE POINT
+ *   Nothing here fixes a typo. `Hauss` folds to `hauss` and stays there. Typos
+ *   are the trigram branch's job and, when that finds nothing either, the did
+ *   you mean suggestion's job, which the reader has to accept by clicking. A
+ *   normaliser that quietly turned `hauss` into `haus` would be applying an
+ *   unaccepted correction, and a wrong one would read as a wrong translation.
+ *
+ * @param raw The search box's contents, as typed or as the recogniser heard it.
+ * @param languageCode The language the query is read as. Must be served.
+ * @returns The search key, the word list, and whether this is a phrase.
+ */
+export function normalizeQuery(raw: string, languageCode: string): NormalizedQuery {
+  const collapsed = raw.replace(WHITESPACE_RUN, ' ').trim();
+  const trimmedEnds = collapsed.replace(SURROUNDING_PUNCTUATION, '');
+  const normalized = normalizeForLanguage(trimmedEnds, languageCode);
+  const tokens = splitTokens(normalized);
+  return { raw, normalized, tokens, isPhrase: tokens.length > 1 };
+}
+
+/**
+ * Fold a whole sentence into the space-separated word sequence a phrase is
+ * matched against.
+ *
+ * This is what makes "does this sentence contain this phrase" answerable. Both
+ * sides go through the SAME `splitTokens` and the SAME `normalizeForLanguage`,
+ * so a phrase typed without German umlauts still finds a sentence that has
+ * them, and a comma standing between two words does not hide the phrase that
+ * spans it.
+ *
+ * The containment test itself belongs to the caller, and it must pad both sides
+ * with a space, so that `haus` does not report a match inside `hausboot`.
+ *
+ * @param sentence One sentence of running text.
+ * @param languageCode The language the sentence is written in. Must be served.
+ * @returns Its folded words, separated by single spaces, punctuation removed.
+ */
+export function normalizeSentence(sentence: string, languageCode: string): string {
+  return splitTokens(normalizeForLanguage(sentence, languageCode)).join(' ');
+}

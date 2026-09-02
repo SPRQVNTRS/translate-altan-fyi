@@ -40,7 +40,7 @@ import {
 } from '#drizzle/schema';
 import type { LanguageCode } from './detect-language';
 import { SERVED_LICENCES } from './licences';
-import { normalizeForLanguage } from './normalize';
+import { normalizeQuery, normalizeSentence } from './normalize';
 import { currentSenseVersions, currentVersionColumn, type DictionaryDb } from './queries.server';
 
 /** Trigram similarity a fuzzy match must clear. Named, never inlined in a query. */
@@ -141,7 +141,7 @@ export interface SearchHeadwordsParams {
 
 /** What both branch builders need. */
 export interface BranchParams {
-  /** The query, already through `normalizeForLanguage`. */
+  /** The query, already through `normalizeQuery`. */
   normalizedQuery: string;
   /** The language being searched. Always constrained: a search is directional. */
   from: LanguageCode;
@@ -531,13 +531,15 @@ export async function searchHeadwords(
   db: DictionaryDb,
   params: SearchHeadwordsParams,
 ): Promise<SearchHit[]> {
-  // The normalization goes through `normalizeForLanguage`, not `normalizeLemma`.
-  // That call IS the locale seam, and it is now load-bearing rather than a
-  // placeholder: `params.from` selects the Turkish rules that fold all four i
-  // letters onto `i`, and the German rule that folds `ß` to `ss`. The SAME
-  // function wrote `headwords.lemma_normalized` on import, which is the only
-  // reason the `=` below can match anything.
-  const normalizedQuery = normalizeForLanguage(params.q, params.from);
+  // The normalization goes through `normalizeQuery`, which wraps
+  // `normalizeForLanguage`, not `normalizeLemma`. That call IS the locale seam,
+  // and it is load-bearing: `params.from` selects the Turkish rules that fold
+  // all four i letters onto `i`, and the German rule that folds `ß` to `ss`.
+  // The SAME function wrote `headwords.lemma_normalized` on import, which is
+  // the only reason the `=` below can match anything. What `normalizeQuery`
+  // adds on top is query-side only: the quotes and the trailing question mark a
+  // reader types, which a stored lemma never carries.
+  const normalizedQuery = normalizeQuery(params.q, params.from).normalized;
   // An empty query touches no database at all. It has no answer, and asking
   // Postgres for the answer to nothing still costs a round trip per request.
   if (normalizedQuery === '') return [];
@@ -611,4 +613,210 @@ export async function searchHeadwords(
     translations: translationsByHeadword.get(match.headwordId) ?? [],
     examples: examplesByHeadword.get(match.headwordId) ?? [],
   }));
+}
+
+// =============================================================================
+// The phrase branch
+// =============================================================================
+//
+// A PHRASE IS NOT A LONGER WORD, AND THE SINGLE-WORD PATH CANNOT SERVE IT.
+//   `headwords.lemma_normalized` holds words. A reader who types "guten Tag"
+//   has typed something that is in no headword column at all, so the exact
+//   branch finds nothing and the trigram branch returns whichever single word
+//   happens to share the most three-letter runs with the whole string, which is
+//   a coincidence rather than an answer.
+//
+//   So a phrase is answered by the two things the dictionary genuinely knows
+//   about it: what each of its WORDS means, and which recorded SENTENCES
+//   contain it. Neither is a translation of the phrase, and the screen must not
+//   present them as one, which is what `search.phraseWordsNote` says out loud.
+//
+// THE EXAMPLE SEARCH IS SQL-NARROWED AND TYPESCRIPT-DECIDED.
+//   Postgres cannot fold a sentence the way `normalizeForLanguage` does, so it
+//   cannot answer "does this sentence contain this phrase" by our own rules. An
+//   `ilike` here would answer a DIFFERENT question, on unfolded text, and the
+//   two answers would disagree on exactly the queries this feature exists for.
+//
+//   What SQL can do cheaply is narrow. A sentence containing every word of the
+//   phrase mentions each of those words, and the Tatoeba importer attaches a
+//   sentence to every headword it mentions through `example_headwords`. So the
+//   junction supplies the candidates and `selectPhraseExamples` decides, on
+//   folded text, with one implementation on both sides.
+//
+//   The candidate cap is the honest limit of that arrangement: a phrase whose
+//   words are attached to more sentences than the cap can miss a match sitting
+//   past it. It bounds recall, never correctness, and it is named rather than
+//   inlined so the number is visible.
+
+/** How many words of a phrase are looked up as headwords. Beyond this is noise. */
+export const PHRASE_TOKEN_LIMIT = 6;
+
+/** How many entries one word of a phrase contributes. The word is context, not the answer. */
+export const PHRASE_HITS_PER_TOKEN = 3;
+
+/** How many attached sentences are pulled back before the folded phrase test runs. */
+export const PHRASE_EXAMPLE_CANDIDATES = 300;
+
+/** How many sentences containing the phrase are shown. */
+export const PHRASE_EXAMPLES_LIMIT = 5;
+
+/** One word of a phrase, with the entries it resolves to on its own. */
+export interface PhraseTokenMatch {
+  /** The folded word, exactly as it was looked up. */
+  token: string;
+  hits: SearchHit[];
+}
+
+/** What the phrase branch answers with: the words, and the sentences. */
+export interface PhraseSearchResult {
+  /** The folded words of the phrase, each with its own entries. */
+  tokens: PhraseTokenMatch[];
+  /** Recorded sentences that contain the whole phrase, in order. */
+  examples: SearchHitExample[];
+}
+
+/**
+ * Sentences attached to any of a set of headwords, licence-filtered in SQL.
+ *
+ * This is the CANDIDATE query of the phrase branch, and it deliberately does
+ * not test for the phrase. `selectPhraseExamples` is the decider, on folded
+ * text, by the app's own per-language rules.
+ */
+export function phraseExampleCandidatesQuery(
+  db: DictionaryDb,
+  params: { headwordIds: string[]; from: LanguageCode; to: LanguageCode; limit: number },
+) {
+  return db
+    .select({
+      headwordId: exampleHeadwords.headwordId,
+      id: examples.id,
+      text: examples.text,
+      languageCode: examples.languageCode,
+      translationText: examples.translationText,
+      translationLanguageCode: examples.translationLanguageCode,
+      externalId: examples.externalId,
+      sourceSlug: sources.slug,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
+    })
+    .from(exampleHeadwords)
+    .innerJoin(examples, eq(exampleHeadwords.exampleId, examples.id))
+    .innerJoin(sources, eq(examples.sourceId, sources.id))
+    .where(
+      and(
+        inArray(exampleHeadwords.headwordId, params.headwordIds),
+        // The phrase was folded by ONE language's rules, so a sentence in
+        // another language cannot be tested against it honestly.
+        eq(examples.languageCode, params.from),
+        servedLicence(),
+      ),
+    )
+    .orderBy(preferTargetLanguage(params.to), asc(examples.id))
+    .limit(params.limit);
+}
+
+/**
+ * Keep the candidate sentences that actually contain the phrase. Pure.
+ *
+ * Both sides go through `normalizeSentence`, so a phrase typed without German
+ * umlauts still finds the sentence that has them, and a comma standing at the
+ * phrase boundary does not hide it. Both sides are padded with a space before
+ * the containment test, so `haus` is not reported as a match inside `hausboot`.
+ *
+ * @param rows The candidate sentences, in the order they should be considered.
+ * @param phrase The folded phrase, its words separated by single spaces.
+ * @param languageCode The language both sides are folded by.
+ * @param cap How many sentences to keep.
+ * @returns The matching sentences, de-duplicated, at most `cap` of them.
+ */
+export function selectPhraseExamples(
+  rows: ExampleRow[],
+  phrase: string,
+  languageCode: LanguageCode,
+  cap: number,
+): SearchHitExample[] {
+  const needle = ` ${phrase} `;
+  const kept: SearchHitExample[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (kept.length >= cap) break;
+    // The same sentence arrives once per headword it is attached to, and every
+    // word of the phrase is one of those headwords.
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    if (!` ${normalizeSentence(row.text, languageCode)} `.includes(needle)) continue;
+    kept.push({
+      id: row.id,
+      text: row.text,
+      languageCode: row.languageCode,
+      translationText: row.translationText,
+      translationLanguageCode: row.translationLanguageCode,
+      externalId: row.externalId,
+      sourceSlug: row.sourceSlug,
+      sourceName: row.sourceName,
+      sourceLicence: row.sourceLicence,
+    });
+  }
+  return kept;
+}
+
+/**
+ * Answer a multi-word query: every word's entries, and the sentences carrying
+ * the whole phrase.
+ *
+ * The word lookups reuse `searchHeadwords` rather than a second query path, so
+ * a word inside a phrase is forgiving of typos and diacritics in exactly the
+ * same way it is on its own. They run in parallel because they are independent
+ * and there are at most `PHRASE_TOKEN_LIMIT` of them.
+ *
+ * @param db The dictionary database handle.
+ * @param params The raw query and the direction the lookup runs in.
+ * @returns The per-word entries and the matching sentences. Either may be empty.
+ * @throws If the query is a single word. The caller must branch on
+ *   `normalizeQuery(...).isPhrase`, because this path would show that one word
+ *   as its own context and find only sentences it is already listed under.
+ */
+export async function searchPhrase(
+  db: DictionaryDb,
+  params: SearchHeadwordsParams,
+): Promise<PhraseSearchResult> {
+  const query = normalizeQuery(params.q, params.from);
+  if (!query.isPhrase) {
+    throw new Error(
+      `searchPhrase was called with "${params.q}", which normalizes to a single word. The ` +
+        'caller must branch on `normalizeQuery(...).isPhrase` and send a single word to ' +
+        '`searchHeadwords` instead.',
+    );
+  }
+  const lookedUp = query.tokens.slice(0, PHRASE_TOKEN_LIMIT);
+  const tokens: PhraseTokenMatch[] = await Promise.all(
+    lookedUp.map(async (token) => ({
+      token,
+      hits: await searchHeadwords(db, {
+        q: token,
+        from: params.from,
+        to: params.to,
+        limit: PHRASE_HITS_PER_TOKEN,
+      }),
+    })),
+  );
+
+  const headwordIds = tokens.flatMap((match) => match.hits.map((hit) => hit.headwordId));
+  // No word of the phrase is in the dictionary, so no sentence is attached to
+  // any of them and the candidate query would have nothing to narrow by.
+  if (headwordIds.length === 0) return { tokens, examples: [] };
+
+  const candidates = await phraseExampleCandidatesQuery(db, {
+    headwordIds,
+    from: params.from,
+    to: params.to,
+    limit: PHRASE_EXAMPLE_CANDIDATES,
+  });
+  const matching = selectPhraseExamples(
+    candidates,
+    query.tokens.join(' '),
+    params.from,
+    PHRASE_EXAMPLES_LIMIT,
+  );
+  return { tokens, examples: matching };
 }

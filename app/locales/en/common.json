@@ -34,7 +34,14 @@
     "flipDirection": "Swap languages and search again",
     "matchFuzzy": "Close match",
     "emptyPrompt": "Type a word above to search.",
-    "submitting": "Searching..."
+    "submitting": "Searching...",
+    "didYouMeanLabel": "Did you mean",
+    "didYouMeanAction": "Search for {{suggestion}} instead.",
+    "phraseWordsHeading": "Words in this phrase",
+    "phraseWordsNote": "There is no entry for the full phrase, so here is what each word means and any recorded sentences that use it.",
+    "phraseTokenNoResults": "No dictionary entry for {{token}}.",
+    "phraseExamplesHeading": "Recorded sentences with this phrase",
+    "phraseNoExamples": "No recorded sentences contain this exact phrase."
   },
   "voice": {
     "fieldLabel": "Spoken language",

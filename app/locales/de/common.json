@@ -34,7 +34,14 @@
     "flipDirection": "Sprachen tauschen und erneut suchen",
     "matchFuzzy": "Ähnlicher Treffer",
     "emptyPrompt": "Oben ein Wort eingeben, um zu suchen.",
-    "submitting": "Wird gesucht..."
+    "submitting": "Wird gesucht...",
+    "didYouMeanLabel": "Meintest du",
+    "didYouMeanAction": "Stattdessen nach {{suggestion}} suchen.",
+    "phraseWordsHeading": "Wörter in diesem Ausdruck",
+    "phraseWordsNote": "Für den gesamten Ausdruck gibt es keinen Eintrag. Hier findest du die Bedeutung der einzelnen Wörter und hinterlegte Sätze dazu.",
+    "phraseTokenNoResults": "Kein Wörterbucheintrag für {{token}}.",
+    "phraseExamplesHeading": "Hinterlegte Sätze mit diesem Ausdruck",
+    "phraseNoExamples": "Keine hinterlegten Sätze enthalten genau diesen Ausdruck."
   },
   "voice": {
     "fieldLabel": "Gesprochene Sprache",

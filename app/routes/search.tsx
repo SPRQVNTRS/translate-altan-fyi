@@ -5,16 +5,18 @@ import { useTranslation } from 'react-i18next';
 import { Form, useNavigation, type MetaFunction } from 'react-router';
 import { DirectionChip } from '#app/components/direction-chip';
 import { RecordSearch } from '#app/components/personal/record-search';
-import { SearchResults } from '#app/components/search-results';
+import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
 import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
 import { VoiceInput } from '#app/components/voice-input';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
+import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
+import { normalizeQuery } from '#app/lib/dictionary/normalize';
 import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
 import type { TitleHandle } from '#app/lib/route-title';
-import { searchHeadwords } from '#app/lib/dictionary/search.server';
+import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
 import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
 import { getRawDb } from '#drizzle/tenant-db';
 
@@ -66,13 +68,35 @@ export async function loader({ request }: Route.LoaderArgs) {
     uiLanguage,
   });
   if (q === '') {
-    return { q, direction, hits: [] };
+    return { q, direction, hits: [], phrase: null, didYouMean: null };
   }
+
+  // ONE PIPELINE, TWO BRANCHES, AND THE BRANCH IS DECIDED HERE.
+  //   A phrase is not a longer word: it is in no headword column, so the
+  //   single-word path can only answer it by coincidence. `searchPhrase`
+  //   answers with what the dictionary does know, each word's entry and the
+  //   recorded sentences carrying the whole phrase, and the screen says that is
+  //   what it is showing.
+  //
+  //   A spoken query reaches this same line. `VoiceInput` writes the
+  //   recogniser's text into the search box and submits the form, so there is
+  //   no second query path for speech and nothing here can tell the two apart.
+  if (normalizeQuery(q, direction.from).isPhrase) {
+    const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
+    return { q, direction, hits: [], phrase, didYouMean: null };
+  }
+
   // THE WHOLE POINT OF THE DETECTION. `direction.from` and `direction.to` go
   // into the QUERY, not only into the chip above it. Passing the raw URL
   // parameters here instead would produce a correct-looking direction label
   // sitting over results drawn from the wrong side of the dictionary.
   const hits = await searchHeadwords(db, { q, from: direction.from, to: direction.to });
+
+  // THE THIRD LAYER, AND ONLY ON A TOTAL MISS. Exact and fuzzy both found
+  // nothing above the threshold, so the closest word below it is worth
+  // offering. It is offered, never applied: the loader does not redirect and
+  // does not re-run the search with the suggestion. See `did-you-mean.ts`.
+  const didYouMean = hits.length === 0 ? await suggestDidYouMean(db, { query: q, languageCode: direction.from }) : null;
 
   // THE TOP HIT ONLY, AND FIRE AND FORGET.
   //   Warming the whole result page would multiply the provider spend by ten
@@ -91,7 +115,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     });
   }
 
-  return { q, direction, hits };
+  return { q, direction, hits, phrase: null, didYouMean };
 }
 
 /**
@@ -100,7 +124,7 @@ export async function loader({ request }: Route.LoaderArgs) {
  */
 export default function SearchRoute({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
-  const { q, direction, hits } = loaderData;
+  const { q, direction, hits, phrase, didYouMean } = loaderData;
   const navigation = useNavigation();
   const isSearching = navigation.state !== 'idle';
   // The voice control writes into THIS box and submits THIS form. It owns no
@@ -164,8 +188,16 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
             <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
             <DirectionChip direction={direction} query={q} />
           </div>
-          {hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
-          {hits.length === 0 && <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>}
+          {phrase !== null && <PhraseResults phrase={phrase} from={direction.from} to={direction.to} />}
+          {phrase === null && hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
+          {phrase === null && hits.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>
+          )}
+          {/* The correction is a link and nothing else. It renders under the
+              empty-result message rather than in place of it, so the reader can
+              see that their own spelling found nothing before they are offered
+              another one. */}
+          {didYouMean !== null && <DidYouMean suggestion={didYouMean} from={direction.from} to={direction.to} />}
           {/* The history WRITE, and it renders nothing. It is here rather than
               in the loader because the loader runs on the server, which must
               never learn what anybody looked up. */}

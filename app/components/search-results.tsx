@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from '#app/components/link';
 import { SourceLink } from '#app/components/source-link';
 import type { LanguageCode } from '#app/lib/dictionary/detect-language';
-import type { SearchHit, SearchHitExample } from '#app/lib/dictionary/search.server';
+import type { PhraseSearchResult, SearchHit, SearchHitExample } from '#app/lib/dictionary/search.server';
 
 /**
  * How many examples a result row shows. A row is a summary, so it carries
@@ -148,5 +148,98 @@ export function SearchResults({ hits, to }: SearchResultsProps) {
         <ResultRow key={hit.headwordId} hit={hit} to={to} />
       ))}
     </ul>
+  );
+}
+
+export interface DidYouMeanProps {
+  /** The headword to offer, in its written form. Never the reader's own query. */
+  suggestion: string;
+  /** The direction the failed search ran in, carried into the corrected search. */
+  from: LanguageCode;
+  to: LanguageCode;
+}
+
+/**
+ * The "did you mean" offer: a LINK, never an applied correction.
+ *
+ * The correction lives entirely in the href. Clicking it is a normal navigation
+ * to a normal search URL, so the reader can see what was searched, share it,
+ * and go back to their own spelling with the browser's back button. Nothing
+ * here rewrites the query on the reader's behalf, and there is no redirect
+ * anywhere on this path.
+ *
+ * `suggestion` comes from `suggestDidYouMean`, which returns `null` rather than
+ * the query it was given, so this component cannot render the reader's own
+ * misspelling back at them as advice.
+ */
+export function DidYouMean({ suggestion, from, to }: DidYouMeanProps) {
+  const { t } = useTranslation();
+  const href = `/search?q=${encodeURIComponent(suggestion)}&from=${from}&to=${to}`;
+
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t('search.didYouMeanLabel')}{' '}
+      <Link
+        to={href}
+        lang={from}
+        className="font-medium text-primary underline underline-offset-4 hover:no-underline"
+        aria-label={t('search.didYouMeanAction', { suggestion })}
+      >
+        {suggestion}
+      </Link>
+    </p>
+  );
+}
+
+export interface PhraseResultsProps {
+  phrase: PhraseSearchResult;
+  from: LanguageCode;
+  to: LanguageCode;
+}
+
+/**
+ * The phrase answer: what each word means, and the sentences that carry the
+ * whole phrase.
+ *
+ * IT SAYS WHAT IT IS. The note above the word list states that there is no
+ * entry for the phrase itself, because a bare list of word entries under a
+ * phrase query reads as a translation of the phrase, and it is not one.
+ */
+export function PhraseResults({ phrase, from, to }: PhraseResultsProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <h3 className="font-display text-base font-semibold">{t('search.phraseWordsHeading')}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{t('search.phraseWordsNote')}</p>
+      </div>
+
+      {phrase.tokens.map((match) => (
+        <div key={match.token} className="flex flex-col gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-primary" lang={from}>
+            {match.token}
+          </p>
+          {match.hits.length > 0 && <SearchResults hits={match.hits} to={to} />}
+          {match.hits.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t('search.phraseTokenNoResults', { token: match.token })}</p>
+          )}
+        </div>
+      ))}
+
+      <div>
+        <h3 className="font-display text-base font-semibold">{t('search.phraseExamplesHeading')}</h3>
+        {phrase.examples.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {phrase.examples.map((example) => (
+              <ResultExample key={example.id} example={example} to={to} />
+            ))}
+          </ul>
+        )}
+        {phrase.examples.length === 0 && (
+          <p className="mt-1 text-sm text-muted-foreground">{t('search.phraseNoExamples')}</p>
+        )}
+      </div>
+    </div>
   );
 }
