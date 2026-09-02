@@ -10,11 +10,12 @@
  *   own.
  *
  * WHAT WE TAKE FROM IT
- *   The lemma, its language, its part of speech, and the glosses of its senses.
- *   Nothing else. `claims` and `forms` are the bulk of the bytes and none of
- *   them are in the schema, so they are not even described to the validator:
- *   an unmentioned field costs nothing, a described one costs a check on every
- *   entity of a 1.58 million line file.
+ *   The lemma, its language, its part of speech, the glosses of its senses, and
+ *   exactly ONE statement property, `P5972` (translation). Nothing else.
+ *   `forms` and the other hundreds of claim properties are the bulk of the
+ *   bytes and none of them are in the schema, so they are not even described to
+ *   the validator: an unmentioned field costs nothing, a described one costs a
+ *   check on every entity of a 1.58 million line file.
  *
  * WHY THE LICENCE IS SAFE
  *   Wikidata lexicographical data is CC0, which is the only reason a gloss from
@@ -24,10 +25,15 @@
  */
 
 import { statSync } from 'node:fs';
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { senses, senseVersions } from '#drizzle/schema';
-import type { InsertHeadword, InsertSense, InsertSenseVersion } from '#drizzle/schema';
+import { senses, senseVersions, translations } from '#drizzle/schema';
+import type {
+  InsertHeadword,
+  InsertSense,
+  InsertSenseVersion,
+  InsertTranslation,
+} from '#drizzle/schema';
 import { getRawDb } from '#drizzle/tenant-db';
 import { createDropCounter } from '../../lib/importers/contract';
 import type {
@@ -119,12 +125,52 @@ export function parseDumpLine(line: string): DumpLine | null {
 }
 
 /**
+ * One `P5972` statement, which is Wikidata's "translation" property on a sense.
+ *
+ * The value is another SENSE id, not a lexeme id and not a string of text:
+ * `{"entity-type":"sense","id":"L144039-S1"}`. That is what makes this property
+ * usable at all, because our `translations` table is an edge between two
+ * meanings and a word-level property could not fill it.
+ *
+ * `datavalue` is OPTIONAL because a `novalue` or `somevalue` snak carries none.
+ * Such a statement says "there is deliberately no translation here", which is
+ * information about the absence and not an edge, so `collectSenseTranslations`
+ * skips it rather than treating a missing field as a parse failure.
+ */
+const TranslationStatementSchema = z.object({
+  rank: z.string(),
+  mainsnak: z.object({
+    snaktype: z.string(),
+    datavalue: z.object({ value: z.object({ id: z.string() }) }).optional(),
+  }),
+});
+
+/**
  * The shape we need from a lexeme, and nothing more.
  *
  * Validation happens here, at the I/O boundary, once per entity. Everything
  * downstream works on the parsed value and never re-checks a field.
+ *
+ * WHY `claims` IS A `z.object` AND NOT A RECORD
+ *   A sense carries statements under `claims`, keyed by property id, and there
+ *   are hundreds of properties in use across the dump. Describing `claims` as
+ *   an open record would validate EVERY property of EVERY sense, which is a
+ *   check per property per entity over 1.58 million entities, to then throw all
+ *   of them away but one. A `z.object` naming only `P5972` costs one lookup and
+ *   zod strips the rest unread, which is exactly the "an unmentioned field
+ *   costs nothing" rule the rest of this schema already follows.
+ *
+ * WHY `P5973` IS NOT HERE
+ *   `P5973` is "synonym". A synonym is a SAME-LANGUAGE relation between two
+ *   senses, and `translations` is the cross-language result surface we serve.
+ *   Importing it would put pairs like (English sense, English sense) into that
+ *   surface, where a reader asking for the German of a word would be handed
+ *   another English word. It is not read, not just not written.
+ *
+ * Exported so a test can feed it a line of the real dump and work on the same
+ * value the importer works on, rather than on a hand-built stand-in.
  */
-const LexemeSchema = z.object({
+export const LexemeSchema = z.object({
   id: z.string(),
   language: z.string(),
   lexicalCategory: z.string(),
@@ -136,12 +182,13 @@ const LexemeSchema = z.object({
         glosses: z
           .record(z.string(), z.object({ language: z.string(), value: z.string() }))
           .optional(),
+        claims: z.object({ P5972: z.array(TranslationStatementSchema).optional() }).optional(),
       }),
     )
     .optional(),
 });
 
-type Lexeme = z.infer<typeof LexemeSchema>;
+export type Lexeme = z.infer<typeof LexemeSchema>;
 
 // =============================================================================
 // Mapping
@@ -224,7 +271,7 @@ function pickLemma(lexeme: Lexeme, languageCode: string): string | null {
 }
 
 // =============================================================================
-// Staging: one sense row per gloss language
+// Staging: one sense row, one sense version per gloss language
 // =============================================================================
 //
 // THE DECISION, AND THE ALTERNATIVE THAT WAS REJECTED
@@ -232,31 +279,35 @@ function pickLemma(lexeme: Lexeme, languageCode: string): string | null {
 //   `L9-S1` alone has English, German, French, Spanish, Thai and Italian. The
 //   question is what that becomes in our schema.
 //
-//   The obvious first answer is one `senses` row with several `sense_versions`
-//   rows under it, one per language. It does not work. `sense_versions` is
-//   unique on `(sense_id, version)`, so two glosses cannot both sit at version
-//   1, and numbering them 1 and 2 would be a lie about what `version` means:
-//   version is re-enrichment order, and the query layer reads `max(version)` as
-//   the current text of a sense. Numbering languages would make the "current"
-//   gloss whichever language happened to be written last, which is a language
-//   picked at random, per sense, forever.
+//   A Wikidata sense is ONE meaning. The six glosses are six wordings of that
+//   same meaning, not six meanings. So it becomes ONE `senses` row, carrying
+//   `external_id` = `L9-S1` with no suffix of any kind, and one
+//   `sense_versions` row per gloss language, all of them at version 1. The
+//   languages we do not serve are dropped; the rest hang off the one sense.
 //
-//   The milestone's own model settles it: a sense IS a language-specific gloss.
-//   So this importer writes one `senses` row per (Wikidata sense, gloss
-//   language) pair, each with exactly one `sense_versions` row at version 1.
-//   `L9-S1` with six glosses becomes six sense rows, of which we keep the ones
-//   in the languages we serve.
+//   The rejected alternative is the shape this importer used to write: one
+//   `senses` row per (Wikidata sense, gloss language) pair, with
+//   `external_id` = `L9-S1#de`. It was chosen because `sense_versions` was then
+//   unique on `(sense_id, version)`, so two glosses could not both sit at
+//   version 1, and numbering them 1 and 2 would have been a lie about what
+//   `version` means. That reasoning was sound about `version` and wrong about
+//   the model: it split one meaning into six identities, so the six glosses of
+//   `L9-S1` were six unrelated senses that could never be recognised as the
+//   same thing, and a `P5972` translation edge pointing at `L9-S1` had six
+//   possible landing places and no way to choose. Overruled by operator
+//   decision; the constraint moved to `(sense_id, gloss_language_code, version)`
+//   instead, which holds the glosses apart without inventing identities.
 //
-//   `senses.external_id` therefore carries the pair and not just the upstream
-//   id: `L9-S1#de`. The unique constraint on `(source_id, external_id)` is what
-//   makes the second run of this importer write nothing new, and the id has to
-//   name the language for that constraint to separate the six rows.
+//   `senses.external_id` therefore carries the upstream id and nothing else,
+//   which is also what makes it joinable against a `P5972` statement value.
+//   The unique constraint on `(source_id, external_id)` is what makes a second
+//   run of this importer write nothing new.
 
 /** A gloss staged for writing, before it has a headword id or a sense id. */
 interface StagedGloss {
   /** Natural key of the headword this gloss hangs from, in the form `upsertHeadwords` returns. */
   headwordKey: string;
-  /** `${wikidataSenseId}#${glossLanguage}`, the value written to `senses.external_id`. */
+  /** The Wikidata sense id, e.g. `L9-S1`, written verbatim to `senses.external_id`. */
   externalId: string;
   glossLanguageCode: string;
   gloss: string;
@@ -280,7 +331,7 @@ function collectGlosses(input: CollectGlossesInput): StagedGloss[] {
       }
       staged.push({
         headwordKey: input.headwordKey,
-        externalId: `${sense.id}#${glossLanguage}`,
+        externalId: sense.id,
         glossLanguageCode: glossLanguage,
         gloss: gloss.value,
       });
@@ -288,6 +339,58 @@ function collectGlosses(input: CollectGlossesInput): StagedGloss[] {
   }
 
   return staged;
+}
+
+// =============================================================================
+// Staging: P5972 translation edges
+// =============================================================================
+
+/** One upstream translation edge, still in Wikidata ids because no sense row exists yet. */
+export interface TranslationPair {
+  fromExternalId: string;
+  toExternalId: string;
+}
+
+/** The rank Wikidata gives a statement that is recorded as known to be wrong. */
+const DEPRECATED_RANK = 'deprecated';
+
+/** The snak type that carries an actual value. `novalue` and `somevalue` carry none. */
+const VALUE_SNAK = 'value';
+
+/**
+ * The `P5972` edges of one lexeme, in Wikidata ids.
+ *
+ * Pure on purpose: it reads a parsed lexeme and returns pairs, so the decision
+ * of what counts as an edge is testable without a dump and without a database.
+ * Resolving those ids to sense ids is a separate step that needs both.
+ *
+ * WHAT IS SKIPPED, AND WHY
+ *   A `deprecated` rank means upstream recorded the statement as wrong and kept
+ *   it for history. Importing it would serve a translation Wikidata itself
+ *   disowns.
+ *
+ *   A snak type other than `value` is `novalue` or `somevalue`: the statement
+ *   asserts that there is no translation, or that there is one but it is
+ *   unknown. Neither is an edge.
+ *
+ *   A statement pointing at the sense it hangs from is skipped here rather than
+ *   later, because `translations` carries a CHECK that rejects a row whose two
+ *   endpoints are the same sense, and a whole batch would fail on one such row.
+ */
+export function collectSenseTranslations(lexeme: Lexeme): TranslationPair[] {
+  const pairs: TranslationPair[] = [];
+
+  for (const sense of lexeme.senses ?? []) {
+    for (const statement of sense.claims?.P5972 ?? []) {
+      if (statement.rank === DEPRECATED_RANK) continue;
+      if (statement.mainsnak.snaktype !== VALUE_SNAK) continue;
+      const target = statement.mainsnak.datavalue?.value.id;
+      if (target === undefined || target === sense.id) continue;
+      pairs.push({ fromExternalId: sense.id, toExternalId: target });
+    }
+  }
+
+  return pairs;
 }
 
 // =============================================================================
@@ -314,6 +417,7 @@ interface WriteCounts {
   headwords: number;
   senses: number;
   senseVersions: number;
+  translations: number;
 }
 
 /** Rows waiting to be written. Filled while reading, emptied by `flushBatch`. */
@@ -335,6 +439,7 @@ function addCounts(total: WriteCounts, batch: WriteCounts): void {
   total.headwords += batch.headwords;
   total.senses += batch.senses;
   total.senseVersions += batch.senseVersions;
+  total.translations += batch.translations;
 }
 
 interface FlushInput {
@@ -359,19 +464,34 @@ interface FlushInput {
  *   and second-run ids both come back. The update itself writes the headword id
  *   from the excluded row, which is a no-op whenever nothing moved.
  *
- * WHY THE BATCH IS DE-DUPLICATED ON `externalId` FIRST
+ * WHY THE BATCH IS DE-DUPLICATED TWICE, ON TWO DIFFERENT KEYS
  *   Postgres raises "ON CONFLICT DO UPDATE command cannot affect row a second
- *   time" when one statement carries the same conflict key twice. The dump can
- *   present the same sense id more than once inside one batch, so the duplicate
- *   is removed before the statement is built.
+ *   time" when one statement carries the same conflict key twice, and the two
+ *   statements below have DIFFERENT conflict keys, so one de-duplication cannot
+ *   serve both.
+ *
+ *   The gloss map is keyed by (external id, gloss language), which is the grain
+ *   of a `sense_versions` row. Keying it by external id alone would silently
+ *   collapse the five languages of one sense into whichever one was staged last
+ *   and write a single version row instead of five.
+ *
+ *   The sense map is keyed by external id alone, which is the grain of a
+ *   `senses` row, because those five glosses are five wordings of ONE meaning
+ *   and must produce one sense. The dump can also present the same sense id in
+ *   more than one entity inside a batch, which this same map absorbs.
  */
 async function flushBatch(input: FlushInput): Promise<WriteCounts> {
-  const counts: WriteCounts = { headwords: 0, senses: 0, senseVersions: 0 };
+  const counts: WriteCounts = { headwords: 0, senses: 0, senseVersions: 0, translations: 0 };
   if (input.batch.headwords.length === 0) return counts;
 
   const uniqueGlosses = new Map<string, StagedGloss>();
   for (const staged of input.batch.glosses) {
-    uniqueGlosses.set(staged.externalId, staged);
+    uniqueGlosses.set(`${staged.externalId}\t${staged.glossLanguageCode}`, staged);
+  }
+
+  const uniqueSenses = new Map<string, StagedGloss>();
+  for (const staged of uniqueGlosses.values()) {
+    uniqueSenses.set(staged.externalId, staged);
   }
 
   // A dry run counts what it WOULD offer the database. It cannot know how many
@@ -384,7 +504,7 @@ async function flushBatch(input: FlushInput): Promise<WriteCounts> {
       uniqueHeadwords.add(headwordKeyOf(row));
     }
     counts.headwords = uniqueHeadwords.size;
-    counts.senses = uniqueGlosses.size;
+    counts.senses = uniqueSenses.size;
     counts.senseVersions = uniqueGlosses.size;
     return counts;
   }
@@ -393,7 +513,7 @@ async function flushBatch(input: FlushInput): Promise<WriteCounts> {
   counts.headwords = headwordIds.size;
 
   const senseRows: InsertSense[] = [];
-  for (const staged of uniqueGlosses.values()) {
+  for (const staged of uniqueSenses.values()) {
     const headwordId = headwordIds.get(staged.headwordKey);
     if (headwordId === undefined) {
       throw new Error(
@@ -446,12 +566,157 @@ async function flushBatch(input: FlushInput): Promise<WriteCounts> {
     const written = await input.db
       .insert(senseVersions)
       .values(part)
-      .onConflictDoNothing({ target: [senseVersions.senseId, senseVersions.version] })
+      .onConflictDoNothing({
+        target: [senseVersions.senseId, senseVersions.glossLanguageCode, senseVersions.version],
+      })
       .returning({ id: senseVersions.id });
     counts.senseVersions += written.length;
   }
 
   return counts;
+}
+
+// =============================================================================
+// Resolving the P5972 edges
+// =============================================================================
+//
+// WHY THIS RUNS AFTER THE READ LOOP AND NOT INSIDE IT
+//   A `P5972` statement names a sense that may live anywhere in the dump,
+//   including thousands of lines further down, so at the moment the statement
+//   is read the target sense usually has no row yet. Resolving it inline would
+//   mean either a lookup that finds nothing most of the time, or holding the
+//   whole dump in memory. Both endpoints exist once the last batch is flushed,
+//   so resolution happens exactly once, at the end.
+//
+// WHAT THAT COSTS IN MEMORY
+//   Only the pairs are held, and only for lexemes this importer KEEPS. Measured
+//   on the real dump: 136,087 `P5972` statements exist in total, 9,484 of them
+//   hang off senses in our four languages, and 1,848 of those point at a target
+//   that is also in our four languages. So the bound is a few thousand short
+//   strings, not millions, and it does not grow with the size of the dump.
+//
+//   The gap between 9,484 and 1,848 is not waste to be optimised away: whether
+//   a target is in a served language cannot be known while reading, because the
+//   statement carries a sense id and not a language. Those pairs are carried,
+//   fail to resolve, and are counted under `translation-target-missing`.
+
+/** Both directions of an edge are written, so one pair offers two rows. */
+const DIRECTIONS_PER_PAIR = 2;
+
+/**
+ * The confidence written on a Wikidata translation edge.
+ *
+ * 1.0 because this is an asserted sense-to-sense statement from the source, not
+ * an inference of ours. It is the same meaning-to-meaning claim the schema's
+ * `translations` table is built for, so there is nothing here to discount.
+ */
+const FULL_CONFIDENCE = 1;
+
+interface WriteTranslationsInput {
+  db: ImporterDb;
+  sourceId: string;
+  pairs: TranslationPair[];
+  counter: DropCounter;
+  dryRun: boolean;
+}
+
+/**
+ * Resolve the staged pairs to sense ids and write both directions of each.
+ *
+ * WHY BOTH DIRECTIONS
+ *   Wikidata records the statement on one side only: the English sense says it
+ *   translates to the German one and the German sense frequently says nothing.
+ *   A reader looking up the German word would then find no translation for a
+ *   pair the database plainly holds. `translations` is unique on
+ *   (from, to, source), so the two directions are two legitimate rows and the
+ *   reverse of an edge upstream happens to state twice is absorbed by the
+ *   conflict target rather than duplicated.
+ *
+ * WHY THE COUNT COMES FROM `RETURNING`
+ *   It is the rows that really landed, never the rows offered. On a second run
+ *   every row conflicts, `DO NOTHING` writes none of them, and this returns
+ *   zero, which is what idempotent means here.
+ *
+ * @returns how many `translations` rows were newly written.
+ */
+async function writeTranslations(input: WriteTranslationsInput): Promise<number> {
+  const uniquePairs = new Map<string, TranslationPair>();
+  for (const pair of input.pairs) {
+    if (pair.fromExternalId === pair.toExternalId) continue;
+    uniquePairs.set(`${pair.fromExternalId}\t${pair.toExternalId}`, pair);
+  }
+  if (uniquePairs.size === 0) return 0;
+
+  // A dry run counts what it WOULD offer, exactly as `flushBatch` does. It
+  // cannot resolve anything, because resolution is a read against rows a dry
+  // run never wrote, so this is an upper bound and reads as one.
+  if (input.dryRun) return uniquePairs.size * DIRECTIONS_PER_PAIR;
+
+  const externalIds = new Set<string>();
+  for (const pair of uniquePairs.values()) {
+    externalIds.add(pair.fromExternalId);
+    externalIds.add(pair.toExternalId);
+  }
+
+  const senseIds = new Map<string, string>();
+  for (const part of chunk([...externalIds], INSERT_CHUNK_SIZE)) {
+    const rows = await input.db
+      .select({ id: senses.id, externalId: senses.externalId })
+      .from(senses)
+      .where(and(eq(senses.sourceId, input.sourceId), inArray(senses.externalId, part)));
+
+    for (const row of rows) {
+      // `external_id` is nullable, for senses we mint ourselves. The filter
+      // above cannot return one, so a null here would mean the database handed
+      // back a row we did not ask for.
+      if (row.externalId === null) continue;
+      senseIds.set(row.externalId, row.id);
+    }
+  }
+
+  // Keyed by the ordered id pair, because one pair contributes two rows and the
+  // reverse of one edge is the forward of another whenever upstream stated both.
+  // Two DISTINCT external ids can never resolve to one sense id, because
+  // `senses` is unique on (source_id, external_id), so no self-row can be built
+  // here that the pre-resolution guard above did not already remove.
+  const rows = new Map<string, InsertTranslation>();
+  for (const pair of uniquePairs.values()) {
+    const fromSenseId = senseIds.get(pair.fromExternalId);
+    const toSenseId = senseIds.get(pair.toExternalId);
+    if (fromSenseId === undefined || toSenseId === undefined) {
+      // Overwhelmingly a target in a language this importer does not keep, so
+      // the sense row simply does not exist. It is counted rather than logged:
+      // there are thousands of them and the shape of the loss is the signal.
+      input.counter.drop('translation-target-missing');
+      continue;
+    }
+    rows.set(`${fromSenseId}\t${toSenseId}`, {
+      fromSenseId,
+      toSenseId,
+      sourceId: input.sourceId,
+      confidence: FULL_CONFIDENCE,
+    });
+    rows.set(`${toSenseId}\t${fromSenseId}`, {
+      fromSenseId: toSenseId,
+      toSenseId: fromSenseId,
+      sourceId: input.sourceId,
+      confidence: FULL_CONFIDENCE,
+    });
+  }
+
+  let written = 0;
+  for (const part of chunk([...rows.values()], INSERT_CHUNK_SIZE)) {
+    const inserted = await input.db
+      .insert(translations)
+      .values(part)
+      .onConflictDoNothing({
+        target: [translations.fromSenseId, translations.toSenseId, translations.sourceId],
+      })
+      .returning({ id: translations.id });
+    written += inserted.length;
+  }
+
+  return written;
 }
 
 // =============================================================================
@@ -503,8 +768,13 @@ export const wikidataLexemesImporter: Importer<ImportOptions> = {
 
     let read = 0;
     let kept = 0;
-    const written: WriteCounts = { headwords: 0, senses: 0, senseVersions: 0 };
+    const written: WriteCounts = { headwords: 0, senses: 0, senseVersions: 0, translations: 0 };
     let batch = emptyBatch();
+    // Held for the whole run, not per batch: an edge is only resolvable once
+    // both of its endpoints have sense rows, which is after the final flush.
+    // The bound is documented above `writeTranslations`, a few thousand short
+    // strings on the real dump.
+    const translationPairs: TranslationPair[] = [];
 
     for await (const line of readLines(options.file)) {
       let parsed: DumpLine | null = null;
@@ -561,6 +831,13 @@ export const wikidataLexemesImporter: Importer<ImportOptions> = {
         counter,
       });
 
+      // Collected at the same point as the glosses, so only a KEPT lexeme
+      // contributes: an edge hanging off a lexeme we dropped has no `from`
+      // sense row to attach to and could never resolve.
+      for (const pair of collectSenseTranslations(lexeme)) {
+        translationPairs.push(pair);
+      }
+
       // The headword is kept even when no gloss survived. A headword with no
       // sense is still worth having: it is what a fuzzy search matches on, and
       // a later enrichment pass attaches meanings to a headword that already
@@ -579,13 +856,24 @@ export const wikidataLexemesImporter: Importer<ImportOptions> = {
 
     addCounts(written, await flushBatch({ db, sourceId, batch, dryRun: options.dryRun }));
 
+    // Strictly after the FINAL flush, for the reason set out above
+    // `writeTranslations`: both endpoints of an edge only have sense rows once
+    // every batch has landed.
+    written.translations += await writeTranslations({
+      db,
+      sourceId,
+      pairs: translationPairs,
+      counter,
+      dryRun: options.dryRun,
+    });
+
     return {
       read,
-      // `written` is the SUM of three tables: headwords, senses and sense
-      // versions. It is not a row count of any one of them, and it will be
-      // larger than the number of words imported, because one word carries
+      // `written` is the SUM of four tables: headwords, senses, sense versions
+      // and translations. It is not a row count of any one of them, and it will
+      // be larger than the number of words imported, because one word carries
       // several glosses and each gloss is a sense plus a version.
-      written: written.headwords + written.senses + written.senseVersions,
+      written: written.headwords + written.senses + written.senseVersions + written.translations,
       dropped: counter.count(),
       durationMs: Date.now() - startedAt,
     };

@@ -1,0 +1,2 @@
+ALTER TABLE "sense_versions" DROP CONSTRAINT "sense_versions_sense_version_unique";--> statement-breakpoint
+ALTER TABLE "sense_versions" ADD CONSTRAINT "sense_versions_sense_gloss_language_version_unique" UNIQUE("sense_id","gloss_language_code","version");

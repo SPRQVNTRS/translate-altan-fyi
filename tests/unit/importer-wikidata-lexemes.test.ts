@@ -1,7 +1,8 @@
 /**
- * The three pure decisions the Wikidata lexeme importer makes per line: what
- * counts as an entity, which language it is in, and what part of speech to
- * store.
+ * The pure decisions the Wikidata lexeme importer makes per line: what counts
+ * as an entity, which language it is in, what part of speech to store, what
+ * the schema keeps of a sense, and which `P5972` statements become translation
+ * edges.
  *
  * WHY THIS FILE MOCKS `#drizzle/tenant-db`
  *   `cli/commands/import/wikidata-lexemes.ts` imports `getRawDb` from
@@ -23,7 +24,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import type { DumpLine } from '../../cli/commands/import/wikidata-lexemes';
+import type { DumpLine, Lexeme } from '../../cli/commands/import/wikidata-lexemes';
 
 mock.module('#drizzle/tenant-db', {
   namedExports: {
@@ -33,12 +34,101 @@ mock.module('#drizzle/tenant-db', {
   },
 });
 
-const { parseDumpLine, lexemeLanguageCode, mapLexicalCategory } = await import(
-  '../../cli/commands/import/wikidata-lexemes'
-);
+const {
+  parseDumpLine,
+  lexemeLanguageCode,
+  mapLexicalCategory,
+  LexemeSchema,
+  collectSenseTranslations,
+} = await import('../../cli/commands/import/wikidata-lexemes');
 
 /** Resolved from this module's own location, so the working directory is irrelevant. */
 const FIXTURE = resolve(import.meta.dirname, '../fixtures/importers/wikidata-lexemes.sample.json');
+
+/**
+ * Every entity of the fixture, parsed through the importer's own schema and
+ * keyed by lexeme id.
+ *
+ * Going through `LexemeSchema` rather than `JSON.parse` alone is the point: the
+ * tests below then work on the same value the importer works on, including the
+ * fields zod has already stripped.
+ */
+function loadFixtureLexemes(): Map<string, Lexeme> {
+  const byId = new Map<string, Lexeme>();
+  for (const line of readFileSync(FIXTURE, 'utf8').split('\n')) {
+    const parsed = parseDumpLine(line);
+    if (parsed === null) continue;
+    const lexeme = LexemeSchema.parse(parsed.entity);
+    byId.set(lexeme.id, lexeme);
+  }
+  return byId;
+}
+
+const FIXTURE_LEXEMES = loadFixtureLexemes();
+
+/** One fixture lexeme, or a throw naming the missing id rather than a confusing undefined. */
+function fixtureLexeme(id: string): Lexeme {
+  const lexeme = FIXTURE_LEXEMES.get(id);
+  if (lexeme === undefined) throw new Error(`the fixture carries no lexeme ${id}`);
+  return lexeme;
+}
+
+/**
+ * The one hand-assembled entity in an otherwise verbatim fixture.
+ *
+ * Every other line is a real dump row. `L4` carries statements written by hand,
+ * in the exact shape the dump uses, because the four cases they cover, a live
+ * edge, a synonym, a deprecated rank and a value-less snak, do not co-occur on
+ * any single real lexeme. Its `P5972` target `L8412-S1` is a sense of the real
+ * Turkish row further down the file, so the pair is resolvable in a later
+ * integration run rather than pointing at nothing.
+ */
+const TRANSLATION_LEXEME_ID = 'L4';
+
+/** Enough of a fixture line to find the entity these tests are about. */
+const EntityIdSchema = z.object({ id: z.string() });
+
+/**
+ * The statements as the fixture LINE carries them, including `P5973`, which
+ * `LexemeSchema` strips.
+ *
+ * This exists so the skip assertions are not vacuous. "No edge to `L9-S1`" and
+ * "no `P5973` key" both pass on a fixture that never carried a synonym at all,
+ * so the fixture is read a second time, unstripped, to prove each case is
+ * actually present before asserting it was dropped.
+ */
+const RawClaimsSchema = z.object({
+  senses: z.array(
+    z.object({
+      id: z.string(),
+      claims: z.object({
+        P5972: z.array(
+          z.object({
+            rank: z.string(),
+            mainsnak: z.object({
+              snaktype: z.string(),
+              datavalue: z.object({ value: z.object({ id: z.string() }) }).optional(),
+            }),
+          }),
+        ),
+        P5973: z.array(
+          z.object({ mainsnak: z.object({ datavalue: z.object({ value: z.object({ id: z.string() }) }) }) }),
+        ),
+      }),
+    }),
+  ),
+});
+
+/** The unstripped statements of the one fixture entity that carries any. */
+function loadRawClaims(): z.infer<typeof RawClaimsSchema> {
+  for (const line of readFileSync(FIXTURE, 'utf8').split('\n')) {
+    const parsed = parseDumpLine(line);
+    if (parsed === null) continue;
+    if (EntityIdSchema.parse(parsed.entity).id !== TRANSLATION_LEXEME_ID) continue;
+    return RawClaimsSchema.parse(parsed.entity);
+  }
+  throw new Error(`the fixture carries no lexeme ${TRANSLATION_LEXEME_ID}`);
+}
 
 describe('parseDumpLine', () => {
   it('reports the array brackets and blank lines as not-an-entity', () => {
@@ -119,6 +209,112 @@ describe('mapLexicalCategory', () => {
   });
 });
 
+describe('LexemeSchema', () => {
+  it('keeps one sense with many glosses as ONE sense', () => {
+    // The model this importer writes: a Wikidata sense is one meaning, so its
+    // six glosses are six wordings of that meaning and not six meanings. The
+    // schema must hand the importer one sense carrying six glosses, so that one
+    // `senses` row and six `sense_versions` rows come out of it.
+    const lexeme = fixtureLexeme('L9');
+    const [first] = lexeme.senses ?? [];
+
+    assert.equal(lexeme.senses?.length, 4);
+    assert.equal(first?.id, 'L9-S1');
+    assert.equal(Object.keys(first?.glosses ?? {}).length, 6);
+
+    // The id goes to `senses.external_id` verbatim. A `#de` suffix here would be
+    // the rejected shape, where one meaning became one identity per gloss
+    // language and a `P5972` edge had six possible landing places.
+    assert.ok(!(first?.id ?? '').includes('#'));
+  });
+
+  it('reads P5972 and does not even carry P5973 through', () => {
+    // `P5973` is "synonym", a same-language relation. It is not read, not just
+    // not written: the schema names only `P5972` under `claims`, so zod strips
+    // the synonym statement and no later step can accidentally import it.
+    const sense = fixtureLexeme(TRANSLATION_LEXEME_ID).senses?.[0];
+
+    assert.deepEqual(Object.keys(sense?.claims ?? {}), ['P5972']);
+    assert.equal(sense?.claims?.P5972?.length, 4);
+  });
+});
+
+describe('collectSenseTranslations', () => {
+  it('has a fixture that really carries all four cases', () => {
+    // Read before the skip assertions below, because each of them would pass on
+    // a fixture that never carried the case it claims to drop.
+    const [sense] = loadRawClaims().senses;
+    const statements = sense?.claims.P5972 ?? [];
+
+    assert.equal(sense?.id, 'L4-S1');
+    assert.equal(statements.length, 4);
+    assert.equal(statements.filter((s) => s.rank === 'deprecated').length, 1);
+    assert.equal(statements.filter((s) => s.mainsnak.snaktype === 'somevalue').length, 1);
+    assert.equal(
+      statements.filter((s) => s.mainsnak.datavalue?.value.id === 'L4-S1').length,
+      1,
+      'one statement points at the sense it hangs from',
+    );
+    assert.deepEqual(
+      sense?.claims.P5973.map((s) => s.mainsnak.datavalue.value.id),
+      ['L9-S1'],
+      'the synonym statement is in the file, so the strip is a real drop',
+    );
+  });
+
+  it('returns the P5972 edge in the direction the statement points', () => {
+    // One pair, in Wikidata ids, because no sense row exists yet. The importer
+    // writes it in BOTH directions later; this function reports what upstream
+    // said, once.
+    const pairs = collectSenseTranslations(fixtureLexeme(TRANSLATION_LEXEME_ID));
+
+    assert.deepEqual(pairs, [{ fromExternalId: 'L4-S1', toExternalId: 'L8412-S1' }]);
+  });
+
+  it('ignores the P5973 synonym statement', () => {
+    // `L4-S1` carries a `P5973` pointing at `L9-S1`. An edge to it would put an
+    // (English sense, English sense) pair on a cross-language surface, where a
+    // reader asking for the German of a word is handed another English word.
+    const pairs = collectSenseTranslations(fixtureLexeme(TRANSLATION_LEXEME_ID));
+
+    assert.ok(pairs.every((pair) => pair.toExternalId !== 'L9-S1'));
+  });
+
+  it('skips a deprecated-rank statement', () => {
+    // Deprecated means upstream recorded the statement as wrong and kept it for
+    // history. `L4-S1` carries one pointing at `L87-S1`.
+    const pairs = collectSenseTranslations(fixtureLexeme(TRANSLATION_LEXEME_ID));
+
+    assert.ok(pairs.every((pair) => pair.toExternalId !== 'L87-S1'));
+  });
+
+  it('skips a snak that carries no value', () => {
+    // A `somevalue` snak says a translation exists but is unknown, so there is
+    // no id to point at. It must be skipped rather than counted as a parse
+    // failure: the statement is well-formed, it just is not an edge. The
+    // assertion is the pair COUNT, since a skipped snak has no id to look for.
+    const pairs = collectSenseTranslations(fixtureLexeme(TRANSLATION_LEXEME_ID));
+
+    assert.equal(pairs.length, 1);
+  });
+
+  it('skips a statement pointing at the sense it hangs from', () => {
+    // `translations` carries a CHECK rejecting a row whose two endpoints are the
+    // same sense, and the rows are written in batches, so one self-edge would
+    // fail a whole batch. `L4-S1` carries one pointing at itself.
+    const pairs = collectSenseTranslations(fixtureLexeme(TRANSLATION_LEXEME_ID));
+
+    assert.ok(pairs.every((pair) => pair.fromExternalId !== pair.toExternalId));
+  });
+
+  it('returns nothing for a lexeme with no statements at all', () => {
+    // Which is almost every lexeme in the dump. `senses` and `claims` are both
+    // optional, and neither absence is an error.
+    assert.deepEqual(collectSenseTranslations(fixtureLexeme('L9')), []);
+    assert.deepEqual(collectSenseTranslations(fixtureLexeme('L312')), []);
+  });
+});
+
 /**
  * What one pass over the fixture found, in the shape the importer would count it.
  */
@@ -172,19 +368,19 @@ function tallyFixture(): FixtureTally {
 }
 
 describe('the real dump fixture', () => {
-  it('parses every entity and files nine of twelve under a served language', () => {
+  it('parses every entity and files ten of thirteen under a served language', () => {
     const tally = tallyFixture();
 
     // The file is machine-written, so a parse failure here would mean the
     // fixture itself is broken and every other number below is unreliable.
     assert.equal(tally.parseFailures, 0, 'the fixture should be well-formed JSON per line');
-    assert.equal(tally.entities, 12);
+    assert.equal(tally.entities, 13);
 
     // The opening bracket, the closing bracket, and the trailing newline. None
     // of them is a row, and the importer counts none of them.
     assert.equal(tally.structural, 3);
 
-    assert.equal(tally.served, 9, 'nine entities are in en, de, tr or es');
+    assert.equal(tally.served, 10, 'ten entities are in en, de, tr or es');
     assert.equal(tally.unserved, 3, 'three are not, and the language filter drops them');
     assert.equal(tally.served + tally.unserved, tally.entities);
   });

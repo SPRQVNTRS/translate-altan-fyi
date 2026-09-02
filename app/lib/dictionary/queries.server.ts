@@ -19,7 +19,7 @@
  *    there by inspecting the generated statement.
  */
 
-import { and, eq, inArray, max, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, max, sql, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type * as schema from '#drizzle/schema';
 import {
@@ -59,15 +59,61 @@ function servedLicence(): SQL {
 // Current sense version
 // =============================================================================
 
+/** The SQL name of the subquery `currentSenseVersions` produces. */
+const CURRENT_SENSE_VERSIONS_TABLE = 'current_sense_versions';
+
 /**
- * The current version number of every sense, as a joinable subquery.
+ * The SQL name of its aggregate column.
  *
- * "Current" is DERIVED: it is `max(version)` per sense, computed at read time.
- * There is deliberately no `is_current` flag on `sense_versions`. A boolean
- * flag is a second source of truth that drifts, it has to be un-set on the
- * previous row every time a version is appended, and one missed write leaves
- * either two current rows or none. A max() cannot disagree with the data it is
- * computed from.
+ * DELIBERATELY NOT `version`. The subquery is always joined back against
+ * `sense_versions`, which has a `version` column of its own, so an alias of
+ * `version` puts two same-named columns in one scope.
+ */
+const CURRENT_VERSION_COLUMN = 'current_version';
+
+/**
+ * `current_sense_versions.current_version`, written as a QUALIFIED reference.
+ *
+ * CALLERS MUST JOIN ON THIS, not on the aggregate read off the subquery handle.
+ * Drizzle renders an aliased aggregate read off a handle as a BARE name, with
+ * no table qualifier. That was the second runtime failure: with the aggregate
+ * aliased `version`, the bare `"version"` matched both the subquery and
+ * `sense_versions`, and Postgres refused the statement with `42702 column
+ * reference "version" is ambiguous`. The distinct alias alone would settle it,
+ * and the qualifier is still written out, so the predicate names one relation
+ * instead of relying on nothing else ever exposing that name.
+ */
+export const currentVersionColumn = sql`${sql.identifier(CURRENT_SENSE_VERSIONS_TABLE)}.${sql.identifier(CURRENT_VERSION_COLUMN)}`;
+
+/**
+ * The current version number of every sense IN EVERY GLOSS LANGUAGE, as a
+ * joinable subquery.
+ *
+ * "Current" is DERIVED: it is `max(version)` per (sense, gloss language),
+ * computed at read time. There is deliberately no `is_current` flag on
+ * `sense_versions`. A boolean flag is a second source of truth that drifts, it
+ * has to be un-set on the previous row every time a version is appended, and
+ * one missed write leaves either two current rows or none. A max() cannot
+ * disagree with the data it is computed from.
+ *
+ * WHY THE GRAIN INCLUDES THE GLOSS LANGUAGE
+ *   A sense is one meaning that carries one gloss per language, and the
+ *   languages are versioned independently: re-enriching the German text appends
+ *   a German row, and that says nothing about the English text. Grouping by
+ *   `sense_id` alone would collapse all languages into a single maximum, so a
+ *   joiner would keep exactly one gloss per sense and it would be whichever
+ *   language was written at the highest version number, which is a language
+ *   picked at random per sense. Both columns are therefore selected, and a
+ *   joiner must match on BOTH: `sense_id` AND `gloss_language_code`.
+ *
+ * WHY THE AGGREGATE CARRIES AN EXPLICIT `.as(CURRENT_VERSION_COLUMN)`
+ *   The two grouped columns are real columns, so the subquery proxy resolves
+ *   them from the table they came from. `max(...)` is a raw SQL expression and
+ *   has no name of its own. Drizzle still GENERATES a statement without the
+ *   alias, so `toSQL()`, typecheck, and the unit tests all stay green, but the
+ *   moment a caller REFERENCES the column off the subquery handle the selection
+ *   proxy throws at runtime: it has no name to resolve. The alias is
+ *   load-bearing, not decoration. Do not remove it.
  *
  * Returned un-awaited so callers can join it. The return type is Drizzle's
  * generated subquery type, which has no spellable name.
@@ -76,11 +122,12 @@ export function currentSenseVersions(db: DictionaryDb) {
   return db
     .select({
       senseId: senseVersions.senseId,
-      version: max(senseVersions.version),
+      glossLanguageCode: senseVersions.glossLanguageCode,
+      version: max(senseVersions.version).as(CURRENT_VERSION_COLUMN),
     })
     .from(senseVersions)
-    .groupBy(senseVersions.senseId)
-    .as('current_sense_versions');
+    .groupBy(senseVersions.senseId, senseVersions.glossLanguageCode)
+    .as(CURRENT_SENSE_VERSIONS_TABLE);
 }
 
 // =============================================================================

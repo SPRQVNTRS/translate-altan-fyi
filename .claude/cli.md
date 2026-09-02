@@ -104,6 +104,22 @@ Every importer is idempotent: it upserts on a natural key, so a second run over
 the same dump writes zero new rows. Each prints a summary of rows read, rows
 written, and rows dropped with a count per reason.
 
+**What the Wikidata importer writes.** One `headwords` row per lexeme, on the
+natural key `(language, lemma, pos)`. One `senses` row per Wikidata sense,
+carrying the upstream id verbatim in `external_id`, so `L9-S1` is ONE sense
+however many languages gloss it. One `sense_versions` row per gloss language,
+all at version 1, held apart by the unique key on
+`(sense_id, gloss_language_code, version)`. A gloss in a language outside
+`--languages` is dropped and counted.
+
+**Translation edges.** Statement `P5972` ("translation") on a sense becomes
+`translations` rows in BOTH directions at confidence 1.0, once both endpoints
+resolve to sense rows we wrote; a pair whose target is not in a served language
+is counted under `translation-target-missing`. A `deprecated` rank, a snak with
+no value, and a statement pointing at its own sense are skipped. `P5973`
+("synonym") is NOT imported: it is a same-language relation, and `translations`
+is the cross-language surface the reader is served from.
+
 **Memory.** Tatoeba holds a map of every kept sentence, about 4.0 million rows
 for the four languages. `--max-rows` caps pass 1, which is what bounds that map.
 It does NOT cap pass 2, which always streams all 28.4 million links.

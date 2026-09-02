@@ -36,6 +36,13 @@
       "when": 1788348419202,
       "tag": "0004_wooden_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788350979902,
+      "tag": "0005_public_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

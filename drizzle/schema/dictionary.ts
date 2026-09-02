@@ -231,10 +231,17 @@ export const sensesRelations = relations(senses, ({ one, many }) => ({
 // =============================================================================
 // Sense versions (the mutable content of a sense, append-only)
 // =============================================================================
-// The CURRENT version of a sense is `max(version)` for that `senseId`, derived
-// by query. There is deliberately NO `is_current` flag: a boolean would be a
-// second source of truth that can disagree with the version numbers, and
-// keeping it correct needs a write to the previous row on every append.
+// The CURRENT version of a sense is `max(version)` PER (sense, gloss language),
+// derived by query. A sense holds ONE gloss per language, and each language is
+// versioned independently: re-enrichment of the German gloss appends a German
+// row at the next version and must not touch, hide or outrank the English one.
+// So "current" is a maximum within a language, never a maximum across the
+// sense, and a reader that groups by `sense_id` alone would serve whichever
+// language happened to be re-enriched last.
+//
+// There is deliberately NO `is_current` flag: a boolean would be a second
+// source of truth that can disagree with the version numbers, and keeping it
+// correct needs a write to the previous row on every append.
 
 export const senseVersions = pgTable(
   'sense_versions',
@@ -255,7 +262,18 @@ export const senseVersions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    unique('sense_versions_sense_version_unique').on(table.senseId, table.version),
+    // The gloss language is PART of the key, not an attribute hanging off it.
+    // One Wikidata sense carries glosses in several languages at once and they
+    // are all the first version of that sense's text, so they all sit at
+    // version 1. A two-column key on (sense_id, version) cannot hold them: the
+    // second language would collide with the first, and numbering the languages
+    // 1, 2, 3 would be a lie about what `version` means. Version is
+    // re-enrichment order WITHIN one language.
+    unique('sense_versions_sense_gloss_language_version_unique').on(
+      table.senseId,
+      table.glossLanguageCode,
+      table.version,
+    ),
     index('sense_versions_sense_id_idx').on(table.senseId),
     index('sense_versions_gloss_language_code_idx').on(table.glossLanguageCode),
     index('sense_versions_source_id_idx').on(table.sourceId),
