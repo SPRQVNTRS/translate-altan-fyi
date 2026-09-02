@@ -34,6 +34,14 @@
  * construct a store directly (`createPrimaryStore()` / `createOutboxStore()`)
  * and pass it via `{ store }`.
  *
+ * WHY A STORE HANDLE IS EXPORTED AT ALL. `getPrimaryStore` is below because
+ * the sync scheduler must SUBSCRIBE to writes, and a subscription is neither a
+ * read nor a write, so none of the entity functions can express it. That is
+ * the only legitimate reason to hand out the store. Everything that changes
+ * data still goes through the functions here, which are what take `persist.ts`'s
+ * save lock — a caller taking the handle to write with it bypasses the lock
+ * and is the parallel writer `local-store-bridge.ts` exists to prevent.
+ *
  * The code below is COPIED from openplate rather than shared, per
  * `.adr/0008-e2ee-sync-copied-not-extracted.md`. Each file names its source
  * path and commit. Fixes go upstream first, then here.
@@ -55,6 +63,9 @@ export type { SyncStamp, LocalList, LocalListItem, LocalNote, LocalHistoryEntry,
 // Store factories and database names — what a test or a server-side caller
 // needs to build a store instead of resolving the browser singleton.
 export { createPrimaryStore, createOutboxStore, PRIMARY_DB_NAME, OUTBOX_DB_NAME } from './store';
+
+// The browser singleton handle, for SUBSCRIBING only — see the module doc.
+export { getPrimaryStore } from './persist';
 
 // Primary store: the authoritative on-device home for the synced entities. The
 // write helpers own the sync stamp — see `primary-store.ts`'s module doc.

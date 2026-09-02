@@ -31,6 +31,15 @@
  * closed two-value set validated identically either way, so this is a URL
  * shape difference and not a protocol one — recorded here rather than left for
  * a reader to notice.
+ *
+ * THE RESPONSE ENVELOPES ARE TRANSCRIBED FROM SECTIONS 5.3 AND 5.4. `GET`
+ * answers `{ records: [...] }`; `PUT` answers the stored record BARE, with no
+ * wrapper key, because 5.4 says the `200` body is "the stored record, same
+ * shape as a `GET /key-records` entry". The port originally wrapped them as
+ * `{ keyRecords }` and `{ keyRecord }`, which is exactly the drift ADR-0008
+ * says a copy risks; the document and `openplate-sync`'s
+ * `src/server/register-routes.ts` agree with each other, so the fix is to
+ * follow them rather than to keep the local naming.
  */
 import type { Route } from './+types/api.v1.sync.key-records';
 
@@ -74,7 +83,7 @@ export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
   if (session === null) return errorResponse(401, NOT_SIGNED_IN);
 
   const records = await handleListKeyRecords(session.accountId, createDrizzleStorageAdapter());
-  return jsonResponse({ keyRecords: records.map(toPayload) }, 200);
+  return jsonResponse({ records: records.map(toPayload) }, 200);
 }
 
 export async function action({ request }: Route.ActionArgs): Promise<Response> {
@@ -117,6 +126,12 @@ async function putKeyRecord(request: Request, accountId: number): Promise<Respon
 
   if (result.status === 'invalid') return errorResponse(400, result.reason);
   if (result.status === 'conflict') {
+    // THIS BODY CARRIES BOTH `error` AND `currentUpdatedAt`, AND THAT IS
+    // DELIBERATE. Section 5.4's table shows only `currentUpdatedAt`, and
+    // upstream sends only that; section 4 states that EVERY non-2xx body is
+    // `{"error": "..."}`. Carrying both satisfies the general rule and the
+    // specific one at once, where upstream satisfies only the specific one, so
+    // this is a superset rather than a drift. Do not "fix" it back.
     return jsonResponse(
       {
         error: 'the key record changed since you last read it; re-read and re-wrap',
@@ -125,7 +140,8 @@ async function putKeyRecord(request: Request, accountId: number): Promise<Respon
       409,
     );
   }
-  return jsonResponse({ keyRecord: toPayload(result.record) }, 200);
+  // Bare, per section 5.4: "the stored record, same shape as a `GET` entry".
+  return jsonResponse(toPayload(result.record), 200);
 }
 
 async function deleteKeyRecord(request: Request, accountId: number): Promise<Response> {

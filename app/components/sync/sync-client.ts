@@ -272,11 +272,12 @@ export function buildKeyRecordRequest(input: {
 /**
  * The account's wrapped-DEK records (`PROTOCOL.md` section 5.3).
  *
- * THE ENVELOPE KEY IS `keyRecords`, NOT `records`. The document spells it
- * `records`; `app/routes/api.v1.sync.key-records.ts` answers `keyRecords`, and
- * the route is what this client actually talks to, so the schema is
- * transcribed from the route. Recorded here rather than left for a reader to
- * discover through a silent parse failure.
+ * THE ENVELOPE KEY IS `records`, AS THE DOCUMENT SPELLS IT. This schema once
+ * read `keyRecords`, because the route answered that; both were a drift
+ * introduced by the port, and both were corrected together —
+ * `app/routes/api.v1.sync.key-records.ts` now answers section 5.3's shape.
+ * Recorded here rather than left for a reader to discover through a silent
+ * parse failure.
  *
  * `kdfDescriptor` is deliberately not modelled. It is on the wire, and the
  * unwrap below does not need it: the descriptor this device derived its KEK
@@ -284,7 +285,7 @@ export function buildKeyRecordRequest(input: {
  * a second copy here would only create a second thing that could disagree.
  */
 const keyRecordsResponseSchema = z.object({
-  keyRecords: z.array(
+  records: z.array(
     z.object({
       kind: z.string(),
       /** Base64 of the packed IV, ciphertext and tag (`PROTOCOL.md` section 4). */
@@ -295,9 +296,15 @@ const keyRecordsResponseSchema = z.object({
   ),
 });
 
-/** The stored record echoed back by a successful `PUT` (`PROTOCOL.md` section 5.4). */
+/**
+ * The stored record echoed back by a successful `PUT` (`PROTOCOL.md` section
+ * 5.4). BARE, with no wrapper key: 5.4 says the body is "the stored record,
+ * same shape as a `GET /key-records` entry".
+ */
 const keyRecordResponseSchema = z.object({
-  keyRecord: z.object({ kind: z.string(), wrappedDek: z.string(), updatedAt: z.string() }),
+  kind: z.string(),
+  wrappedDek: z.string(),
+  updatedAt: z.string(),
 });
 
 /**
@@ -511,7 +518,7 @@ async function unwrapPassphraseDek(passphraseKek: CryptoKey): Promise<Uint8Array
     method: 'GET',
     schema: keyRecordsResponseSchema,
   });
-  const record = response.keyRecords.find((candidate) => candidate.kind === 'passphrase');
+  const record = response.records.find((candidate) => candidate.kind === 'passphrase');
   if (record === undefined) {
     throw new SyncRequestError({
       kind: 'invalid',

@@ -20,13 +20,19 @@
  * would need all of that written again, worse.
  */
 import { reportError } from '#app/lib/report-error';
-import { enqueueSyncIntent, flushOutboxOnce, setOutboxRunner, type OutboxRunner } from '#app/lib/local-store';
-// A DEEP IMPORT, deliberately. `app/lib/local-store`'s index exposes the write
-// helpers but no store HANDLE, and a listener needs one. This is a read of the
-// singleton to subscribe to it, never a write path — every write this module
-// causes still goes through the index's own functions, so `sync-lock.ts`'s
-// ordering rule is untouched.
-import { getPrimaryStore } from '#app/lib/local-store/persist';
+// THROUGH THE BARREL, NOT PAST IT. `#app/lib/local-store` is the one seam
+// (`local-store-bridge.ts`'s header states the rule), and reaching into
+// `persist.ts` is how a parallel writer ends up bypassing the save lock. The
+// handle is taken here to SUBSCRIBE to writes, never to perform one — every
+// write this module causes still goes through the barrel's own functions, so
+// `sync-lock.ts`'s ordering rule is untouched.
+import {
+  enqueueSyncIntent,
+  flushOutboxOnce,
+  getPrimaryStore,
+  setOutboxRunner,
+  type OutboxRunner,
+} from '#app/lib/local-store';
 import { isSyncRequestError } from '#app/lib/e2ee/client/sync-error';
 import { runSyncCycleForCurrentSession } from './orchestrator';
 import { getSyncSession } from './sync-session';
