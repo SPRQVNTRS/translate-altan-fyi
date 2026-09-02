@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
 import { Label } from '#app/components/ui/label';
+import { Link } from '#app/components/link';
 import {
   Table,
   TableBody,
@@ -30,7 +31,15 @@ import {
   LlmNotConfiguredError,
   registry,
 } from '#app/lib/llm/registry.server';
+import { BUDGET_WARN_FRACTION, readBudget } from '#app/lib/abuse/budget.server';
+import {
+  readRejections,
+  TRIGGER_LIMIT_PER_IP_PER_HOUR,
+  TRIGGER_LIMIT_PER_SESSION_PER_HOUR,
+} from '#app/lib/abuse/rate-limit.server';
 import { getActiveModel, listActiveModelAudit, setActiveModel } from '#app/models/app-settings.server';
+import { listFlaggedForReview } from '#app/models/votes.server';
+import { getRawDb } from '#drizzle/tenant-db';
 
 export const handle = {
   title: 'Language model',
@@ -54,6 +63,9 @@ const CUSTOM_MODEL_VALUE = '__custom__';
 
 /** How many switches the history block shows. */
 const AUDIT_LIMIT = 20;
+
+/** How many flagged enrichments the review block shows. */
+const FLAGGED_LIMIT = 20;
 
 /**
  * The switch form.
@@ -86,11 +98,54 @@ export async function loader() {
   const status = registry.describeConfiguration(active);
   const audit = await listActiveModelAudit(AUDIT_LIMIT);
 
+  // The three spend reads are independent of each other and of the model reads
+  // above, so they are issued together. Every one of them is a plain read: this
+  // page never grants, releases or clears anything.
+  const [budget, rejections, flagged] = await Promise.all([
+    readBudget(),
+    readRejections(),
+    listFlaggedForReview(getRawDb(), FLAGGED_LIMIT),
+  ]);
+
   // The catalog crosses to the client so the two dependent selects can react to
   // a provider change without a round trip. It is plain data with no key values
   // in it, and `describeConfiguration` returns only a reason string, so nothing
   // secret rides along.
-  return { active, status, audit, providers: PROVIDERS };
+  // COMMITTED IS RESERVED PLUS SPENT, and that is the figure the cap is measured
+  // against. `spent` alone would show headroom that a call in flight has already
+  // claimed, which is exactly the arithmetic `reserve` refuses on.
+  //
+  // THE WARNING IS DECIDED HERE, NOT IN THE COMPONENT. `BUDGET_WARN_FRACTION`
+  // lives in a `.server` module, and reading it from the rendered body would
+  // pull that module, and the database handle under it, into the client bundle.
+  // The threshold crosses the wire as a plain boolean and a plain percentage.
+  const committedUsd = budget.reservedUsd + budget.spentUsd;
+  const spend = {
+    ...budget,
+    committedUsd,
+    usedPercent: (committedUsd / budget.capUsd) * 100,
+    warnPercent: BUDGET_WARN_FRACTION * 100,
+    isNearCap: committedUsd >= budget.capUsd * BUDGET_WARN_FRACTION,
+  };
+
+  return {
+    active,
+    status,
+    audit,
+    providers: PROVIDERS,
+    spend,
+    rejections,
+    flagged,
+    // The two trigger ceilings travel as data rather than being read from the
+    // module in the component, because `rate-limit.server` must never reach the
+    // client bundle. They are printed beside the refusal counts so the operator
+    // can read the guard and its effect off one page instead of grepping for a
+    // constant to find out what "17 refused" was measured against.
+    triggerLimits: {
+      perIpPerHour: TRIGGER_LIMIT_PER_IP_PER_HOUR,
+      perSessionPerHour: TRIGGER_LIMIT_PER_SESSION_PER_HOUR,
+    },
+  };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -160,6 +215,17 @@ const REASONING_EFFORT_NOTE = {
   unsupported: 'cannot be sent this option on its transport.',
 } satisfies Record<OptionSupport, string | null>;
 
+/**
+ * A money figure, at the scale the operator has to reason at.
+ *
+ * FOUR DECIMALS, NOT TWO. One enrichment costs a fraction of a cent, so a
+ * two-decimal figure prints `$0.00` for a day that really did spend money and
+ * the page would look broken until the cap was nearly gone.
+ */
+function usd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
 /** One side of an audit row, as the history table prints it. */
 function describeSelection(selection: ActiveModelSelection | null): string {
   if (selection === null) return '-';
@@ -167,7 +233,7 @@ function describeSelection(selection: ActiveModelSelection | null): string {
 }
 
 export default function SuperLlm({ loaderData, actionData }: Route.ComponentProps) {
-  const { active, status, audit, providers } = loaderData;
+  const { active, status, audit, providers, spend, rejections, flagged, triggerLimits } = loaderData;
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== 'idle';
 
@@ -370,6 +436,106 @@ export default function SuperLlm({ loaderData, actionData }: Route.ComponentProp
                     <TableCell>{entry.actorEmail ?? entry.actorUserId ?? 'System process'}</TableCell>
                     <TableCell className="font-mono">{describeSelection(entry.before)}</TableCell>
                     <TableCell className="font-mono">{describeSelection(entry.after)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      <section className={CARD_CLASS}>
+        <h2 className={SECTION_LABEL_CLASS}>{`Today's spend`}</h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div className="flex gap-2">
+            <dt className="w-40 shrink-0 text-muted-foreground">UTC day</dt>
+            <dd className="tabular-nums">{spend.day}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-40 shrink-0 text-muted-foreground">Spent</dt>
+            <dd className="tabular-nums">{usd(spend.spentUsd)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-40 shrink-0 text-muted-foreground">Reserved</dt>
+            <dd className="tabular-nums">{usd(spend.reservedUsd)}</dd>
+          </div>
+          {/* The one row that changes colour, because it is the one figure that
+              decides whether enrichment still runs. `text-destructive` and no
+              border accent, per the house design rules. */}
+          <div className={`flex gap-2 ${spend.isNearCap ? 'text-destructive' : ''}`}>
+            <dt className="w-40 shrink-0 text-muted-foreground">Committed of cap</dt>
+            <dd className="tabular-nums font-medium">
+              {`${usd(spend.committedUsd)} of ${usd(spend.capUsd)} (${spend.usedPercent.toFixed(1)}%)`}
+            </dd>
+          </div>
+        </dl>
+
+        {spend.isNearCap && (
+          <p className="mt-3 text-sm font-medium text-destructive">
+            {`Spend has passed ${spend.warnPercent.toFixed(0)}% of the daily cap. Enrichment stops at the cap and resumes at the next UTC midnight.`}
+          </p>
+        )}
+
+        <h3 className="mt-5 text-sm font-medium">Refused today</h3>
+        <dl className="mt-2 space-y-2 text-sm">
+          <div className="flex gap-2">
+            <dt className="w-40 shrink-0 text-muted-foreground">Rate limit</dt>
+            <dd className="tabular-nums">{rejections.rateLimited}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-40 shrink-0 text-muted-foreground">Budget cap</dt>
+            <dd className="tabular-nums">{rejections.budget}</dd>
+          </div>
+        </dl>
+        {/* The counts above are meaningless without the ceilings they were
+            measured against, so both figures are printed rather than left in a
+            constant somebody has to go and read. */}
+        <p className="mt-3 text-sm text-muted-foreground">
+          {`Triggers are limited to ${triggerLimits.perIpPerHour} per address per hour and ${triggerLimits.perSessionPerHour} per session per hour.`}
+        </p>
+      </section>
+
+      <section className={CARD_CLASS}>
+        <h2 className={SECTION_LABEL_CLASS}>Flagged for review</h2>
+        {/* WHY THESE ROWS CANNOT SIMPLY BE RE-RUN, which is the whole reason the
+            queue exists. A row is flagged only when readers scored it badly AND
+            it already carries the CURRENT model and the CURRENT prompt version.
+            Identical input through an identical model under an identical prompt
+            reproduces the same answer at full price, so an automatic retry would
+            spend money to reproduce the complaint. The way out is a person: a
+            better prompt, a different model, or a correction to the entry. Until
+            one of those changes, the flag is the only useful record. */}
+        <p className="mt-2 text-sm text-muted-foreground">
+          These answers were voted down on the current model and prompt version, so re-running them would return the
+          same text. Changing the prompt or the model is what clears them.
+        </p>
+        {flagged.length === 0 && <p className="mt-3 text-sm text-muted-foreground">No flagged enrichments.</p>}
+        {flagged.length > 0 && (
+          <div className="mt-3">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Lemma</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Prompt</TableHead>
+                  <TableHead>Up</TableHead>
+                  <TableHead>Down</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flagged.map((row) => (
+                  <TableRow key={row.enrichmentId}>
+                    <TableCell>
+                      <Link to={`/entry/${row.headwordId}`} className="underline underline-offset-2">
+                        {row.lemma}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono">{row.model}</TableCell>
+                    <TableCell className="tabular-nums">{row.promptVersion}</TableCell>
+                    <TableCell className="tabular-nums">{row.up}</TableCell>
+                    <TableCell className="tabular-nums">{row.down}</TableCell>
+                    <TableCell className="tabular-nums">{new Date(row.createdAt).toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

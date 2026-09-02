@@ -57,6 +57,13 @@
       "when": 1788356060024,
       "tag": "0007_colorful_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788362846360,
+      "tag": "0008_rich_black_crow",
+      "breakpoints": true
     }
   ]
 }

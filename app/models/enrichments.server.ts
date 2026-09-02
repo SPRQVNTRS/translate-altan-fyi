@@ -51,6 +51,17 @@ export interface EnrichmentCacheKey {
 
 /** One cached, validated enrichment, as a page renders it. */
 export interface EnrichmentView {
+  /**
+   * The row's own id.
+   *
+   * CARRIED BECAUSE A VOTE POINTS AT A ROW, NOT AT A SENSE. A reader votes on
+   * one cached ANSWER, and the same sense can hold several across models and
+   * prompt versions, so the sense id cannot identify what was judged. The column
+   * was already selected here, for the warning below, and then dropped on the
+   * way out; carrying it costs nothing and is what lets the entry page attach a
+   * vote to the exact text it showed.
+   */
+  id: string;
   senseId: string;
   provider: string;
   model: string;
@@ -59,16 +70,28 @@ export interface EnrichmentView {
   createdAt: Date;
 }
 
-/** The predicate every read in this file shares. */
-function matchesKey(key: EnrichmentCacheKey) {
-  return and(
+/**
+ * The five columns that identify one cache key, with NO status filter.
+ *
+ * Split out from `matchesKey` because the reads in this file disagree about
+ * status and agree about everything else. A cache read wants `ok` rows only; a
+ * read that asks whether the last attempt failed must see the `failed` rows
+ * too, and pinning the status here would silently hide exactly the rows that
+ * question is about.
+ */
+function matchesCacheKey(key: EnrichmentCacheKey) {
+  return [
     eq(enrichments.headwordId, key.headwordId),
     eq(enrichments.fromLanguageCode, key.from),
     eq(enrichments.toLanguageCode, key.to),
     eq(enrichments.model, key.model),
     eq(enrichments.promptVersion, key.promptVersion),
-    eq(enrichments.status, 'ok'),
-  );
+  ];
+}
+
+/** The predicate every CACHE read in this file shares: the key, plus `ok`. */
+function matchesKey(key: EnrichmentCacheKey) {
+  return and(...matchesCacheKey(key), eq(enrichments.status, 'ok'));
 }
 
 /**
@@ -112,6 +135,7 @@ export async function listCachedEnrichments(
     }
 
     views.push({
+      id: row.id,
       senseId: row.senseId,
       provider: row.provider,
       model: row.model,
@@ -146,6 +170,70 @@ export async function listEnrichedSenseIds(
     .where(matchesKey(key));
 
   return rows.map((row) => row.senseId);
+}
+
+/**
+ * Whether the NEWEST attempt at this key failed.
+ *
+ * WHY THE NEWEST ROW AND NOT "ANY FAILURE".
+ *   Failures are appended, never updated, so a key that failed once and then
+ *   succeeded still carries the old `failed` row forever. Asking whether any
+ *   failure exists would therefore mark a perfectly enriched entry as broken.
+ *   The newest row is the current fact: a retry that succeeded lands after the
+ *   failure it replaces, and a retry that failed again lands after the first
+ *   failure.
+ *
+ * The status is read raw rather than parsed, because the check constraint on
+ * the column already pins it to `ok` or `failed`.
+ *
+ * @param db The database handle.
+ * @param key The headword, direction, model and prompt version to read for.
+ * @returns `true` when the latest row for the key is a failure.
+ */
+export async function latestAttemptFailed(db: DictionaryDb, key: EnrichmentCacheKey): Promise<boolean> {
+  const latest = await latestAttempt(db, key);
+  return latest !== null && latest.failed;
+}
+
+/** The newest attempt at a key: whether it failed, and when it landed. */
+export interface LatestAttempt {
+  failed: boolean;
+  at: Date;
+}
+
+/**
+ * The newest attempt at this key, or `null` when the key has none.
+ *
+ * WHY THE TIMESTAMP COMES BACK WITH THE VERDICT, IN ONE READ.
+ *   `latestAttemptFailed` answers "is this key currently broken", which is
+ *   enough to stop showing skeletons and not enough to decide anything else. A
+ *   caller that also wants to know whether the failure is old enough to retry
+ *   needs the instant it happened, and asking for it separately would be a
+ *   second ordered read of the same rows that could land on a DIFFERENT newest
+ *   row: a retry finishing between the two reads would give a verdict from one
+ *   attempt and a timestamp from another. One read, one row, one fact.
+ *
+ * The rule `latestAttemptFailed` documents still governs: the NEWEST row only.
+ * Failures are appended and never updated, so a key that failed once and then
+ * succeeded still carries the old `failed` row forever, and asking whether any
+ * failure exists would mark a perfectly enriched entry as broken.
+ *
+ * @param db The database handle.
+ * @param key The headword, direction, model and prompt version to read for.
+ * @returns The newest attempt's verdict and instant, or `null` for a key that
+ *   has never been attempted.
+ */
+export async function latestAttempt(db: DictionaryDb, key: EnrichmentCacheKey): Promise<LatestAttempt | null> {
+  const rows = await db
+    .select({ status: enrichments.status, createdAt: enrichments.createdAt })
+    .from(enrichments)
+    .where(and(...matchesCacheKey(key)))
+    .orderBy(desc(enrichments.createdAt))
+    .limit(1);
+
+  const row = rows[0];
+  if (row === undefined) return null;
+  return { failed: row.status === 'failed', at: row.createdAt };
 }
 
 /** One successful attempt, as the workflow reports it. */

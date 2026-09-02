@@ -102,7 +102,14 @@
     "registerLabel": "Register",
     "usageNotesLabel": "Usage notes",
     "examplesLabel": "Examples",
-    "commonMistakesLabel": "Common mistakes"
+    "commonMistakesLabel": "Common mistakes",
+    "voteUp": "Helpful notes",
+    "voteDown": "Unhelpful notes",
+    "voteSignIn": "You need an account to vote, so please sign in.",
+    "voteImproving": "We are improving these notes now.",
+    "voteRecorded": "Your vote was recorded.",
+    "budgetReached": "New study notes are unavailable today. You can still read the dictionary entry above.",
+    "rateLimited": "You have requested new notes too many times. Please wait a few minutes before trying again."
   },
   "attribution": {
     "metaTitle": "Sources",
@@ -116,7 +123,7 @@
     "versionLabel": "Version",
     "notImported": "Not imported yet",
     "generatedTitle": "Generated content",
-    "generatedBody": "Explanations and example sentences created by a language model are marked as generated content. No upstream licence applies to them.",
+    "generatedBody": "An AI language model writes the explanations and example sentences marked as generated content. No person reviews this text before publication. No upstream licence applies to them.",
     "empty": "No sources imported yet."
   }
 }

@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   check,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { headwords, languages, senses } from './dictionary';
 
@@ -80,6 +81,21 @@ export const enrichments = pgTable(
     /** Nullable: the client's pricing table does not cover every model, so the cost is sometimes unknown rather than zero. */
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 }),
     latencyMs: integer('latency_ms').notNull(),
+    // THE ONE EXCEPTION TO "A ROW IS NEVER UPDATED", SEE THE FILE COMMENT.
+    //
+    // A down-voted enrichment that is ALREADY on the current model and prompt
+    // version cannot be improved by re-running it: the same input through the
+    // same model under the same prompt produces the same class of answer, so a
+    // re-queue would spend money to reproduce the reader's complaint. Such a row
+    // is flagged for a human to look at instead of being re-enriched.
+    //
+    // Updating this column does not break the append-only rule, because the rule
+    // protects the RECORD OF WHAT THE MODEL SAID. This flag is not part of that
+    // record. It is a fact about a review queue, held here rather than in a
+    // second table only because there is exactly one flag per row and it is read
+    // on the same scan. Every column that describes the model's answer stays
+    // written once and never touched again.
+    flaggedForReview: boolean('flagged_for_review').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

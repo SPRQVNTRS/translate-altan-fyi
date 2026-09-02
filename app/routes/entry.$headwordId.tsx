@@ -14,8 +14,11 @@ import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { isServedLanguage, type Direction, type LanguageCode } from '#app/lib/dictionary/detect-language';
 import { EXAMPLE_LIMIT, getEntry } from '#app/lib/dictionary/entry.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
+import { isBudgetExhausted } from '#app/lib/abuse/budget.server';
+import { checkTriggerRateLimit } from '#app/lib/abuse/rate-limit.server';
 import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
-import { resolveEnrichmentPanel, type EnrichmentPanel } from '#app/lib/enrichment/state.server';
+import { resolveEnrichmentPanel, type EnrichmentPanel, type EnrichmentRefusal } from '#app/lib/enrichment/state.server';
+import { requireVoterAccount } from '#app/lib/votes/account-gate.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
 import { getRawDb } from '#drizzle/tenant-db';
@@ -61,6 +64,86 @@ const MISSING_ENTRY_PANEL: EnrichmentPanel = {
 };
 
 /**
+ * Whether this panel is asking for work, and what happens if it is.
+ *
+ * A CACHE HIT IS NOT A TRIGGER. IT IS NEVER COUNTED AND NEVER REFUSED.
+ *   A `ready` panel already holds every note the page will show. Nothing will be
+ *   queued for it, no provider will be called, and it will cost nothing, so
+ *   running it past the rate limiter would count a request that spends no money
+ *   against a budget for requests that do. The honest majority of readers, the
+ *   ones landing on words the dictionary has already enriched, would then be the
+ *   ones who exhaust the limit and get turned away, while the script walking
+ *   uncached words gets the same allowance either way. The limiter therefore
+ *   sees ONLY the panels that would start real work.
+ *
+ * THE GUARDS ARE AWAITED, NOT FIRED BEHIND THE RESPONSE.
+ *   The enqueue is fire and forget on purpose, because its answer changes
+ *   nothing on the page. These two do the opposite: their whole job is to decide
+ *   whether the enqueue happens at all, and a decision taken after the response
+ *   has gone is not a decision.
+ *
+ * @returns the panel to render. A refusal returns the SAME panel with one field
+ *   set: the entry above it is complete, the HTTP status is unchanged, and
+ *   nothing throws.
+ */
+async function triggerEnrichment(
+  request: Request,
+  panel: EnrichmentPanel,
+  key: { headwordId: string; from: LanguageCode | null; to: LanguageCode },
+): Promise<EnrichmentPanel> {
+  if (key.from === null) return panel;
+  // An idle panel has nothing to ask for and a READY one is the cache hit above.
+  if (panel.state === 'idle' || panel.state === 'ready') return panel;
+  // A failed panel is retried only once its window has passed. Without that
+  // check one provider outage pins the entry to "failed" forever, because the
+  // loader would never queue for it again.
+  if (panel.state === 'failed' && !panel.retryable) return panel;
+
+  const working = { reason: null, model: panel.model, from: panel.from, senses: panel.senses };
+
+  const refusal = await refuseTrigger(request);
+  if (refusal !== null) {
+    // A REFUSAL LEAVES THE STATE ALONE. Nothing was started, so a failed panel
+    // is still failed and a pending one is still pending; the only new fact is
+    // WHY no work is running, which is one line of copy inside one card.
+    if (panel.state === 'failed') {
+      return { ...working, state: 'failed', retryable: panel.retryable, refusal };
+    }
+    return { ...working, state: 'pending', refusal };
+  }
+
+  // FIRE AND FORGET. A loader NEVER awaits a provider: the dictionary rows are
+  // already in hand, and holding the page open for a model call would trade a
+  // fast entry page for a slow one on every first visit. The job runs behind the
+  // response, and the panel polls the read-only companion route for its result.
+  enqueueEnrichmentInBackground({
+    headwordId: key.headwordId,
+    from: key.from,
+    to: key.to,
+    promptVersion: PROMPT_VERSION,
+  });
+
+  // PENDING, EVEN WHEN THE PANEL WAS FAILED. The page must show the run it just
+  // started, not the failure it is retrying past, or the reader would be told
+  // the notes cannot be generated while a job to generate them is in flight.
+  return { ...working, state: 'pending', refusal: null };
+}
+
+/**
+ * Which guard turns this trigger away, or `null` when neither does.
+ *
+ * The rate limit runs first, because it is the cheaper question and it is the
+ * one that describes THIS caller. The budget is an installation-wide fact, so
+ * asking it first would let one visitor's flood be reported as everyone's cap.
+ */
+async function refuseTrigger(request: Request): Promise<EnrichmentRefusal | null> {
+  const verdict = await checkTriggerRateLimit(request);
+  if (!verdict.allowed) return 'rate-limited';
+  if (await isBudgetExhausted()) return 'budget';
+  return null;
+}
+
+/**
  * One headword, with its senses and its examples.
  *
  * MISSING IS A 200, RETIRED IS A 302.
@@ -104,7 +187,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const from: LanguageCode | null = isServedLanguage(entry.languageCode) ? entry.languageCode : null;
   const direction: Direction | null = from === null ? null : { from, to, detected: false };
 
-  const panel: EnrichmentPanel =
+  // The reader's vote identity, resolved BEFORE the panel because the panel
+  // carries "my vote" on every sense it returns. It is null for an anonymous
+  // visitor, which is the default mode of this product, and a null account costs
+  // the resolver no query at all.
+  const accountId = await requireVoterAccount(request);
+
+  const resolvedPanel: EnrichmentPanel =
     from === null
       ? MISSING_ENTRY_PANEL
       : await resolveEnrichmentPanel(db, {
@@ -112,16 +201,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
           senseIds: entry.senses.map((sense) => sense.senseId),
           from,
           to,
+          accountId,
         });
 
-  // FIRE AND FORGET. A loader NEVER awaits a provider: the dictionary rows are
-  // already in hand, and holding the page open for a model call would trade a
-  // fast entry page for a slow one on every first visit. The job runs behind
-  // the response, and the panel polls the read-only companion route for its
-  // result.
-  if (from !== null && panel.state === 'pending') {
-    enqueueEnrichmentInBackground({ headwordId: entry.headwordId, from, to, promptVersion: PROMPT_VERSION });
-  }
+  const panel = await triggerEnrichment(request, resolvedPanel, {
+    headwordId: entry.headwordId,
+    from,
+    to,
+  });
 
   // The cap is applied HERE, not in the component. `EXAMPLE_LIMIT` is a value
   // from a `.server` module, and a value read by any route export other than

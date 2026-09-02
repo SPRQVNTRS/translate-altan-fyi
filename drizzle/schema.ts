@@ -42,6 +42,16 @@ export * from './schema/settings';
 // tenant, so it is not in TENANT_TABLES either.
 export * from './schema/enrichment';
 
+// Reader votes on an enrichment, plus the per-headword re-enrichment cooldown.
+// Global too: both describe the shared dictionary, so neither is in TENANT_TABLES
+// and both are reached through `getRawDb()`.
+export * from './schema/votes';
+
+// Rate-limit counters, the daily spend cap and its operator alerts.
+// Global as well, and deliberately anonymous: they protect the installation, not
+// a tenant, so they are absent from TENANT_TABLES and read via `getRawDb()`.
+export * from './schema/abuse';
+
 // =============================================================================
 // Organizations (Multi-Tenancy Core)
 // =============================================================================

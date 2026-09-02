@@ -43,6 +43,13 @@ export default [
   // Public and read only, unlike the bearer-token `/api/v1/*` routes above.
   route('/api/enrichment/:headwordId', 'routes/api.enrichment.$headwordId.ts'),
 
+  // A public POST, gated by the SESSION rather than by a bearer token: the
+  // caller is a fetcher inside an already-rendered entry page, not an API
+  // client. The path deliberately sits BESIDE `/api/enrichment/`, not under it:
+  // as `/api/enrichment/vote` it would be shadowed by the `:headwordId` dynamic
+  // segment above and every vote would reach the poll loader instead.
+  route('/api/enrichment-vote', 'routes/api.enrichment-vote.ts'),
+
   // =============================================================================
   // App Shell (sidebar, mobile drawer, bottom tab bar)
   // =============================================================================
@@ -94,6 +101,7 @@ export default [
       route('/super/orgs', 'routes/super/orgs.tsx'),
       route('/super/users', 'routes/super/users.tsx'),
       route('/super/llm', 'routes/super/llm.tsx'),
+      route('/super/whoami-ip', 'routes/super/whoami-ip.tsx'),
     ]),
   ]),
 

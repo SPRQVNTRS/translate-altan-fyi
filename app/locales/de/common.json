@@ -102,7 +102,14 @@
     "registerLabel": "Sprachregister",
     "usageNotesLabel": "Hinweise zur Verwendung",
     "examplesLabel": "Beispiele",
-    "commonMistakesLabel": "Häufige Fehler"
+    "commonMistakesLabel": "Häufige Fehler",
+    "voteUp": "Hilfreiche Notizen",
+    "voteDown": "Nicht hilfreiche Notizen",
+    "voteSignIn": "Sie benötigen ein Konto, um abzustimmen. Bitte melden Sie sich an.",
+    "voteImproving": "Wir verbessern diese Notizen gerade.",
+    "voteRecorded": "Ihre Bewertung wurde gespeichert.",
+    "budgetReached": "Neue Lernnotizen sind heute nicht verfügbar. Sie können den Wörterbucheintrag oben weiterhin lesen.",
+    "rateLimited": "Sie haben zu oft neue Notizen angefordert. Bitte warten Sie einige Minuten, bevor Sie es erneut versuchen."
   },
   "attribution": {
     "metaTitle": "Quellen",
@@ -116,7 +123,7 @@
     "versionLabel": "Version",
     "notImported": "Noch nicht importiert",
     "generatedTitle": "Generierte Inhalte",
-    "generatedBody": "Erklärungen und Beispielsätze, die von einem Sprachmodell erstellt wurden, sind als generierte Inhalte gekennzeichnet. Für sie gilt keine vorgelagerte Lizenz.",
+    "generatedBody": "Ein KI-Sprachmodell verfasst die als generierter Inhalt gekennzeichneten Erklärungen und Beispielsätze. Vor der Veröffentlichung werden diese Texte von keiner Person überprüft. Für sie gilt keine vorgelagerte Lizenz.",
     "empty": "Noch keine Quellen importiert."
   }
 }
