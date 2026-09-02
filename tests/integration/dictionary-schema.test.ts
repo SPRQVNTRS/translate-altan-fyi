@@ -9,10 +9,16 @@
  *   comment. A unit test can read the query text; only Postgres can say whether
  *   the constraint exists and bites.
  *
- * SELF-SKIPPING
- *   The pre-push gate does not start a database, so every case here skips
- *   without the environment. See `tests/unit/integration-tests-self-skip.test.ts`,
- *   which enforces that property for every file in this directory.
+ * THE PRECONDITION IS A REACHABLE DATABASE
+ *   This is the first file in `tests/integration/` whose precondition is a
+ *   database rather than an HTTP server. It needs `DB_HOST` and the other
+ *   `DB_*` variables, and it needs NOTHING else: no API key, and no server on
+ *   :3456. Every case therefore gates on `DB_HOST` alone. Gating it on
+ *   `TEST_API_KEY` as well would state a precondition this file does not have.
+ *
+ *   The pre-push gate starts no database, so every case here skips there. See
+ *   `tests/unit/integration-tests-self-skip.test.ts`, which enforces that
+ *   property for every file in this directory and accepts either precondition.
  *
  * ISOLATION
  *   Every row this file creates carries a run-scoped random suffix, and every
@@ -42,7 +48,6 @@ import {
 } from '../../app/lib/dictionary/queries.server';
 
 const DB_HOST = process.env.DB_HOST;
-const TEST_API_KEY = process.env.TEST_API_KEY;
 
 const pool = new pg.Pool({
   host: DB_HOST,
@@ -75,7 +80,7 @@ let openSenseId = '';
 const SHARED_LEMMA = `zzruntest${RUN}`;
 
 function isConfigured(): boolean {
-  return Boolean(DB_HOST) && Boolean(TEST_API_KEY);
+  return Boolean(DB_HOST);
 }
 
 /**
@@ -173,7 +178,7 @@ after(async () => {
 });
 
 describe('dictionary schema', () => {
-  it('rejects a headword with no source', { skip: !DB_HOST || !TEST_API_KEY ? 'DB_HOST or TEST_API_KEY not set' : false }, async () => {
+  it('rejects a headword with no source', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     // Written as raw SQL because the Drizzle types make the omission
     // impossible to express, and the point of the case is the database's
     // answer rather than the compiler's.
@@ -196,7 +201,7 @@ describe('dictionary schema', () => {
     );
   });
 
-  it('rejects a translation whose two senses are the same', { skip: !DB_HOST || !TEST_API_KEY ? 'DB_HOST or TEST_API_KEY not set' : false }, async () => {
+  it('rejects a translation whose two senses are the same', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     const error = await captureError(async () => {
       await db
         .insert(translations)
@@ -210,7 +215,7 @@ describe('dictionary schema', () => {
     );
   });
 
-  it('hides an unserved licence and returns the served row with the same lemma', { skip: !DB_HOST || !TEST_API_KEY ? 'DB_HOST or TEST_API_KEY not set' : false }, async () => {
+  it('hides an unserved licence and returns the served row with the same lemma', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     const rows = await findHeadwords(db, {
       languageCode: LANGUAGE,
       lemmaNormalized: SHARED_LEMMA,
@@ -227,7 +232,7 @@ describe('dictionary schema', () => {
     );
   });
 
-  it('has the trigram index behind lemma search', { skip: !DB_HOST || !TEST_API_KEY ? 'DB_HOST or TEST_API_KEY not set' : false }, async () => {
+  it('has the trigram index behind lemma search', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     const result = await db.execute(
       sql`select indexdef from pg_indexes where indexname = 'headwords_lemma_normalized_trgm_idx'`,
     );
@@ -238,7 +243,7 @@ describe('dictionary schema', () => {
     assert.match(definition, /gin_trgm_ops/i, `expected gin_trgm_ops, got: ${definition}`);
   });
 
-  it('redirects a retired id and reports an unknown one as missing', { skip: !DB_HOST || !TEST_API_KEY ? 'DB_HOST or TEST_API_KEY not set' : false }, async () => {
+  it('redirects a retired id and reports an unknown one as missing', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     const retiredId = randomUUID();
     await db.insert(entryAliases).values({
       retiredId,
