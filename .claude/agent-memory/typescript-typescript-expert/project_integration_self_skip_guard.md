@@ -12,6 +12,13 @@ finds zero files.
 
 **Why:** the pre-push gate never runs `tests/integration/`, so an unguarded case
 there would be executed by nothing while the suite looks green.
+The guard accepts EITHER precondition token: `TEST_API_KEY` (a live server on
+:3456) or `DB_HOST` (a live database). Declare the one the case actually has.
+
 **How to apply:** any new integration case needs
-`{ skip: !TEST_API_KEY ? 'TEST_API_KEY not set' : false }`. If a test needs no live
-server, put it in `tests/unit/` instead. Related: [[translate-altan-fyi-verify-commands]].
+`{ skip: !TEST_API_KEY ? 'TEST_API_KEY not set' : false }` or
+`{ skip: !DB_HOST ? 'DB_HOST not set' : false }`. If a case needs neither, put it in
+`tests/unit/` instead. A DB-backed file must also close BOTH pools in `after()`: its
+own `pool.end()` and the app's `closePool()`, which `#drizzle/tenant-db` opens at
+module load for any imported `.server.ts`. Leaving it open hangs the run forever
+rather than failing it. Related: [[translate-altan-fyi-verify-commands]].

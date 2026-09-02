@@ -13,3 +13,4 @@
 - [A union member with two literal states never narrows away](project_ts_union_member_with_two_literal_states.md) — `state: 'pending' | 'ready'` survives both exhaustive checks; one literal per member
 - [RR8 fetcher.load is stable, the fetcher object is not](project_rr8_fetcher_load_is_stable.md) — depend on `fetcher.load`, never the fetcher, or a polling interval restarts every render and fires nothing
 - [Transient typecheck failures in a shared worktree](project_transient_typecheck_failures_shared_worktree.md) — typegen sees a half-written routes.ts; re-run and md5 the file before diagnosing
+- [Local-only sync_blobs reads sit outside the adapter](project_blob_usage_read_lives_outside_the_adapter.md) — select size_bytes, never getBlob; the adapter mirrors upstream and must stay drift-free
