@@ -28,6 +28,8 @@ import assert from 'node:assert/strict';
 import { DEFAULT_ACTIVE_MODEL } from '#app/lib/llm/catalog';
 import { registry, type AudioPort, type AudioTranscriptionRequest } from '#app/lib/llm/registry.server';
 import { GENERATED_BY_LABEL_KEY } from '#app/lib/ai-disclosure';
+import { requiresBearerToken } from '#app/lib/api-middleware.server';
+import { TRANSCRIBE_PATH } from '#app/lib/voice/limits';
 import { cleanTranscript, transcribeRecording, transcriptionInstruction } from '#app/services/transcribe.server';
 
 /** A clip, as far as this service is concerned: some bytes and a content type. */
@@ -199,5 +201,40 @@ describe('transcription failures', () => {
 
     assert.equal(outcome.ok, false, 'an empty transcript must not be submitted as a search');
     assert.equal(outcome.reason, 'provider-failed');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The Express guard in front of the route                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The bearer guard must let a recording through.
+ *
+ * WHY THIS CASE EXISTS. `app/lib/api-middleware.server.ts` answers 401 to every
+ * `/api/v1/*` request with no `Authorization: Bearer` header, before the router
+ * runs. The transcription route has no credential to send: its caller is a
+ * browser with no Web Speech API. On 2026-09-02 a stage check found the guard
+ * refusing every recording, and the route's own tests were all green, because
+ * they call the action directly and never pass through Express. This case is
+ * what closes that gap.
+ */
+describe('the api/v1 bearer guard and the voice fallback', () => {
+  it('does not ask a recording for a token it cannot have', () => {
+    assert.equal(
+      requiresBearerToken(TRANSCRIBE_PATH),
+      false,
+      'the caller is a browser with no Web Speech API, and this product has no account requirement',
+    );
+  });
+
+  it('still demands a token everywhere else under /api/v1/', () => {
+    assert.equal(requiresBearerToken('/api/v1/users'), true, 'the guard must still hold for API clients');
+    assert.equal(requiresBearerToken('/api/v1/workflows'), true);
+  });
+
+  it('leaves the session-authenticated routes alone, as it did before', () => {
+    assert.equal(requiresBearerToken('/api/v1/auth/login'), false);
+    assert.equal(requiresBearerToken('/api/v1/sync/blob'), false);
   });
 });
