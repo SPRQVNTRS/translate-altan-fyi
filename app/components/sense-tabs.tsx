@@ -50,7 +50,11 @@ function SensePanel({ sense, to }: { sense: EntrySense; to: LanguageCode }) {
             {sense.glosses.map((gloss) => (
               <li key={`${gloss.sourceSlug}:${gloss.languageCode}:${gloss.gloss}`} className="text-sm">
                 <span lang={gloss.languageCode}>{gloss.gloss}</span>{' '}
-                <SourceLink sourceSlug={gloss.sourceSlug} attribution={gloss.attribution} />
+                <SourceLink
+                  sourceSlug={gloss.sourceSlug}
+                  sourceName={gloss.sourceName}
+                  sourceLicence={gloss.sourceLicence}
+                />
               </li>
             ))}
           </ul>
@@ -74,7 +78,11 @@ function SensePanel({ sense, to }: { sense: EntrySense; to: LanguageCode }) {
                 >
                   {translation.lemma}
                 </Link>{' '}
-                <SourceLink sourceSlug={translation.sourceSlug} attribution={translation.attribution} />
+                <SourceLink
+                  sourceSlug={translation.sourceSlug}
+                  sourceName={translation.sourceName}
+                  sourceLicence={translation.sourceLicence}
+                />
               </li>
             ))}
           </ul>

@@ -191,4 +191,43 @@ describe('forgiving search over the populated dictionary', () => {
       );
     },
   );
+
+  it(
+    'serves example sentences in the target language when the headword has any',
+    { skip: !DB_HOST ? 'DB_HOST not set' : false },
+    async () => {
+      // THE PRECONDITION, AND WHY THIS WORD.
+      //   The Tatoeba import attaches sentences to the German `Haus` with
+      //   translations into several languages, English among them. That mixture
+      //   is what the case needs: a word with only English sentences could not
+      //   fail, and a word with none could not pass non-vacuously. Nothing here
+      //   creates or changes a row.
+      //
+      // THE DEFECT.
+      //   A `to=en` lookup showed `Das ist sein Haus. / Esta es su casa.` The
+      //   Spanish row was licensed and attached correctly. It was simply not an
+      //   answer to the question, and the row limit had been spent reaching it.
+      const hits = await searchHeadwords(db, { q: GERMAN_LEMMA, from: 'de', to: 'en' });
+      assert.ok(hits.length > 0, `no hits at all for ${GERMAN_LEMMA}`);
+      const withEnglish = hits.filter((hit) =>
+        hit.examples.some((example) => example.translationLanguageCode === 'en'),
+      );
+      // The vacuity guard. Without it, a change that returned NO examples at all
+      // would satisfy every assertion below while removing the whole feature.
+      assert.ok(
+        withEnglish.length > 0,
+        `no hit for ${GERMAN_LEMMA} carried a single English-translated example, so this case ` +
+          'proved nothing. Either the examples stopped being fetched, or the corpus this ' +
+          'database holds no longer matches the precondition stated above.',
+      );
+      for (const hit of withEnglish) {
+        const languages = hit.examples.map((example) => example.translationLanguageCode);
+        assert.ok(
+          languages.every((language) => language === 'en'),
+          `${hit.lemma} was served an example translated into another language while English ` +
+            `ones were available: ${JSON.stringify(languages)}`,
+        );
+      }
+    },
+  );
 });

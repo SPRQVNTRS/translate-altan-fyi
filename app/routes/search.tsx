@@ -9,6 +9,7 @@ import { Input } from '#app/components/ui/input';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
+import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords } from '#app/lib/dictionary/search.server';
 import { getRawDb } from '#drizzle/tenant-db';
 
@@ -23,6 +24,16 @@ export const meta: MetaFunction = ({ matches }) => {
     { name: 'description', content: metaTitle(language, 'search.metaDescription') },
   ];
 };
+
+/**
+ * The name of this screen, for the chrome's `h1`.
+ *
+ * Search lives at `/`, which the nav catalog does carry, but the same screen is
+ * also reachable at `/search`, which it does not. The handle names it once for
+ * both, and reuses the catalog's own label so the header and the sidebar can
+ * never disagree.
+ */
+export const handle = { titleKey: 'nav.search' } satisfies TitleHandle;
 
 /**
  * The search itself, from the URL.

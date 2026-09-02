@@ -84,6 +84,8 @@
     "noTranslations": "No translations for this meaning yet.",
     "noExamples": "No example sentences yet.",
     "sourceLabel": "Source: {{source}}",
+    "sourceRecordLabel": "attribution",
+    "exampleTranslationLanguage": "Translation in {{language}}",
     "backToSearch": "Back to search"
   },
   "enrichment": {

@@ -65,6 +65,25 @@ function servedLicence() {
   return inArray(sources.licence, [...SERVED_LICENCES]);
 }
 
+/**
+ * Target-language preference, as SQL.
+ *
+ * WHY THE PREFERENCE IS IN THE STATEMENT AND NOT ONLY IN JAVASCRIPT
+ *   The example queries are capped, on the entry page by `.limit()` and on both
+ *   surfaces by the per-headword cap. A cap applied to rows ordered by id alone
+ *   spends its whole budget on whatever sentences happen to sort first, so a
+ *   reader asking for English can be served five Spanish translations while the
+ *   English ones sit two rows further down and are never fetched. Ordering the
+ *   preferred rows first means the budget reaches them.
+ *
+ *   The JavaScript selection in `collectExamples` is the second half, not a
+ *   duplicate: SQL decides which rows are FETCHED, and the selection decides
+ *   which of the fetched rows are SHOWN. Neither half does the other's job.
+ */
+export function preferTargetLanguage(to: LanguageCode) {
+  return sql`case when ${examples.translationLanguageCode} = ${to} then 0 else 1 end`;
+}
+
 // =============================================================================
 // The result shape
 // =============================================================================
@@ -75,7 +94,10 @@ export interface SearchHitTranslation {
   lemma: string;
   languageCode: string;
   sourceSlug: string;
-  attribution: string;
+  /** The source's own name, for the compact "<name>, <licence>" credit. */
+  sourceName: string;
+  /** The raw licence identifier. `licenceLabel` turns it into display text. */
+  sourceLicence: string;
 }
 
 /** One usage sentence shown under a hit. */
@@ -85,8 +107,11 @@ export interface SearchHitExample {
   languageCode: string;
   translationText: string | null;
   translationLanguageCode: string | null;
+  /** The upstream identifier, which `sourceRecordUrl` turns into a deep link. */
+  externalId: string | null;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** One headword the query matched, with everything the result card renders. */
@@ -235,7 +260,8 @@ export function glossesForHeadwordsQuery(
       gloss: senseVersions.gloss,
       glossLanguageCode: senseVersions.glossLanguageCode,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(senseVersions)
     .innerJoin(
@@ -284,7 +310,8 @@ export function translationsForHeadwordsQuery(
       lemma: targetHeadwords.lemma,
       languageCode: targetHeadwords.languageCode,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(translations)
     .innerJoin(senses, eq(translations.fromSenseId, senses.id))
@@ -311,7 +338,10 @@ export function translationsForHeadwordsQuery(
  * mentions several words at once, which the single `examples.headword_id`
  * column cannot express.
  */
-export function junctionExamplesQuery(db: DictionaryDb, headwordIds: string[]) {
+export function junctionExamplesQuery(
+  db: DictionaryDb,
+  params: { headwordIds: string[]; to: LanguageCode },
+) {
   return db
     .select({
       headwordId: exampleHeadwords.headwordId,
@@ -320,18 +350,25 @@ export function junctionExamplesQuery(db: DictionaryDb, headwordIds: string[]) {
       languageCode: examples.languageCode,
       translationText: examples.translationText,
       translationLanguageCode: examples.translationLanguageCode,
+      externalId: examples.externalId,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(exampleHeadwords)
     .innerJoin(examples, eq(exampleHeadwords.exampleId, examples.id))
     .innerJoin(sources, eq(examples.sourceId, sources.id))
-    .where(and(inArray(exampleHeadwords.headwordId, headwordIds), servedLicence()))
-    .orderBy(asc(examples.id));
+    .where(and(inArray(exampleHeadwords.headwordId, params.headwordIds), servedLicence()))
+    // Preference first, id second. The id leg is what keeps two identical
+    // requests in the same order; on its own it decides which language wins.
+    .orderBy(preferTargetLanguage(params.to), asc(examples.id));
 }
 
 /** Examples attached directly through `examples.headword_id`, licence-filtered in SQL. */
-export function directExamplesQuery(db: DictionaryDb, headwordIds: string[]) {
+export function directExamplesQuery(
+  db: DictionaryDb,
+  params: { headwordIds: string[]; to: LanguageCode },
+) {
   return db
     .select({
       headwordId: examples.headwordId,
@@ -340,13 +377,15 @@ export function directExamplesQuery(db: DictionaryDb, headwordIds: string[]) {
       languageCode: examples.languageCode,
       translationText: examples.translationText,
       translationLanguageCode: examples.translationLanguageCode,
+      externalId: examples.externalId,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(examples)
     .innerJoin(sources, eq(examples.sourceId, sources.id))
-    .where(and(inArray(examples.headwordId, headwordIds), servedLicence()))
-    .orderBy(asc(examples.id));
+    .where(and(inArray(examples.headwordId, params.headwordIds), servedLicence()))
+    .orderBy(preferTargetLanguage(params.to), asc(examples.id));
 }
 
 // =============================================================================
@@ -361,8 +400,10 @@ export interface ExampleRow {
   languageCode: string;
   translationText: string | null;
   translationLanguageCode: string | null;
+  externalId: string | null;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** A row of `translationsForHeadwordsQuery`, before it is grouped by headword. */
@@ -372,7 +413,8 @@ export interface TranslationRow {
   lemma: string;
   languageCode: string;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** A matched headword, before its relations are attached. */
@@ -405,7 +447,8 @@ export function collectTranslations(rows: TranslationRow[]): Map<string, SearchH
       lemma: row.lemma,
       languageCode: row.languageCode,
       sourceSlug: row.sourceSlug,
-      attribution: row.attribution,
+      sourceName: row.sourceName,
+      sourceLicence: row.sourceLicence,
     });
     byHeadword.set(row.fromHeadwordId, bucket);
   }
@@ -413,13 +456,37 @@ export function collectTranslations(rows: TranslationRow[]): Map<string, SearchH
 }
 
 /**
- * Group examples under the headword they belong to, capped per headword.
+ * Group examples under the headword they belong to, preferring the target
+ * language, capped per headword.
  *
- * The two example queries can return the same sentence for the same headword,
- * once through the junction and once through `examples.headword_id`, so the
- * pair is de-duplicated on the way in.
+ * THE THREE STEPS ARE IN THIS ORDER FOR A REASON.
+ *   1. De-duplicate. The two example queries can return the same sentence for
+ *      the same headword, once through the junction and once through
+ *      `examples.headword_id`.
+ *   2. Choose the language. A sentence whose translation is in the language the
+ *      reader asked for is the answer; a translation into some third language
+ *      is not, and it is what put a Spanish sentence under an English lookup.
+ *   3. Cap. The cap is applied LAST. Capping while the bucket fills, which is
+ *      what this function used to do, drops a preferred row that happens to
+ *      sort after `cap` other rows, and the preference then never sees it.
+ *
+ * THE CHOICE IS PER HEADWORD, NOT ACROSS THE RESULT SET.
+ *   A search returns many headwords and the corpus covers them unevenly: one
+ *   word may have ten English-translated sentences and the next word none at
+ *   all. A global rule would either strip every example from the second word or
+ *   admit off-language rows for the first. Deciding per headword gives each
+ *   word the best it has, and only falls back where that word has nothing
+ *   better.
+ *
+ * @param rows The de-duplicated union of both example queries.
+ * @param cap How many sentences one headword may show.
+ * @param to The language the reader is translating into.
  */
-export function collectExamples(rows: ExampleRow[], cap: number): Map<string, SearchHitExample[]> {
+export function collectExamples(
+  rows: ExampleRow[],
+  cap: number,
+  to: LanguageCode,
+): Map<string, SearchHitExample[]> {
   const byHeadword = new Map<string, SearchHitExample[]>();
   const seen = new Set<string>();
   for (const row of rows) {
@@ -429,19 +496,28 @@ export function collectExamples(rows: ExampleRow[], cap: number): Map<string, Se
     if (seen.has(key)) continue;
     seen.add(key);
     const bucket = byHeadword.get(headwordId) ?? [];
-    if (bucket.length >= cap) continue;
     bucket.push({
       id: row.id,
       text: row.text,
       languageCode: row.languageCode,
       translationText: row.translationText,
       translationLanguageCode: row.translationLanguageCode,
+      externalId: row.externalId,
       sourceSlug: row.sourceSlug,
-      attribution: row.attribution,
+      sourceName: row.sourceName,
+      sourceLicence: row.sourceLicence,
     });
     byHeadword.set(headwordId, bucket);
   }
-  return byHeadword;
+  const chosen = new Map<string, SearchHitExample[]>();
+  for (const [headwordId, bucket] of byHeadword) {
+    const preferred = bucket.filter((example) => example.translationLanguageCode === to);
+    // An empty `preferred` is the fallback case: this headword has nothing in
+    // the target language, and one off-language sentence beats none at all.
+    const kept = preferred.length > 0 ? preferred : bucket;
+    chosen.set(headwordId, kept.slice(0, cap));
+  }
+  return chosen;
 }
 
 /**
@@ -504,8 +580,8 @@ export async function searchHeadwords(
   const [glossRows, translationRows, junctionRows, directRows] = await Promise.all([
     glossesForHeadwordsQuery(db, { headwordIds, glossLanguage: params.to }),
     translationsForHeadwordsQuery(db, { headwordIds, to: params.to }),
-    junctionExamplesQuery(db, headwordIds),
-    directExamplesQuery(db, headwordIds),
+    junctionExamplesQuery(db, { headwordIds, to: params.to }),
+    directExamplesQuery(db, { headwordIds, to: params.to }),
   ]);
   // First row wins, and the query ordered by `senses.id`, so the chosen gloss
   // is the same on every request rather than whichever row Postgres returned
@@ -519,6 +595,7 @@ export async function searchHeadwords(
   const examplesByHeadword = collectExamples(
     [...junctionRows, ...directRows],
     EXAMPLES_PER_HIT,
+    params.to,
   );
   return matches.map((match) => ({
     headwordId: match.headwordId,

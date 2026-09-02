@@ -11,20 +11,56 @@ import type { SearchHit, SearchHitExample } from '#app/lib/dictionary/search.ser
  */
 const ROW_EXAMPLE_LIMIT = 2;
 
+/**
+ * The marker on an example whose translation is NOT in the target language.
+ *
+ * The query prefers examples translated into the language the reader asked
+ * for, and falls back to any language only when the headword has none. A
+ * fallback is still useful, but it is not what was asked for, so it says so
+ * rather than quietly looking like a match.
+ *
+ * It lives here because the search row and the entry page show the same two
+ * example lists, and one marker written twice would drift into two.
+ */
+export function ExampleLanguageBadge({ languageCode }: { languageCode: string }) {
+  const { t } = useTranslation();
+  const code = languageCode.toUpperCase();
+  const label = t('entry.exampleTranslationLanguage', { language: code });
+
+  return (
+    <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground" title={label}>
+      {/* The code is the whole visible badge, and two letters are not a
+          sentence, so the full label is what assistive tech reads. */}
+      <span aria-hidden="true">{code}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 /** One example sentence under a result row, quiet, with its source credit. */
-function ResultExample({ example }: { example: SearchHitExample }) {
+function ResultExample({ example, to }: { example: SearchHitExample; to: LanguageCode }) {
   return (
     <li className="text-sm">
       <span lang={example.languageCode} className="text-muted-foreground">
         {example.text}
       </span>
       {example.translationText !== null && example.translationLanguageCode !== null && (
-        <span lang={example.translationLanguageCode} className="text-muted-foreground/80">
-          {' '}
-          {example.translationText}
-        </span>
+        <>
+          <span lang={example.translationLanguageCode} className="text-muted-foreground/80">
+            {' '}
+            {example.translationText}
+          </span>
+          {example.translationLanguageCode !== to && (
+            <ExampleLanguageBadge languageCode={example.translationLanguageCode} />
+          )}
+        </>
       )}{' '}
-      <SourceLink sourceSlug={example.sourceSlug} attribution={example.attribution} />
+      <SourceLink
+        sourceSlug={example.sourceSlug}
+        sourceName={example.sourceName}
+        sourceLicence={example.sourceLicence}
+        externalId={example.externalId}
+      />
     </li>
   );
 }
@@ -89,7 +125,7 @@ function ResultRow({ hit, to }: { hit: SearchHit; to: LanguageCode }) {
           </p>
           <ul className="mt-1 space-y-1">
             {examples.map((example) => (
-              <ResultExample key={example.id} example={example} />
+              <ResultExample key={example.id} example={example} to={to} />
             ))}
           </ul>
         </div>

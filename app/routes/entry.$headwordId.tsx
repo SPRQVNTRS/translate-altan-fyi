@@ -1,10 +1,12 @@
 import type { Route } from './+types/entry.$headwordId';
 import { useTranslation } from 'react-i18next';
 import { redirect, type MetaFunction } from 'react-router';
+import { z } from 'zod';
 import { DirectionChip } from '#app/components/direction-chip';
 import { EnrichmentSection } from '#app/components/enrichment-section';
 import { EntryUnavailable } from '#app/components/entry-unavailable';
 import { Link } from '#app/components/link';
+import { ExampleLanguageBadge } from '#app/components/search-results';
 import { SenseTabs } from '#app/components/sense-tabs';
 import { SourceLink } from '#app/components/source-link';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
@@ -12,6 +14,7 @@ import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { isServedLanguage, type Direction, type LanguageCode } from '#app/lib/dictionary/detect-language';
 import { EXAMPLE_LIMIT, getEntry } from '#app/lib/dictionary/entry.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
+import type { TitleHandle } from '#app/lib/route-title';
 import { getRawDb } from '#drizzle/tenant-db';
 
 export const meta: MetaFunction = ({ matches }) => {
@@ -21,6 +24,25 @@ export const meta: MetaFunction = ({ matches }) => {
     { name: 'description', content: metaTitle(language, 'entry.metaDescription') },
   ];
 };
+
+/**
+ * The word itself is the name of this screen, for the chrome's `h1`.
+ *
+ * The loader's shape is PARSED here rather than trusted. `handle` is a static
+ * module-level export, so it cannot import the loader's return type without
+ * dragging a `.server` module into the client bundle, and a missing entry is an
+ * ordinary 200 on this route. A shape that does not carry a lemma therefore
+ * returns `null`, and the header falls back the way it did before.
+ */
+const EntryTitleSchema = z.object({ entry: z.object({ lemma: z.string() }).nullish() });
+
+export const handle = {
+  title: (data) => {
+    const parsed = EntryTitleSchema.safeParse(data);
+    if (!parsed.success) return null;
+    return parsed.data.entry?.lemma ?? null;
+  },
+} satisfies TitleHandle;
 
 /**
  * One headword, with its senses and its examples.
@@ -124,9 +146,17 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
                 {example.translationText !== null && example.translationLanguageCode !== null && (
                   <p lang={example.translationLanguageCode} className="text-muted-foreground">
                     {example.translationText}
+                    {example.translationLanguageCode !== to && (
+                      <ExampleLanguageBadge languageCode={example.translationLanguageCode} />
+                    )}
                   </p>
                 )}
-                <SourceLink sourceSlug={example.sourceSlug} attribution={example.attribution} />
+                <SourceLink
+                  sourceSlug={example.sourceSlug}
+                  sourceName={example.sourceName}
+                  sourceLicence={example.sourceLicence}
+                  externalId={example.externalId}
+                />
               </li>
             ))}
           </ul>

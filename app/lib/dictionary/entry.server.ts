@@ -37,7 +37,7 @@ import {
 import type { LanguageCode } from './detect-language';
 import { SERVED_LICENCES } from './licences';
 import { currentSenseVersions, currentVersionColumn, type DictionaryDb } from './queries.server';
-import { collectExamples, type ExampleRow } from './search.server';
+import { collectExamples, preferTargetLanguage, type ExampleRow } from './search.server';
 
 /** How many usage sentences one entry page carries. */
 export const EXAMPLE_LIMIT = 5;
@@ -60,7 +60,10 @@ export interface EntryGloss {
   languageCode: string;
   gloss: string;
   sourceSlug: string;
-  attribution: string;
+  /** The source's own name, for the compact "<name>, <licence>" credit. */
+  sourceName: string;
+  /** The raw licence identifier. `licenceLabel` turns it into display text. */
+  sourceLicence: string;
 }
 
 /** One sense-level edge into the target language. */
@@ -69,7 +72,8 @@ export interface EntryTranslation {
   lemma: string;
   languageCode: string;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** One meaning of the headword, with its wording and its edges. */
@@ -86,8 +90,11 @@ export interface EntryExample {
   languageCode: string;
   translationText: string | null;
   translationLanguageCode: string | null;
+  /** The upstream identifier, which `sourceRecordUrl` turns into a deep link. */
+  externalId: string | null;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** The whole entry page, in one object. */
@@ -160,7 +167,8 @@ export function entryGlossesQuery(db: DictionaryDb, senseIds: string[]) {
       languageCode: senseVersions.glossLanguageCode,
       gloss: senseVersions.gloss,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(senseVersions)
     .innerJoin(
@@ -198,7 +206,8 @@ export function entryTranslationsQuery(
       lemma: targetHeadwords.lemma,
       languageCode: targetHeadwords.languageCode,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(translations)
     .innerJoin(targetSenses, eq(translations.toSenseId, targetSenses.id))
@@ -217,7 +226,10 @@ export function entryTranslationsQuery(
 }
 
 /** Examples attached to this headword through the junction, licence-filtered in SQL. */
-export function entryJunctionExamplesQuery(db: DictionaryDb, headwordId: string) {
+export function entryJunctionExamplesQuery(
+  db: DictionaryDb,
+  params: { headwordId: string; to: LanguageCode },
+) {
   return db
     .select({
       headwordId: exampleHeadwords.headwordId,
@@ -226,14 +238,20 @@ export function entryJunctionExamplesQuery(db: DictionaryDb, headwordId: string)
       languageCode: examples.languageCode,
       translationText: examples.translationText,
       translationLanguageCode: examples.translationLanguageCode,
+      externalId: examples.externalId,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(exampleHeadwords)
     .innerJoin(examples, eq(exampleHeadwords.exampleId, examples.id))
     .innerJoin(sources, eq(examples.sourceId, sources.id))
-    .where(and(eq(exampleHeadwords.headwordId, headwordId), servedLicence()))
-    .orderBy(asc(examples.id))
+    .where(and(eq(exampleHeadwords.headwordId, params.headwordId), servedLicence()))
+    // The preference leads the ordering, because the `.limit()` below is what
+    // makes it matter: five sentences ordered by id alone can be five rows in a
+    // language the reader did not ask for, and the ones they did ask for are
+    // then never fetched at all.
+    .orderBy(preferTargetLanguage(params.to), asc(examples.id))
     .limit(EXAMPLE_LIMIT);
 }
 
@@ -247,7 +265,7 @@ export function entryJunctionExamplesQuery(db: DictionaryDb, headwordId: string)
  */
 export function entryDirectExamplesQuery(
   db: DictionaryDb,
-  params: { headwordId: string; senseIds: string[] },
+  params: { headwordId: string; senseIds: string[]; to: LanguageCode },
 ) {
   return db
     .select({
@@ -256,8 +274,10 @@ export function entryDirectExamplesQuery(
       languageCode: examples.languageCode,
       translationText: examples.translationText,
       translationLanguageCode: examples.translationLanguageCode,
+      externalId: examples.externalId,
       sourceSlug: sources.slug,
-      attribution: sources.attribution,
+      sourceName: sources.name,
+      sourceLicence: sources.licence,
     })
     .from(examples)
     .innerJoin(sources, eq(examples.sourceId, sources.id))
@@ -274,7 +294,7 @@ export function entryDirectExamplesQuery(
         servedLicence(),
       ),
     )
-    .orderBy(asc(examples.id))
+    .orderBy(preferTargetLanguage(params.to), asc(examples.id))
     .limit(EXAMPLE_LIMIT);
 }
 
@@ -288,7 +308,8 @@ interface GlossRow {
   languageCode: string;
   gloss: string;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /** A translation row before it is grouped under its sense. */
@@ -298,7 +319,8 @@ interface EntryTranslationRow {
   lemma: string;
   languageCode: string;
   sourceSlug: string;
-  attribution: string;
+  sourceName: string;
+  sourceLicence: string;
 }
 
 /**
@@ -315,7 +337,8 @@ function collectGlosses(rows: GlossRow[]): Map<string, EntryGloss[]> {
       languageCode: row.languageCode,
       gloss: row.gloss,
       sourceSlug: row.sourceSlug,
-      attribution: row.attribution,
+      sourceName: row.sourceName,
+      sourceLicence: row.sourceLicence,
     });
     bySense.set(row.senseId, bucket);
   }
@@ -341,7 +364,8 @@ function collectSenseTranslations(rows: EntryTranslationRow[]): Map<string, Entr
       lemma: row.lemma,
       languageCode: row.languageCode,
       sourceSlug: row.sourceSlug,
-      attribution: row.attribution,
+      sourceName: row.sourceName,
+      sourceLicence: row.sourceLicence,
     });
     bySense.set(row.fromSenseId, bucket);
   }
@@ -374,8 +398,8 @@ export async function getEntry(
   const [glossRows, translationRows, junctionRows, directRows] = await Promise.all([
     senseIds.length > 0 ? entryGlossesQuery(db, senseIds) : [],
     senseIds.length > 0 ? entryTranslationsQuery(db, { senseIds, to: params.to }) : [],
-    entryJunctionExamplesQuery(db, params.headwordId),
-    entryDirectExamplesQuery(db, { headwordId: params.headwordId, senseIds }),
+    entryJunctionExamplesQuery(db, { headwordId: params.headwordId, to: params.to }),
+    entryDirectExamplesQuery(db, { headwordId: params.headwordId, senseIds, to: params.to }),
   ]);
   const glossesBySense = collectGlosses(glossRows);
   const translationsBySense = collectSenseTranslations(translationRows);
@@ -390,12 +414,15 @@ export async function getEntry(
     languageCode: row.languageCode,
     translationText: row.translationText,
     translationLanguageCode: row.translationLanguageCode,
+    externalId: row.externalId,
     sourceSlug: row.sourceSlug,
-    attribution: row.attribution,
+    sourceName: row.sourceName,
+    sourceLicence: row.sourceLicence,
   }));
   const examplesByHeadword = collectExamples(
     [...junctionRows, ...directExampleRows],
     EXAMPLE_LIMIT,
+    params.to,
   );
   return {
     headwordId: headword.headwordId,

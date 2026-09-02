@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { useLocation, useNavigation } from 'react-router';
+import { useLocation, useMatches, useNavigation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Menu } from 'lucide-react';
 import { Link } from '#app/components/link';
 import { ThemeToggle } from '#app/components/theme-toggle';
+import { routeTitle } from '#app/lib/route-title';
 import { cn } from '#app/lib/utils';
 import {
   activeNavigationHref,
@@ -143,12 +144,19 @@ export default function AppWrapper({
 function InnerContent({ title, backTo, children }: { title?: string; backTo?: string; children: React.ReactNode }) {
   const { t } = useTranslation();
   const location = useLocation();
-  // When a route passes no title, the nav catalog already knows the name of the
-  // screen the user is on, so the header reads it from there rather than making
-  // every route repeat its own label.
+  const matches = useMatches();
+  // When a route passes no title, two fallbacks answer for it, in order. A
+  // route can name itself through a `handle` (see `#app/lib/route-title`),
+  // which is the only way a screen inside this layout can reach the header at
+  // all. Failing that, the nav catalog already knows the name of the screen the
+  // user is on, so the header reads it from there rather than making every
+  // route repeat its own label. Screens outside the catalog, `/search` and
+  // `/entry/:id`, are exactly why the handle exists: without it the h1 fell all
+  // the way back to the wordmark and the mobile header said "translate" twice.
   const activeHref = activeNavigationHref(location.pathname);
   const activeItem = navigationItems.find((item) => item.to === activeHref);
   const activeLabel = activeItem && t(activeItem.labelKey);
+  const handleTitle = routeTitle(matches, (key) => t(key));
 
   return (
     <>
@@ -180,7 +188,7 @@ function InnerContent({ title, backTo, children }: { title?: string; backTo?: st
               {/* `truncate`, because a long title would otherwise wrap the
                   header to a second line on a narrow phone. */}
               <h1 className="truncate font-display text-lg font-semibold leading-tight tracking-tight md:text-xl">
-                {title ?? activeLabel ?? APP_NAME}
+                {title ?? handleTitle ?? activeLabel ?? APP_NAME}
               </h1>
             </div>
             <div className="flex items-center gap-3">
