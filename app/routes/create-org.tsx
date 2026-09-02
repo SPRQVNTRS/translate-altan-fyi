@@ -8,8 +8,6 @@ import {
   generateSlug,
   isSlugAvailable,
 } from '#app/models/organizations.server';
-import { getUserMembershipsForSession } from '#app/models/organizations.server';
-import { sessionStorage } from '#app/services/session.server';
 import { useClearForm } from '#app/utils/form-storage';
 import { z } from 'zod';
 
@@ -55,25 +53,13 @@ export async function action({ request, context }: Route.ActionArgs) {
   // Create organization with user as owner
   const org = await createOrganizationWithOwner({ name, slug }, user.id);
 
-  // Update session with new membership
-  const session = await sessionStorage.getSession(request.headers.get('cookie'));
-  const sessionUser = session.get('user');
-
-  if (sessionUser) {
-    const memberships = await getUserMembershipsForSession(user.id);
-    session.set('user', {
-      ...sessionUser,
-      memberships,
-      currentOrgId: org.id,
-      currentOrgSlug: org.slug,
-    });
-  }
-
-  return redirect(`/org/${org.slug}/dashboard`, {
-    headers: {
-      'Set-Cookie': await sessionStorage.commitSession(session),
-    },
-  });
+  // NOTHING IS WRITTEN TO THE SESSION. Memberships used to be cached in the
+  // cookie by the bcrypt login and refreshed here. `authMiddleware` now reads
+  // them from the database on every request, so a cache would only be a second
+  // copy that can go stale, and a stale copy of somebody's permissions is the
+  // one thing a cookie should never hold. The new membership is live the moment
+  // this transaction commits.
+  return redirect(`/org/${org.slug}/dashboard`);
 }
 
 export default function CreateOrg({ loaderData, actionData }: Route.ComponentProps) {

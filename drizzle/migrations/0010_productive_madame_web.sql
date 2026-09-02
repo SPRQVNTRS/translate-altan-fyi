@@ -1,0 +1,2 @@
+ALTER TABLE "enrichment_votes" ADD COLUMN "account_id" integer NOT NULL;--> statement-breakpoint
+ALTER TABLE "enrichment_votes" ADD CONSTRAINT "enrichment_votes_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE cascade ON UPDATE no action;

@@ -24,6 +24,7 @@ import { registerDirectTransportHandlers } from './lib/direct-transport-handlers
 
 // Import command registrations
 import { registerUserCommands } from './commands/user';
+import { registerAccountCommands } from './commands/account';
 import { registerOrganizationCommands } from './commands/organization';
 import { registerWorkflowCommands } from './commands/workflow';
 import { registerOperationCommands } from './commands/operation';
@@ -94,6 +95,7 @@ async function main(): Promise<void> {
 
   // Register all command groups
   registerUserCommands(program);
+  registerAccountCommands(program);
   registerOrganizationCommands(program);
   registerWorkflowCommands(program);
   registerOperationCommands(program);

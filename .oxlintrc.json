@@ -89,27 +89,6 @@
                   "@supabase/ssr/*"
                 ],
                 "message": "Supabase SSR imports are only allowed in variants/supabase/**. Use a variant-agnostic abstraction instead."
-              },
-              {
-                "group": [
-                  "remix-auth",
-                  "remix-auth/*"
-                ],
-                "message": "remix-auth imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
-              },
-              {
-                "group": [
-                  "remix-auth-form",
-                  "remix-auth-form/*"
-                ],
-                "message": "remix-auth-form imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
-              },
-              {
-                "group": [
-                  "bcryptjs",
-                  "bcryptjs/*"
-                ],
-                "message": "bcryptjs imports are only allowed in variants/self-hosted/**. Use a variant-agnostic abstraction instead."
               }
             ]
           }

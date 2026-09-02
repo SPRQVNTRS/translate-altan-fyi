@@ -1,11 +1,7 @@
-// eslint-disable-next-line no-restricted-imports
-import bcrypt from 'bcryptjs';
 import { users, pages, organizations, organizationMembers } from './schema';
 import { db, client } from './db';
 import { eq } from 'drizzle-orm';
 import 'dotenv/config';
-
-const SEED_PASSWORD = 'password';
 
 const SEED_USERS = [
   {
@@ -48,8 +44,6 @@ const SEED_USERS = [
 async function main() {
   try {
     console.log(`Seeding database...`);
-    const passwordHash = await bcrypt.hash(process.env.SUPERADMIN_PASSWORD || SEED_PASSWORD, 10);
-
     // Create default organization
     const [org] = await db
       .insert(organizations)
@@ -75,7 +69,11 @@ async function main() {
         .values({
           email: seedUser.email,
           name: seedUser.name,
-          password: passwordHash,
+          // No password: `users` no longer authenticates anybody. The seed
+          // creates the org membership surface; a person signs in through an
+          // `accounts` row, which is minted by the client at signup and never
+          // seeded (its verifier is derived from a passphrase this repo must
+          // never hold).
           role: seedUser.role,
           isSuperadmin: seedUser.isSuperadmin,
         })

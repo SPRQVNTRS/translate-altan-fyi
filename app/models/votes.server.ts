@@ -46,7 +46,7 @@ const DOWN_COUNT = sql<number>`count(*) filter (where ${enrichmentVotes.value} =
 
 export interface CastVoteParams {
   enrichmentId: string;
-  accountId: string;
+  accountId: number;
   value: VoteValue;
 }
 
@@ -98,7 +98,7 @@ export async function tallyVotes(db: DictionaryDb, enrichmentId: string): Promis
 
 export interface ReadVotesForAccountParams {
   enrichmentIds: string[];
-  accountId: string;
+  accountId: number;
 }
 
 /**

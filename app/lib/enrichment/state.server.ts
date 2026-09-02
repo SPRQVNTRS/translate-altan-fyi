@@ -199,7 +199,7 @@ export interface ResolveEnrichmentPanelParams {
    * nothing here, and every `myVote` is `null` without the database being asked
    * a question whose answer was known in advance.
    */
-  accountId?: string | null;
+  accountId?: number | null;
 }
 
 /** The cached rows for `target`, in `target`'s order, with uncached senses left out. */
@@ -235,7 +235,7 @@ function orderByTarget(rows: EnrichmentView[], target: string[]): EnrichmentView
 async function withVotes(
   db: DictionaryDb,
   rows: EnrichmentView[],
-  accountId: string | null | undefined,
+  accountId: number | null | undefined,
 ): Promise<EnrichmentPanelSense[]> {
   if (rows.length === 0) return [];
 

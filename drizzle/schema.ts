@@ -47,6 +47,16 @@ export * from './schema/enrichment';
 // and both are reached through `getRawDb()`.
 export * from './schema/votes';
 
+// The end-to-end-encrypted personal layer: accounts, their opaque session
+// tokens, and the wrapped-DEK key records.
+// Global as well, and NOT tenant-scoped: an account is a person's own identity
+// on this installation, not a row inside somebody's organization. None of the
+// three is in TENANT_TABLES, so all three are reached through `getRawDb()`.
+export * from './schema/accounts';
+// Imported as well as re-exported: `users.accountId` references the table, and
+// `export *` re-exports a name without binding it locally.
+import { accounts } from './schema/accounts';
+
 // Rate-limit counters, the daily spend cap and its operator alerts.
 // Global as well, and deliberately anonymous: they protect the installation, not
 // a tenant, so they are absent from TENANT_TABLES and read via `getRawDb()`.
@@ -139,7 +149,17 @@ export const users = pgTable('users', {
   email: text('email').unique().notNull(),
   deactivated: boolean('deactivated').default(false).notNull(),
   name: text('name').notNull(),
-  password: text('password').notNull(),
+  /**
+   * AUTHENTICATION NO LONGER LIVES HERE. `accounts` owns it: the handle, the
+   * peppered verifier, the recovery verifier and the KDF descriptor are all on
+   * that table, and the bcrypt `password` column this row used to carry is
+   * gone with the password path.
+   *
+   * `users` survives only for the org/api-key surface — organization
+   * membership, roles, and the `created_by` on an API key. This nullable link
+   * is what joins one of those rows to the account that authenticates it.
+   */
+  accountId: integer('account_id').references(() => accounts.id),
   role: text('role').$type<RoleType>().default('editor').notNull(),
   /** Superadmins operate across all organizations: their code paths use getRawDb() instead of the org-scoped tenantDb(ctx). See .adr/0003-app-enforced-multi-tenancy.md. */
   isSuperadmin: boolean('is_superadmin').default(false).notNull(),

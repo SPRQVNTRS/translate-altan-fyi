@@ -14,12 +14,18 @@ import { getRawDb } from '#drizzle/tenant-db';
 import { eq, and, asc, count, type SQL } from 'drizzle-orm';
 import type { PaginationParams } from '#app/lib/pagination.server';
 
-export type SafeUser = Omit<SelectUser, 'password'>;
-
-export function stripPassword(user: SelectUser): SafeUser {
-  const { password: _p, ...safe } = user;
-  return safe;
-}
+/**
+ * A `users` row as the admin API returns it.
+ *
+ * THE ALIAS SURVIVES THE COLUMN IT USED TO HIDE. `SafeUser` was
+ * `Omit<SelectUser, 'password'>` and every read went through a `stripPassword`
+ * helper. The column is gone — authentication moved to `accounts` — so there is
+ * nothing left to strip and the helper would be a no-op that reads like a
+ * guarantee. The name is kept because it is what every caller, formatter and
+ * CLI column already refers to, and because it is still the right name: this
+ * is the shape that is safe to send over the wire.
+ */
+export type SafeUser = SelectUser;
 
 export interface ListUsersFilters {
   active?: boolean;
@@ -59,7 +65,7 @@ export async function listUsersAdmin(
       .then((r) => r[0]),
   ]);
 
-  return { rows: rows.map(stripPassword), total: Number(totalRow?.value ?? 0) };
+  return { rows: rows, total: Number(totalRow?.value ?? 0) };
 }
 
 export async function getUserByIdAdmin(id: number): Promise<SafeUser | null> {
@@ -68,7 +74,7 @@ export async function getUserByIdAdmin(id: number): Promise<SafeUser | null> {
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
-  return user ? stripPassword(user) : null;
+  return user ?? null;
 }
 
 export async function getUserByEmailAdmin(email: string): Promise<SafeUser | null> {
@@ -77,7 +83,7 @@ export async function getUserByEmailAdmin(email: string): Promise<SafeUser | nul
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
-  return user ? stripPassword(user) : null;
+  return user ?? null;
 }
 
 export interface PatchUserFields {
@@ -92,5 +98,5 @@ export async function patchUserAdmin(id: number, fields: PatchUserFields): Promi
     .where(eq(users.id, id))
     .returning();
   const user = updated[0];
-  return user ? stripPassword(user) : null;
+  return user ?? null;
 }

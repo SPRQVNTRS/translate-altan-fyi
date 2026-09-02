@@ -141,11 +141,18 @@ export const organizationRowSchema = createSelectSchema(organizations, {
 });
 export type OrganizationRow = z.infer<typeof organizationRowSchema>;
 
-/** Users never cross the boundary with their `password` column. */
+/**
+ * The `users` row as the API returns it.
+ *
+ * There is nothing to omit any more: the `password` column went with the
+ * bcrypt path, and `users` now carries no credential at all. Authentication
+ * lives on `accounts`, whose verifier columns have no CLI surface and must not
+ * grow one.
+ */
 export const userRowSchema = createSelectSchema(users, {
   createdAt: timestamp,
   updatedAt: timestamp,
-}).omit({ password: true });
+});
 export type UserRow = z.infer<typeof userRowSchema>;
 
 export const memberRowSchema = createSelectSchema(organizationMembers, {
