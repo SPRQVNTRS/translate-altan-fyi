@@ -1,0 +1,89 @@
+/**
+ * The projection of a device snapshot onto the collections that ride the
+ * encrypted blob, and its inverse.
+ *
+ * This module has no upstream counterpart, so it carries no provenance header.
+ *
+ * WHAT THE BLOB CARRIES, AND WHAT IT DELIBERATELY LEAVES BEHIND, IS STATED IN
+ * `app/lib/e2ee/BLOB-CONTENTS.md`. Read the reasoning there. It is not repeated
+ * here, on purpose: two statements of one policy are two things to keep in step,
+ * and the document is the one that is normative.
+ *
+ * `PROTOCOL.md` specifies the envelope around these bytes. It says nothing about
+ * this shape, because the server cannot read it.
+ */
+import { z } from 'zod';
+import type { LocalList, LocalListItem, LocalNote, LocalStoreSnapshot } from './schema';
+
+/** The three collections that ride the encrypted blob. See app/lib/e2ee/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
+export interface SyncedSnapshot {
+  lists: LocalList[];
+  listItems: LocalListItem[];
+  notes: LocalNote[];
+}
+
+/** Projects a device snapshot onto the collections the blob carries. */
+export function toSyncedSnapshot(snapshot: LocalStoreSnapshot): SyncedSnapshot {
+  return { lists: snapshot.lists, listItems: snapshot.listItems, notes: snapshot.notes };
+}
+
+/**
+ * The inverse: `base` with its three synced collections replaced by what
+ * arrived. Every other collection on `base` passes through untouched — which is
+ * the whole point, and the reason this takes a base snapshot rather than
+ * rebuilding one. A merge result must never be able to blank a device-only
+ * collection just by not carrying it.
+ */
+export function withSyncedSnapshot(base: LocalStoreSnapshot, synced: SyncedSnapshot): LocalStoreSnapshot {
+  return { ...base, lists: synced.lists, listItems: synced.listItems, notes: synced.notes };
+}
+
+/** The ordering stamp every synced entity carries — PROTOCOL.md section 3.3. */
+const syncStampFields = {
+  lamport: z.number().int().nonnegative(),
+  deviceId: z.string().min(1),
+  updatedAt: z.number().int(),
+  deleted: z.boolean(),
+} as const;
+
+const listSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  name: z.string(),
+  languagePair: z.string(),
+});
+
+const listItemSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  listId: z.string(),
+  headwordId: z.string(),
+  senseId: z.string().nullable(),
+  lemma: z.string(),
+  translationSnapshot: z.string(),
+  note: z.string(),
+});
+
+const noteSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  headwordId: z.string(),
+  text: z.string(),
+});
+
+/**
+ * A `SyncedSnapshot` arriving from a peer, for `parseRemoteSnapshot` to
+ * validate against.
+ *
+ * A decrypted blob is still UNTRUSTED INPUT. The ciphertext was authenticated,
+ * so it is what some device of this account wrote — but that device may have
+ * run an older or a newer build, and a shape mismatch must fail here rather
+ * than surface as an undefined field on a screen. Each collection defaults to
+ * empty, so a blob written before a collection existed is read as "that device
+ * had none", which is true, rather than rejected outright.
+ */
+export const syncedSnapshotSchema = z.object({
+  lists: z.array(listSchema).default([]),
+  listItems: z.array(listItemSchema).default([]),
+  notes: z.array(noteSchema).default([]),
+});
