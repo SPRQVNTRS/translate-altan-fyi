@@ -1,5 +1,5 @@
 /**
- * The two numbers the enrichment feature is bounded by.
+ * The numbers the enrichment feature is bounded by.
  *
  * NO IMPORTS, AND NONE MAY BE ADDED. The entry page reads these constants while
  * it decides what to wait for, so this module is reached by the client bundle. A
@@ -50,3 +50,22 @@ export const ENRICHMENT_TIMEOUT_MS = 120_000;
  * and the orchestrator wiring read the SAME name and cannot drift apart.
  */
 export const ENRICHMENT_QUEUE = 'enrichment';
+
+/**
+ * How long a failed enrichment stays failed before the entry page may ask again.
+ *
+ * THE LOOP THIS CLOSES, AND IT IS A LOOP THAT NEVER ENDS ON ITS OWN.
+ *   The entry loader only ever queues a job for a `pending` panel. A key whose
+ *   newest row is a failure resolves to `failed`, so it is never queued again,
+ *   and the failure is permanent. That is the right answer for a model that
+ *   cannot write these notes at all, and the wrong answer for the far more
+ *   common case: a provider that was down for ten minutes. Without this window,
+ *   one transient outage pins every entry it touched to "could not be generated"
+ *   for the life of the deployment, and only a prompt-version bump or a model
+ *   switch, both of which change the cache key, would ever release them.
+ *
+ *   An hour is the deliberate figure. Long enough that a provider having a bad
+ *   afternoon is not re-asked by every reader who lands on the page, short
+ *   enough that a reader coming back the same day sees the entry recover.
+ */
+export const ENRICHMENT_RETRY_AFTER_MS = 3_600_000;

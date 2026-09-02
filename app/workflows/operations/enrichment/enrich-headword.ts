@@ -22,9 +22,12 @@
 
 import type { OperationHandler } from '@sprqvntrs/workflows';
 
+import { recordRejection } from '#app/lib/abuse/rate-limit.server';
+import { release, reserve, settle } from '#app/lib/abuse/budget.server';
 import type { EnrichmentJobPayload } from '#app/lib/enrichment/job-payload';
 import { ENRICHMENT_SENSE_LIMIT, ENRICHMENT_TIMEOUT_MS } from '#app/lib/enrichment/limits';
 import { getEntry, type EntrySense } from '#app/lib/dictionary/entry.server';
+import { estimateCostUsd, modelPrice } from '#app/lib/llm/catalog';
 import type { EnrichmentOutput, EnrichmentSenseOutput } from '#app/lib/llm/enrichment-schema';
 import { enrichmentOutputSchema } from '#app/lib/llm/enrichment-schema';
 import { createComponentLogger } from '#app/lib/logger';
@@ -56,9 +59,63 @@ const log = createComponentLogger('EnrichHeadword');
  */
 const MAX_PROVIDER_ATTEMPTS = 2;
 
+// -----------------------------------------------------------------------------
+// The spend estimate
+// -----------------------------------------------------------------------------
+// The reservation has to be taken BEFORE the call, so it is taken against a
+// figure nobody has measured yet. These three constants are that figure, and
+// each is deliberately generous rather than accurate: an over-estimate reserves
+// too much and is handed straight back by `settle`, while an under-estimate lets
+// a run past a cap it should have hit.
+// -----------------------------------------------------------------------------
+
+/**
+ * The rule of thumb for turning a rendered prompt into a token count.
+ *
+ * Roughly four characters per token for the Latin-script languages this
+ * dictionary serves. It is an approximation and it does not need to be better:
+ * the reservation it feeds is reconciled against the provider's own count within
+ * seconds.
+ */
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * How many output tokens one sense's study notes are expected to cost.
+ *
+ * The output side dominates the price of these calls, so this is the number the
+ * estimate actually turns on. It is set above the length the prompt asks for,
+ * because a model that rambles must not be able to spend past the cap by
+ * rambling.
+ */
+const EXPECTED_OUTPUT_TOKENS_PER_SENSE = 700;
+
+/**
+ * What to reserve for a model with no row in the price table.
+ *
+ * NEVER ZERO, AND THIS IS THE WHOLE REASON THE CONSTANT EXISTS. A zero estimate
+ * adds nothing to the day's total, so a model the price table forgot would be
+ * free forever: the cap would never be reached, no alert would ever fire, and
+ * the guard would stop enforcing without once failing. That is the same trap
+ * `modelPrice` returning `null` instead of a guessed zero exists to avoid, and
+ * this is the other half of it. A flat, deliberately high figure means an
+ * unpriced model is throttled rather than unlimited, which is the safe direction
+ * to be wrong in.
+ */
+const UNPRICED_MODEL_RESERVE_USD = 0.05;
+
+/** What one call is expected to cost, in USD. See the constants above for why each figure is high. */
+function estimateRunCostUsd(model: string, prompt: string, pendingSenses: number): number {
+  const price = modelPrice(model);
+  if (price === null) return UNPRICED_MODEL_RESERVE_USD;
+
+  const promptTokens = Math.ceil(prompt.length / CHARS_PER_TOKEN);
+  const completionTokens = pendingSenses * EXPECTED_OUTPUT_TOKENS_PER_SENSE;
+  return estimateCostUsd(price, promptTokens, completionTokens);
+}
+
 /** What one run of the job did. */
 export interface EnrichmentRunSummary {
-  outcome: 'written' | 'cached' | 'skipped-not-configured' | 'skipped-no-entry' | 'failed';
+  outcome: 'written' | 'cached' | 'skipped-not-configured' | 'skipped-no-entry' | 'skipped-budget' | 'failed';
   writtenSenseIds: string[];
   failedSenseIds: string[];
   providerCalls: number;
@@ -205,10 +262,49 @@ export async function runEnrichHeadword(payload: EnrichmentJobPayload): Promise<
     senses: pending.map(toPromptSense),
   });
 
-  const attempts = await callProvider(active, prompt);
   const pendingIds = pending.map((sense) => sense.senseId);
+  const estimateUsd = estimateRunCostUsd(active.model, prompt, pending.length);
+
+  // RESERVE BEFORE THE CALL, ALWAYS. The reverse order, call first and count
+  // after, has a window in which every parallel run reads the same low total and
+  // every one of them charges. See `app/lib/abuse/budget.server.ts`.
+  const reservation = await reserve(estimateUsd);
+  if (!reservation.ok) {
+    // A REFUSED RUN STILL WRITES ROWS, AND THAT IS NOT BOOKKEEPING.
+    //
+    //   Returning quietly here would be the exact trap this file's header warns
+    //   about. The entry page waits until every sense it asked for has an
+    //   answer, so a sense that gets neither an `ok` row nor a `failed` row is
+    //   not "notes we skipped today", it is a page that shows skeletons, waits,
+    //   and re-queues the same job on EVERY load. A run refused for spending too
+    //   much would therefore cause more queueing than a run that went ahead,
+    //   which is the opposite of a cap.
+    //
+    //   A failed row terminates the wait at once, and it is not permanent:
+    //   `ENRICHMENT_RETRY_AFTER_MS` is what lets tomorrow, under a fresh day's
+    //   budget, ask again.
+    const error = 'The daily enrichment budget for this installation is used up. Please try again tomorrow.';
+    await recordFailures(db, { payload, active, senseIds: pendingIds, error, latencyMs: 0 });
+    await recordRejection('budget');
+    log.info('Enrichment refused by the daily budget', { headwordId: payload.headwordId, estimateUsd });
+    return {
+      outcome: 'skipped-budget',
+      writtenSenseIds: [],
+      failedSenseIds: pendingIds,
+      providerCalls: 0,
+      reason: error,
+    };
+  }
+
+  const attempts = await callProvider(active, prompt);
 
   if (attempts.result === null) {
+    // NOTHING WAS SPENT, SO THE RESERVATION GOES BACK. Every attempt rejected
+    // before an answer arrived, which is the one case the gateway's rule calls a
+    // release. A model that answered badly is NOT this case: that call burned
+    // the money, and releasing it would hand out a free retry loop.
+    await release(estimateUsd);
+
     // NEVER STORE A PARTIAL OR HALF-PARSED ANSWER. There is no half success to
     // record: the whole call produced nothing, so every pending sense gets a
     // failed row and the next run may try again.
@@ -222,6 +318,15 @@ export async function runEnrichHeadword(payload: EnrichmentJobPayload): Promise<
       reason: error,
     };
   }
+
+  // THE CALL RAN, SO THE RESERVATION BECOMES A SPEND.
+  //
+  // A NULL ACTUAL SETTLES AT THE ESTIMATE, NEVER AT ZERO. `costUsd` is null when
+  // neither the client library nor our own table can price the model that ran,
+  // and the call still cost money whatever our table says. Settling those at
+  // zero would give exactly the models we cannot price an unlimited number of
+  // free retries, which is the same hole a zero estimate opens at the other end.
+  await settle({ estimateUsd, actualUsd: attempts.result.costUsd ?? estimateUsd });
 
   const answers = indexBySenseId(attempts.result.output);
   const writtenSenseIds: string[] = [];
@@ -278,7 +383,11 @@ function emptySummary(outcome: EnrichmentRunSummary['outcome'], reason: string |
  *
  * A `failed` summary fails the operation, so the workflow record says so and the
  * run is visible on the admin surface. Every other outcome is a completion,
- * including the two skips, because neither of them is a fault to retry.
+ * including all three skips, because none of them is a fault to retry.
+ * `skipped-budget` in particular must NOT fail the operation: a run refused by
+ * the cap did exactly what it was asked to do, and failing it would put the job
+ * back on the queue to be refused again, which is a retry loop built out of the
+ * guard that exists to stop one.
  */
 export const enrichHeadwordHandler: OperationHandler = async (ctx) => {
   const payload = enrichHeadwordContextSchema.parse(ctx.initialContext);
