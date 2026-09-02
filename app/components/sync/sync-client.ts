@@ -31,11 +31,12 @@ import { workerArgon2idDeriver } from '#app/lib/e2ee/client/argon2-worker';
 import { deriveCredentialsFromPassphrase } from '#app/lib/e2ee/client/derive-credentials';
 import type { PassphraseKdfDescriptor } from '#app/lib/e2ee/client/passphrase-kek';
 import { deriveRecoveryAuthHash, generateRecoveryCode } from '#app/lib/e2ee/client/recovery-kek';
-import { setupSyncKeys, type SyncKeySetupRecord } from '#app/lib/e2ee/client/setup-keys';
+import { setupSyncKeys, type SyncKeySetupRecord, type SyncKeySetupResult } from '#app/lib/e2ee/client/setup-keys';
 import { errorKindForStatus, SyncRequestError } from '#app/lib/e2ee/client/sync-error';
 import { bytesToBase64 } from '#app/lib/e2ee/crypto/base64';
 import { generateHandle, normalizeHandle } from '#app/lib/e2ee/flows/handle';
 import { classifySignupFailure } from '#app/lib/e2ee/flows/signup-error';
+import { reportError } from '#app/lib/report-error';
 
 /**
  * How many fresh handles a signup will mint before giving up on a `409`.
@@ -55,8 +56,27 @@ const kdfDescriptorSchema = z.object({
   }),
 });
 
-/** A session response. The account is echoed back; the session itself rides an httpOnly cookie this code never touches. */
-const sessionSchema = z.object({
+/**
+ * The response is an ENVELOPE, not a bare descriptor (`PROTOCOL.md` section
+ * 5.7). This client read the bare shape once and every second-device sign in
+ * died silently between the KDF call and the login call, because the parse
+ * threw before the login was ever attempted. `sync-ui.test.ts` now parses a
+ * literal transcribed from the document through this schema, so the two cannot
+ * drift apart again without a red test.
+ */
+export const kdfResponseSchema = z.object({ kdfDescriptor: kdfDescriptorSchema });
+
+/**
+ * A session response, shared by signup (`201`) and login (`200`), which
+ * `PROTOCOL.md` sections 5.8 and 5.9 give the same shape:
+ * `{"account": {...}, "tokens": {...}}`.
+ *
+ * Only the fields this client actually reads are required. `tokens` is
+ * deliberately NOT modelled: the auth routes set an httpOnly session cookie,
+ * so no code here may hold a bearer token, and a schema that required one
+ * would be asserting a dependency this client must not have.
+ */
+export const sessionSchema = z.object({
   account: z.object({ id: z.number().int(), handle: z.string() }),
 });
 
@@ -137,12 +157,13 @@ async function readErrorMessage(response: Response): Promise<string> {
  * service holds for a person, so it travels in a body.
  */
 export async function fetchKdfDescriptor(handle: string): Promise<PassphraseKdfDescriptor> {
-  return requestJson({
+  const response = await requestJson({
     path: '/api/v1/auth/kdf',
     method: 'POST',
     body: { handle },
-    schema: kdfDescriptorSchema,
+    schema: kdfResponseSchema,
   });
+  return response.kdfDescriptor;
 }
 
 /** What a completed setup hands back to the ceremony: the two things the user must save, and nothing else. */
@@ -152,26 +173,156 @@ export interface CreatedSyncAccount {
   recoveryCode: string;
 }
 
-function toWireKeyRecord(kind: 'passphrase' | 'recovery', record: SyncKeySetupRecord) {
+/** The record kinds, in the order setup writes them. */
+export type SyncKeyRecordKind = 'passphrase' | 'recovery';
+
+/**
+ * The signup request body, built as a value so a test can inspect it.
+ *
+ * ── The defect this shape exists to prevent ──────────────────────────────
+ *
+ * This body used to carry a `keyRecords` array. `PROTOCOL.md` section 5.8 does
+ * not define that field, so the service ignored it and answered `201`. Every
+ * account created that way had a session, a verifier, and NO wrapped DEK
+ * anywhere on the server: the passphrase authenticated and there was nothing
+ * for a second device to unwrap. The whole feature failed silently behind a
+ * success status, and no gate could see it, because sending a field a server
+ * does not read is invisible from this side.
+ *
+ * The fields below are exactly section 5.8's list and nothing else.
+ * `displayName` is omitted rather than sent as `null`: the protocol makes it
+ * optional and this product has no display name to put in it.
+ */
+export interface SignupRequestBody {
+  handle: string;
+  authHash: string;
+  kdfDescriptor: PassphraseKdfDescriptor;
+  recoveryAuthHash: string;
+}
+
+export function buildSignupRequest(input: {
+  handle: string;
+  authHash: string;
+  recoveryAuthHash: string;
+  kdfDescriptor: PassphraseKdfDescriptor;
+}): SignupRequestBody {
   return {
-    kind,
-    kdfDescriptor: record.kdfDescriptor,
-    wrappedDek: bytesToBase64(record.wrappedDek),
+    handle: input.handle,
+    authHash: input.authHash,
+    kdfDescriptor: input.kdfDescriptor,
+    recoveryAuthHash: input.recoveryAuthHash,
   };
 }
 
 /**
- * Provisions a sync account: one Argon2id run, both wrapped-DEK records, one
- * signup.
+ * One `PUT /key-records` body (`PROTOCOL.md` section 5.4).
+ *
+ * `expectedUpdatedAt` IS ALWAYS PRESENT, and at setup it is always `null`,
+ * which is the caller asserting "no record of this kind exists yet". The route
+ * rejects a body that merely omits the key, on purpose: a missing CAS token is
+ * a caller who has not thought about concurrency, and accepting it is how one
+ * device silently overwrites another device's rotation.
+ *
+ * The `kdfDescriptor` nullability is not a style choice either. A `passphrase`
+ * record must carry the account's descriptor so any device can re-derive the
+ * KEK; a `recovery` record must carry `null`, because that path is HKDF-only
+ * and has no parameters to record. The service returns `400` for either
+ * mistake.
+ */
+export interface KeyRecordRequestBody {
+  /** The account's Argon2id descriptor for a `passphrase` record; `null` for a `recovery` one. */
+  kdfDescriptor: SyncKeySetupRecord['kdfDescriptor'];
+  /** Base64 of the packed IV, ciphertext and tag. */
+  wrappedDek: string;
+  /** The CAS token. Always present, and `null` at setup: "no record of this kind exists yet". */
+  expectedUpdatedAt: string | null;
+}
+
+export function buildKeyRecordRequest(input: {
+  kind: SyncKeyRecordKind;
+  record: SyncKeySetupRecord;
+}): KeyRecordRequestBody {
+  return {
+    kdfDescriptor: input.record.kdfDescriptor,
+    wrappedDek: bytesToBase64(input.record.wrappedDek),
+    expectedUpdatedAt: null,
+  };
+}
+
+/** The stored record echoed back by a successful `PUT` (`PROTOCOL.md` section 5.4). */
+const keyRecordResponseSchema = z.object({
+  keyRecord: z.object({ kind: z.string(), wrappedDek: z.string(), updatedAt: z.string() }),
+});
+
+/**
+ * Writes one wrapped-DEK record with the session the signup just issued.
+ *
+ * The kind travels as `?kind=`, which is this repo's URL shape for what
+ * `PROTOCOL.md` spells `/key-records/:kind`. The route's own header records
+ * that difference; the submission is identical either way.
+ */
+async function putKeyRecord(input: { kind: SyncKeyRecordKind; record: SyncKeySetupRecord }): Promise<void> {
+  await requestJson({
+    path: `/api/v1/sync/key-records?kind=${input.kind}`,
+    method: 'PUT',
+    body: buildKeyRecordRequest(input),
+    schema: keyRecordResponseSchema,
+  });
+}
+
+/**
+ * Destroys an account whose key records could not be written.
+ *
+ * WHY DELETE RATHER THAN LEAVE IT. At this point the account exists, holds a
+ * session, and can never decrypt anything: it is the exact unopenable state
+ * this whole fix is about. Leaving it would hand the user a handle and a
+ * recovery code that look like credentials and are not, which is strictly
+ * worse than no account, because they would file it away and trust it. The
+ * account is seconds old and holds no data, so there is nothing to lose by
+ * removing it, and a clean retry is then possible.
+ *
+ * It re-authenticates with the same `authHash` the signup used, which the
+ * endpoint requires so that a stray cookie cannot destroy an account.
+ *
+ * A failure here is REPORTED, never thrown: the caller is already handling a
+ * more important error, and replacing that cause with a cleanup failure would
+ * hide what actually went wrong.
+ */
+async function deleteHalfBuiltAccount(authHash: string): Promise<void> {
+  try {
+    const response = await fetch('/api/v1/auth/account', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ authHash }),
+    });
+    if (!response.ok) {
+      reportError(new Error(`rollback failed with status ${response.status}`), {
+        operation: 'sync-setup',
+        step: 'deleteHalfBuiltAccount',
+      });
+    }
+  } catch (cause) {
+    reportError(cause, { operation: 'sync-setup', step: 'deleteHalfBuiltAccount' });
+  }
+}
+
+/**
+ * Provisions a sync account: one Argon2id run, one signup, then both
+ * wrapped-DEK records.
+ *
+ * ── The order, and why it is not negotiable ──────────────────────────────
+ *
+ * The key-record endpoint is authenticated, so the records cannot be written
+ * until the signup has issued a session. That leaves a window in which the
+ * account exists and cannot decrypt anything, and the ONLY safe way to close
+ * it is to refuse to report success until both records have landed. If either
+ * write fails the account is deleted and the error is rethrown, so the user
+ * never sees a recovery code for an account that cannot use one.
  *
  * The handle is minted HERE rather than in a component, because
  * `generateHandle` reads the CSPRNG and a value drawn during render would
  * differ between the server pass and the client pass and break hydration.
- *
- * Both key records go up with the signup in one request. Creating the account
- * first and writing the records after would leave a window in which a crash
- * produces an account that can log in and decrypt nothing, which is the exact
- * brick `PROTOCOL.md` section 5.14 refuses to permit.
  */
 export async function createSyncAccount({ passphrase }: { passphrase: string }): Promise<CreatedSyncAccount> {
   const recoveryCode = generateRecoveryCode();
@@ -181,11 +332,31 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
     deriveHash: workerArgon2idDeriver,
   });
   const recoveryAuthHash = await deriveRecoveryAuthHash(recoveryCode.raw);
-  const keyRecords = [
-    toWireKeyRecord('passphrase', keys.passphraseKeyRecord),
-    toWireKeyRecord('recovery', keys.recoveryKeyRecord),
-  ];
 
+  const handle = await signUp({ keys, recoveryAuthHash });
+
+  try {
+    // Sequential, not concurrent. Two writes against the same account through
+    // one session is not a race worth running in parallel to save a round
+    // trip, and a sequential pair fails on the first problem with a smaller
+    // mess to undo.
+    await putKeyRecord({ kind: 'passphrase', record: keys.passphraseKeyRecord });
+    await putKeyRecord({ kind: 'recovery', record: keys.recoveryKeyRecord });
+  } catch (cause) {
+    await deleteHalfBuiltAccount(keys.authHash);
+    throw cause;
+  }
+
+  return { handle, recoveryCode: recoveryCode.formatted };
+}
+
+/**
+ * Creates the account row, minting a fresh handle for as long as the service
+ * keeps answering `409`.
+ *
+ * @returns the handle the account was actually created under.
+ */
+async function signUp(input: { keys: SyncKeySetupResult; recoveryAuthHash: string }): Promise<string> {
   let attempt = 1;
   while (attempt <= MAX_HANDLE_ATTEMPTS) {
     const handle = generateHandle();
@@ -193,25 +364,22 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
       await requestJson({
         path: '/api/v1/auth/signup',
         method: 'POST',
-        body: {
+        body: buildSignupRequest({
           handle,
-          authHash: keys.authHash,
-          recoveryAuthHash,
-          kdfDescriptor: keys.kdfDescriptor,
-          keyRecords,
-        },
+          authHash: input.keys.authHash,
+          recoveryAuthHash: input.recoveryAuthHash,
+          kdfDescriptor: input.keys.kdfDescriptor,
+        }),
         schema: sessionSchema,
       });
-      return { handle, recoveryCode: recoveryCode.formatted };
+      return handle;
     } catch (cause) {
       // A taken handle is the ONE retryable signup failure: the handle is
       // machine-minted, so a collision is our problem to solve and not
-      // something to report to a user who did not choose it. Anything else is
-      // rethrown untouched for the classifier to read.
-      // The classifier owns the status-to-meaning mapping, so this reads the
-      // protocol's answer rather than re-deriving it from a status code here.
-      // `null` for the signup mode is honest: this client does not fetch the
-      // handshake, so it must not promise that an invite would help.
+      // something to report to a user who did not choose it. The classifier
+      // owns the status-to-meaning mapping, and `null` for the signup mode is
+      // honest, this client does not fetch the handshake so it must not
+      // promise that an invite would help.
       if (classifySignupFailure(cause, null) !== 'handle-taken') throw cause;
       attempt += 1;
     }

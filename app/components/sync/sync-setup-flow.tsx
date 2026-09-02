@@ -8,6 +8,7 @@ import { CopyButton } from '#app/components/sync/copy-button';
 import { PassphraseStrengthMeter } from '#app/components/sync/passphrase-strength-meter';
 import { isRecoveryCodeConfirmed } from '#app/components/sync/recovery-confirmation';
 import { createSyncAccount } from '#app/components/sync/sync-client';
+import { reportError } from '#app/lib/report-error';
 import {
   initialSyncSetupState,
   syncSetupReducer,
@@ -68,7 +69,18 @@ export function SyncSetupFlow() {
     try {
       const account = await createSyncAccount({ passphrase });
       dispatch({ type: 'setupSucceeded', handle: account.handle, recoveryCode: account.recoveryCode });
-    } catch {
+    } catch (cause) {
+      // REPORTED, then shown. A bare `catch {}` here discarded the cause
+      // entirely, and a client-side schema that disagreed with the service cost
+      // a browser session to diagnose because the only evidence was one
+      // translated sentence on screen. The seam is the app-wide reporter, which
+      // is client-safe and never throws.
+      //
+      // THE PAYLOAD IS A FIXED LITERAL, and that is a security constraint, not
+      // tidiness: the passphrase, the recovery code, the handle and every key
+      // derived from them are in scope right here, and not one of them may
+      // reach a log line. Only the operation's name and the failing step go.
+      reportError(cause, { operation: 'sync-setup', step: 'createSyncAccount' });
       // One sentence for every failure, because the catalog holds one. The
       // cause is not shown: a service's own prose is untranslated, and the
       // statuses that would deserve their own sentence (an invite-only

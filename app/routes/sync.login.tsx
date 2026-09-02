@@ -1,11 +1,15 @@
 import type { MetaFunction } from 'react-router';
 import { SyncLoginForm } from '#app/components/sync/sync-login-form';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
+import type { TitleHandle } from '#app/lib/route-title';
 
 export const meta: MetaFunction = ({ matches }) => {
   const language = metaLanguage(matches);
   return [{ title: metaTitle(language, 'sync.loginMetaTitle') }];
 };
+
+/** The name of this screen, for the chrome's `h1`. See `sync.setup.tsx` for why sync routes need one. */
+export const handle = { titleKey: 'sync.loginMetaTitle' } satisfies TitleHandle;
 
 /**
  * Signing a second device in.

@@ -15,6 +15,14 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isRecoveryCodeConfirmed } from '#app/components/sync/recovery-confirmation';
+import {
+  buildKeyRecordRequest,
+  buildSignupRequest,
+  kdfResponseSchema,
+  sessionSchema,
+} from '#app/components/sync/sync-client';
+import { SyncRequestError, errorKindForStatus } from '#app/lib/e2ee/client/sync-error';
+import { classifySignInFailure } from '#app/lib/e2ee/flows/sign-in-error';
 import { formatRecoveryCode } from '#app/lib/e2ee/client/recovery-kek';
 import { passphraseStrengthKey, ratePassphrase } from '#app/lib/e2ee/flows/passphrase-strength';
 import {
@@ -191,5 +199,212 @@ describe('route modules', () => {
     assert.ok(pattern.test("import bcrypt from 'bcryptjs';"));
     assert.ok(pattern.test('const b = require("bcryptjs");'));
     assert.ok(!pattern.test("// bcryptjs is deliberately not imported here"));
+  });
+});
+
+/**
+ * WIRE-CONTRACT TESTS. `PROTOCOL.md` is the source, and the TypeScript is its
+ * transcription rather than the other way round, so every literal below is
+ * COPIED OUT OF THE DOCUMENT and then parsed with the client's real schema.
+ *
+ * ── Why this suite exists ────────────────────────────────────────────────
+ *
+ * `fetchKdfDescriptor` read the bare descriptor while section 5.7 specifies an
+ * envelope. The whole gate was green over it: lint, typecheck, every unit
+ * test, the integration suite and the production build all passed, because
+ * nothing anywhere compared a client schema against what a route actually
+ * returns. The integration tests exercise the store, and the rest of this file
+ * tests pure logic. Second-device sign in was simply impossible, and it took a
+ * browser on a real deployment to find out.
+ *
+ * ── Why the literals are transcribed and not generated ───────────────────
+ *
+ * A fixture built from the schema, or from a handler's return type, only ever
+ * proves the schema agrees with itself. Typing the document's own JSON in by
+ * hand is what makes this a test of the CONTRACT. If the protocol changes, the
+ * fix is to retranscribe the literal, never to relax the schema.
+ *
+ * Each case is paired with a NEGATIVE one asserting the shape the client used
+ * to expect is now REJECTED, so this suite would have failed on the original
+ * defect instead of passing beside it.
+ */
+describe('wire contract: PROTOCOL.md is the source', () => {
+  describe('POST /v1/auth/kdf (section 5.7)', () => {
+    // Transcribed from section 5.7. The document writes the salt as the
+    // placeholder "<base64, 16 bytes>"; a real 16-byte base64 value stands in
+    // for it, because a placeholder cannot be decoded. The envelope, the field
+    // names and the three parameter values are the document's own.
+    const documented = {
+      kdfDescriptor: {
+        salt: 'AAECAwQFBgcICQoLDA0ODw==',
+        params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
+      },
+    };
+
+    it('accepts the documented response and yields the descriptor', () => {
+      const parsed = kdfResponseSchema.safeParse(documented);
+      assert.ok(parsed.success, 'the documented 200 body must parse');
+      assert.equal(parsed.data.kdfDescriptor.salt, 'AAECAwQFBgcICQoLDA0ODw==');
+      assert.equal(parsed.data.kdfDescriptor.params.memorySizeKib, 65536);
+    });
+
+    it('rejects a BARE descriptor, the shape that broke second-device sign in', () => {
+      const bare = documented.kdfDescriptor;
+      assert.equal(kdfResponseSchema.safeParse(bare).success, false);
+    });
+
+    it('rejects a descriptor with a missing or non-positive parameter', () => {
+      const noParams = { kdfDescriptor: { salt: 'AAECAwQFBgcICQoLDA0ODw==' } };
+      const zeroIterations = {
+        kdfDescriptor: { salt: 'AAECAwQFBgcICQoLDA0ODw==', params: { memorySizeKib: 65536, iterations: 0, parallelism: 1 } },
+      };
+      assert.equal(kdfResponseSchema.safeParse(noParams).success, false);
+      assert.equal(kdfResponseSchema.safeParse(zeroIterations).success, false);
+    });
+  });
+
+  describe('POST /v1/auth/signup and /v1/auth/login (sections 5.8 and 5.9)', () => {
+    // Section 5.8's 201 row, verbatim: {"account": {"id": 1, "handle": "...",
+    // "displayName": null}, "tokens": {...}}. Section 5.9 gives login the same
+    // shape. `tokens` is present here exactly as the service sends it, to prove
+    // the client tolerates a field it deliberately does not model: the session
+    // rides an httpOnly cookie and no code in the browser may hold a token.
+    const documented = {
+      account: { id: 1, handle: 'qr7k4m2p', displayName: null },
+      tokens: { accessToken: 'opaque', refreshToken: 'opaque', expiresAt: '2026-01-01T00:00:00.000Z' },
+    };
+
+    it('accepts the documented session response from either endpoint', () => {
+      const parsed = sessionSchema.safeParse(documented);
+      assert.ok(parsed.success, 'the documented session body must parse');
+      assert.equal(parsed.data.account.handle, 'qr7k4m2p');
+      assert.equal(parsed.data.account.id, 1);
+    });
+
+    it('rejects a session response with no account', () => {
+      assert.equal(sessionSchema.safeParse({ tokens: documented.tokens }).success, false);
+      assert.equal(sessionSchema.safeParse({ account: { handle: 'qr7k4m2p' } }).success, false);
+    });
+  });
+});
+
+describe('wire contract: what setup SENDS', () => {
+  const kdfDescriptor = {
+    salt: 'AAECAwQFBgcICQoLDA0ODw==',
+    params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
+  };
+
+  describe('POST /v1/auth/signup body (section 5.8)', () => {
+    /**
+     * Section 5.8's request block, transcribed field for field. This list is
+     * the WHOLE contract: a body key outside it is a key the service does not
+     * read.
+     */
+    const DOCUMENTED_FIELDS = new Set(['handle', 'authHash', 'kdfDescriptor', 'displayName', 'recoveryAuthHash']);
+
+    const body = buildSignupRequest({
+      handle: 'qr7k4m2p',
+      authHash: 'YXV0aC1oYXNo',
+      recoveryAuthHash: 'cmVjb3ZlcnktYXV0aC1oYXNo',
+      kdfDescriptor,
+    });
+
+    /**
+     * THE TEST THAT WOULD HAVE CAUGHT THE UNOPENABLE ACCOUNT.
+     *
+     * The body carried a `keyRecords` array, which section 5.8 does not
+     * define. The service ignored it and returned `201`, so every account
+     * created had a verifier and a session but no wrapped DEK anywhere: it
+     * could log in and could never decrypt. Sending a field a server does not
+     * read is invisible from the client, which is why the assertion has to be
+     * against the DOCUMENT rather than against a response.
+     */
+    it('sends no field PROTOCOL.md does not define', () => {
+      const undocumented = Object.keys(body).filter((field) => !DOCUMENTED_FIELDS.has(field));
+      assert.deepEqual(undocumented, [], `undocumented signup fields: ${undocumented.join(', ')}`);
+    });
+
+    it('sends every field the service needs to build a usable account', () => {
+      // `displayName` is the one documented field this product omits: it is
+      // optional and there is no display name to send.
+      for (const field of ['handle', 'authHash', 'kdfDescriptor', 'recoveryAuthHash']) {
+        assert.ok(field in body, `signup body is missing ${field}`);
+      }
+    });
+
+    it('detects an undocumented field, so the check above is not vacuous', () => {
+      const contaminated = { ...body, keyRecords: [] };
+      const undocumented = Object.keys(contaminated).filter((field) => !DOCUMENTED_FIELDS.has(field));
+      assert.deepEqual(undocumented, ['keyRecords']);
+    });
+  });
+
+  describe('PUT /key-records body (section 5.4)', () => {
+    const wrappedDek = Uint8Array.from({ length: 28 }, (_, index) => index);
+
+    it('asserts no record exists yet, with the CAS key PRESENT and null', () => {
+      const body = buildKeyRecordRequest({
+        kind: 'passphrase',
+        record: { kdfDescriptor, wrappedDek },
+      });
+      // Present AND null. The route rejects a body that merely omits the key,
+      // so `in` is the assertion that matters here, not the value alone.
+      assert.ok('expectedUpdatedAt' in body, 'expectedUpdatedAt must be present');
+      assert.equal(body.expectedUpdatedAt, null);
+      assert.equal(body.wrappedDek, 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGw==');
+    });
+
+    it('carries the descriptor for a passphrase record and null for a recovery one', () => {
+      // Either mistake is a 400: the passphrase path needs the parameters to
+      // re-derive its KEK, and the recovery path is HKDF-only so it has none.
+      const passphraseBody = buildKeyRecordRequest({ kind: 'passphrase', record: { kdfDescriptor, wrappedDek } });
+      const recoveryBody = buildKeyRecordRequest({ kind: 'recovery', record: { kdfDescriptor: null, wrappedDek } });
+      assert.deepEqual(passphraseBody.kdfDescriptor, kdfDescriptor);
+      assert.equal(recoveryBody.kdfDescriptor, null);
+    });
+  });
+});
+
+/**
+ * The sign-in failure mapping, which the envelope defect had made unreachable:
+ * the parse threw before any 401 could be seen, so a wrong passphrase rendered
+ * the generic crash message instead of "Incorrect handle or passphrase."
+ */
+/** Exactly what `requestJson` builds from a non-2xx response. */
+function requestErrorForStatus(status: number): SyncRequestError {
+  return new SyncRequestError({
+    kind: errorKindForStatus(status),
+    // The service's single generic message (`auth-handlers.ts`'s LOGIN_REJECTED).
+    message: 'invalid handle or passphrase',
+    status,
+  });
+}
+
+describe('sign-in failure mapping', () => {
+  it('maps a 401 to rejected, which the form renders as sync.loginFailed', () => {
+    assert.equal(classifySignInFailure(requestErrorForStatus(401)), 'rejected');
+  });
+
+  it('cannot tell a wrong passphrase from an unknown handle', () => {
+    // The service answers ONE 401, after identical work, for both. The client
+    // sees only the status, so the two are the same value here BY
+    // CONSTRUCTION: there is no branch that could leak which one it was, and
+    // adding one would rebuild the account-enumeration oracle the protocol
+    // removes.
+    const wrongPassphrase = classifySignInFailure(requestErrorForStatus(401));
+    const unknownHandle = classifySignInFailure(requestErrorForStatus(401));
+    assert.equal(wrongPassphrase, unknownHandle);
+    assert.equal(wrongPassphrase, 'rejected');
+  });
+
+  it('maps everything else to other, which renders the generic message', () => {
+    for (const status of [400, 403, 429, 500]) {
+      assert.equal(classifySignInFailure(requestErrorForStatus(status)), 'other', `status ${status}`);
+    }
+    // A schema mismatch, the original defect, arrives as a transport error and
+    // must NOT be dressed up as a rejected credential.
+    const parseFailure = new SyncRequestError({ kind: 'transport', message: 'unreadable shape' });
+    assert.equal(classifySignInFailure(parseFailure), 'other');
+    assert.equal(classifySignInFailure(new Error('boom')), 'other');
   });
 });

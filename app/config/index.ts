@@ -130,14 +130,6 @@ export const CONFIG = {
   },
 
   /**
-   * Superadmin Configuration
-   */
-  superadmin: {
-    email: optionalEnv('SUPERADMIN_EMAIL', 'superadmin@example.com'),
-    password: optionalEnv('SUPERADMIN_PASSWORD', 'password'),
-  },
-
-  /**
    * Logging Configuration
    */
   logging: {

@@ -7,6 +7,7 @@ import { Input } from '#app/components/ui/input';
 import { Label } from '#app/components/ui/label';
 import { signInToSync } from '#app/components/sync/sync-client';
 import { classifySignInFailure } from '#app/lib/e2ee/flows/sign-in-error';
+import { reportError } from '#app/lib/report-error';
 
 /**
  * The second-device sign-in.
@@ -44,7 +45,14 @@ export function SyncLoginForm() {
       await signInToSync({ handle, passphrase });
       await navigate('/settings');
     } catch (cause) {
-      setError(classifySignInFailure(cause) === 'rejected' ? t('sync.loginFailed') : t('sync.genericError'));
+      const failure = classifySignInFailure(cause);
+      // A `rejected` is a wrong handle or a wrong passphrase, which is a normal
+      // outcome and not something to log: reporting every one of them would
+      // bury the failures that matter under ordinary typing mistakes. Anything
+      // else is unexpected and gets reported, with a fixed payload that carries
+      // neither the handle nor the passphrase.
+      if (failure !== 'rejected') reportError(cause, { operation: 'sync-login', step: 'signInToSync' });
+      setError(failure === 'rejected' ? t('sync.loginFailed') : t('sync.genericError'));
     } finally {
       setIsWorking(false);
     }

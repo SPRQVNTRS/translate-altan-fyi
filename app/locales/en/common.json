@@ -140,7 +140,6 @@
     "passphraseHint": "Choose several memorable words, which stay on your device and are never sent to our servers.",
     "passphraseConfirmLabel": "Repeat passphrase",
     "passphraseMismatch": "Passphrases do not match.",
-    "passphraseTooWeak": "Passphrase is too short or too common.",
     "continueAction": "Continue",
     "handleTitle": "Your handle",
     "handleBody": "This generated name is your handle, not an email address. Save it now, because you will need it to sign in on your second device.",

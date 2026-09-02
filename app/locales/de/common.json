@@ -140,7 +140,6 @@
     "passphraseHint": "Wähle mehrere einprägsame Wörter, die auf deinem Gerät bleiben und nie an unsere Server gesendet werden.",
     "passphraseConfirmLabel": "Passphrase wiederholen",
     "passphraseMismatch": "Die Passphrasen stimmen nicht überein.",
-    "passphraseTooWeak": "Die Passphrase ist zu kurz oder zu gebräuchlich.",
     "continueAction": "Weiter",
     "handleTitle": "Dein Handle",
     "handleBody": "Dieser generierte Name ist dein Handle, keine E-Mail-Adresse. Speichere ihn jetzt, denn du brauchst ihn für die Anmeldung auf deinem zweiten Gerät.",
