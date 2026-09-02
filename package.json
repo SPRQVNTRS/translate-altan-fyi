@@ -103,7 +103,7 @@
     "lint:fix": "oxlint --fix --max-warnings 0",
     "prepare": "git config core.hooksPath .githooks || true",
     "start": "cross-env NODE_ENV=production tsx ./server.ts",
-    "test:integration": "node --experimental-strip-types --test \"tests/integration/**/*.test.ts\"",
+    "test:integration": "node --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
     "test:unit": "node --import tsx --experimental-test-module-mocks --test \"tests/unit/**/*.test.ts\"",
     "typecheck": "react-router typegen && tsc",
     "worker": "tsx ./worker.ts"
