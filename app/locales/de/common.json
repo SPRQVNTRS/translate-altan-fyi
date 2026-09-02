@@ -39,14 +39,50 @@
   "lists": {
     "metaTitle": "Listen",
     "metaDescription": "Wörter, die du zum Lernen speicherst, sammeln sich hier.",
-    "emptyTitle": "Gespeicherte Wörter",
-    "emptyBody": "Wörter, die du speicherst, sammeln sich hier, sobald die Speicherfunktion bereit ist. Du wirst jedes nachgeschlagene Wort zu einer Liste hinzufügen können."
+    "emptyTitle": "Noch keine Listen",
+    "emptyBody": "Listen werden auf diesem Gerät gespeichert und funktionieren offline.",
+    "title": "Vokabellisten",
+    "createLabel": "Listenname",
+    "createPlaceholder": "Reisewortschatz",
+    "createSubmit": "Liste erstellen",
+    "renameLabel": "Neuer Listenname",
+    "renameSubmit": "Namen speichern",
+    "renameTrigger": "Umbenennen",
+    "deleteTrigger": "Löschen",
+    "deleteTitle": "Liste löschen",
+    "deleteBody": "Die Wörter in dieser Liste werden mitgelöscht. Das kann nicht rückgängig gemacht werden.",
+    "deleteConfirm": "Liste löschen",
+    "deleteCancel": "Abbrechen",
+    "itemCount": "{{count}} Wörter",
+    "openList": "{{name}} öffnen",
+    "detailEmptyTitle": "Keine Wörter in dieser Liste",
+    "detailEmptyBody": "Füge ein Wort über seine Eintragsseite hinzu.",
+    "detailNotFound": "Diese Liste wurde auf diesem Gerät nicht gefunden.",
+    "detailBack": "Alle Listen",
+    "removeItem": "Wort entfernen",
+    "itemNoteLabel": "Deine Notiz",
+    "createPending": "Liste wird erstellt...",
+    "renamePending": "Liste wird umbenannt...",
+    "deletePending": "Liste wird gelöscht...",
+    "createdToast": "Liste {{name}} erstellt.",
+    "renamedToast": "In {{name}} umbenannt.",
+    "deletedToast": "Liste gelöscht.",
+    "removedItemToast": "Wort aus der Liste entfernt.",
+    "removeItemPending": "Wort wird entfernt..."
   },
   "history": {
     "metaTitle": "Verlauf",
     "metaDescription": "Eine Übersicht der Wörter, die du nachschlägst.",
-    "emptyTitle": "Suchverlauf",
-    "emptyBody": "Hier sammeln sich die Wörter, die du nachschlägst, sobald das Suchfeld verbunden ist. Deine Suchanfragen bleiben hier sichtbar, damit du sie in Ruhe wiederholen kannst."
+    "emptyTitle": "Kein Suchverlauf",
+    "emptyBody": "Suchanfragen werden ausschließlich auf diesem Gerät gespeichert. Sie werden niemals an den Server übertragen.",
+    "repeat": "Nach {{query}} suchen",
+    "clear": "Verlauf löschen",
+    "clearTitle": "Suchverlauf löschen",
+    "clearBody": "Dadurch werden alle auf diesem Gerät gespeicherten Suchanfragen gelöscht. Dies kann nicht rückgängig gemacht werden.",
+    "clearConfirm": "Verlauf löschen",
+    "capNote": "Es werden nur die letzten 500 Suchanfragen behalten und nichts, was älter als 90 Tage ist.",
+    "clearPending": "Verlauf wird gelöscht...",
+    "clearedToast": "Suchverlauf gelöscht."
   },
   "settings": {
     "metaTitle": "Einstellungen",
@@ -66,7 +102,22 @@
     "handleLabel": "Sync-Handle",
     "vaultSizeLabel": "Größe der verschlüsselten Serverdaten",
     "vaultSizeEmpty": "Noch keine Daten synchronisiert.",
-    "vaultSizeHint": "Der Server speichert diese verschlüsselten Bytes und kann sie nicht lesen, weshalb nur deren Größe angegeben werden kann."
+    "vaultSizeHint": "Der Server speichert diese verschlüsselten Bytes und kann sie nicht lesen, weshalb nur deren Größe angegeben werden kann.",
+    "devicesTitle": "Angemeldete Geräte",
+    "devicesBody": "Diese Geräte haben derzeit Zugriff auf deine synchronisierten Listen und Notizen. Die App hat nie nach einem Gerätenamen gefragt, daher wird jedes Gerät anhand einer kurzen ID angezeigt.",
+    "devicesEmpty": "Es sind keine weiteren Geräte angemeldet.",
+    "deviceCreated": "Angemeldet",
+    "deviceLastSeen": "Zuletzt aktiv",
+    "deviceCurrent": "Dieses Gerät",
+    "deviceRevoke": "Gerät abmelden",
+    "revokeTitle": "Gerät abmelden",
+    "revokeBody": "Das Gerät wird abgemeldet und muss sich erneut mit der Passphrase anmelden.",
+    "revokeConfirm": "Gerät abmelden",
+    "exportTitle": "Daten exportieren",
+    "exportBody": "Diese Datei wird auf deinem Gerät als lesbares JSON erstellt. Sie enthält deine Listen, gespeicherten Wörter, Notizen und deinen Suchverlauf.",
+    "exportButton": "Exportdatei herunterladen",
+    "exportEmpty": "Auf diesem Gerät gibt es keine gespeicherten Daten zum Exportieren.",
+    "revokeCancel": "Abbrechen"
   },
   "offline": {
     "metaTitle": "Offline",
@@ -91,7 +142,13 @@
     "sourceLabel": "Quelle: {{source}}",
     "sourceRecordLabel": "Quellennachweis",
     "exampleTranslationLanguage": "Übersetzung auf {{language}}",
-    "backToSearch": "Zurück zur Suche"
+    "backToSearch": "Zurück zur Suche",
+    "noteLabel": "Private Notiz",
+    "notePlaceholder": "Notiz zu diesem Wort hinzufügen",
+    "noteSave": "Notiz speichern",
+    "noteSaved": "Notiz gespeichert",
+    "noteHint": "Notizen verbleiben auf diesem Gerät, solange du nicht synchronisierst, und der Server kann sie nicht lesen.",
+    "notePending": "Notiz wird gespeichert..."
   },
   "enrichment": {
     "title": "Erklärung und weitere Beispiele",
@@ -180,6 +237,21 @@
     },
     "setup": {
       "passphraseTooShort": "Deine Passphrase ist zu kurz. Bitte gib mindestens {{min}} Zeichen ein."
-    }
+    },
+    "pending": "Änderungen werden mit dem Server synchronisiert.",
+    "offline": "Offline. Änderungen werden auf diesem Gerät gespeichert und später synchronisiert."
+  },
+  "addToList": {
+    "trigger": "In Liste speichern",
+    "title": "Wort in Liste speichern",
+    "description": "Diese Bedeutung wird in deiner Liste gespeichert und auf diesem Gerät gesichert.",
+    "pickLabel": "Wähle eine Liste",
+    "newListLabel": "Name der neuen Liste",
+    "newListPlaceholder": "Reisesätze",
+    "create": "Liste erstellen und speichern",
+    "saved": "In {{list}} gespeichert",
+    "alreadySaved": "Dieses Wort befindet sich bereits in dieser Liste.",
+    "createPending": "Liste wird erstellt und gespeichert...",
+    "savePending": "Wird in Liste gespeichert..."
   }
 }

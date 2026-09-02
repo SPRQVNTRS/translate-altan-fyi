@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import {
   AlertDialog,
@@ -24,6 +24,14 @@ interface ConfirmActionProps {
   formData?: Record<string, string | number>;
   /** Text for the confirm button (defaults to "Continue") */
   confirmText?: string;
+  /**
+   * Text for the confirm button while the action is in flight.
+   *
+   * A pending button must say what it is busy doing, and only the caller knows
+   * that. Falls back to `confirmText`, so a caller that has no progressive
+   * label still reads as it did before.
+   */
+  confirmPendingText?: string;
   /** Text for the cancel button (defaults to "Cancel") */
   cancelText?: string;
   /** Variant for the confirm button */
@@ -43,6 +51,7 @@ export function ConfirmAction({
   description,
   formData = EMPTY_FORM_DATA,
   confirmText = 'Continue',
+  confirmPendingText,
   cancelText = 'Cancel',
   confirmVariant = 'default',
   onSuccess,
@@ -52,17 +61,26 @@ export function ConfirmAction({
   const fetcher = useFetcher<{ success: boolean; error?: string }>();
   const isSubmitting = fetcher.state !== 'idle';
 
-  // Handle fetcher response
-  if (fetcher.data && fetcher.state === 'idle') {
-    if (fetcher.data.success) {
-      if (open) {
-        setOpen(false);
-        onSuccess?.();
-      }
-    } else if (fetcher.data.error) {
-      onError?.(fetcher.data.error);
+  // Handle the fetcher's answer, AFTER the commit rather than during the
+  // render. `onSuccess` is where callers raise their confirmation toast, and a
+  // toast raised mid-render updates the Toaster while another component is
+  // rendering, which React warns about.
+  //
+  // Each answer is handled once. The callbacks are inline closures at every
+  // call site, so this re-runs on every parent render, and a confirmation the
+  // reader has already seen must not be repeated.
+  const handled = useRef<object | null>(null);
+  useEffect(() => {
+    const data = fetcher.data;
+    if (!data || fetcher.state !== 'idle' || handled.current === data) return;
+    handled.current = data;
+    if (data.success) {
+      setOpen(false);
+      onSuccess?.();
+      return;
     }
-  }
+    if (data.error) onError?.(data.error);
+  }, [fetcher.data, fetcher.state, onSuccess, onError]);
 
   const handleConfirm = () => {
     const form = new FormData();
@@ -89,7 +107,7 @@ export function ConfirmAction({
           <AlertDialogCancel disabled={isSubmitting}>{cancelText}</AlertDialogCancel>
           <Button variant={confirmVariant} onClick={handleConfirm} disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {confirmText}
+            {isSubmitting ? (confirmPendingText ?? confirmText) : confirmText}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

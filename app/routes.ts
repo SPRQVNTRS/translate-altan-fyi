@@ -85,6 +85,11 @@ export default [
     route('/entry/:headwordId', 'routes/entry.$headwordId.tsx'),
     route('/attribution', 'routes/attribution.tsx'),
     route('/lists', 'routes/lists.tsx'),
+    // Client only, like `/lists` itself: it reads the device's own store and
+    // has no server loader, so it works with the network off. The service
+    // worker does not precache it, so a HARD reload here while offline lands
+    // on `/offline`; an in-app navigation from `/lists` does not.
+    route('/lists/:listId', 'routes/lists.$listId.tsx'),
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),
     // Sync lives inside the app shell, not in `_public`, because it is a

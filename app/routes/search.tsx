@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation, type MetaFunction } from 'react-router';
 import { DirectionChip } from '#app/components/direction-chip';
+import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchResults } from '#app/components/search-results';
 import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
@@ -151,6 +152,15 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           </div>
           {hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
           {hits.length === 0 && <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>}
+          {/* The history WRITE, and it renders nothing. It is here rather than
+              in the loader because the loader runs on the server, which must
+              never learn what anybody looked up. */}
+          <RecordSearch
+            query={q}
+            from={direction.from}
+            to={direction.to}
+            headwordId={hits[0]?.headwordId ?? null}
+          />
         </div>
       )}
     </div>

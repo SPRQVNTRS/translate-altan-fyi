@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useRef, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from '#app/components/link';
 import { SourceLink } from '#app/components/source-link';
@@ -35,6 +35,18 @@ export interface SenseTabsProps {
   senses: EntrySense[];
   /** The target language, carried into every translation link. */
   to: LanguageCode;
+  /**
+   * The sense the reader has picked, or null when they have not picked yet.
+   *
+   * OWNED BY THE ENTRY ROUTE, not by this component. The "save to list" button
+   * beside these chips has to save the sense the reader chose, and two copies
+   * of that answer would eventually disagree. Lifting the state does NOT change
+   * the two rules above: null is still the starting value, and only
+   * `onSelectSense` moves off it.
+   */
+  selectedSenseId: string | null;
+  /** Called when the reader picks a sense. Only a click or Enter/Space calls it, never focus. */
+  onSelectSense: (senseId: string) => void;
 }
 
 /** The glosses, translations and credits of one sense. */
@@ -92,10 +104,9 @@ function SensePanel({ sense, to }: { sense: EntrySense; to: LanguageCode }) {
   );
 }
 
-export function SenseTabs({ senses, to }: SenseTabsProps) {
+export function SenseTabs({ senses, to, selectedSenseId, onSelectSense }: SenseTabsProps) {
   const { t, i18n } = useTranslation();
   const groupId = useId();
-  const [selectedSenseId, setSelectedSenseId] = useState<string | null>(null);
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   if (senses.length === 0) return null;
@@ -141,7 +152,7 @@ export function SenseTabs({ senses, to }: SenseTabsProps) {
                 chipRefs.current[index] = node;
               }}
               onKeyDown={(event) => moveFocus(event, index)}
-              onClick={() => setSelectedSenseId(sense.senseId)}
+              onClick={() => onSelectSense(sense.senseId)}
               className={cn(
                 'rounded-full px-2 py-0.5 text-xs transition-colors',
                 isSelected ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary hover:bg-primary/20',

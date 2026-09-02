@@ -39,14 +39,50 @@
   "lists": {
     "metaTitle": "Lists",
     "metaDescription": "Words you save for study will collect here.",
-    "emptyTitle": "Saved words",
-    "emptyBody": "Words you save will collect here once saving is built. You will be able to add any word you look up to a list."
+    "emptyTitle": "No lists yet",
+    "emptyBody": "Lists are saved on this device and work offline.",
+    "title": "Vocabulary lists",
+    "createLabel": "List name",
+    "createPlaceholder": "Travel phrases",
+    "createSubmit": "Create list",
+    "renameLabel": "New list name",
+    "renameSubmit": "Save name",
+    "renameTrigger": "Rename",
+    "deleteTrigger": "Delete",
+    "deleteTitle": "Delete list",
+    "deleteBody": "The words in this list will be deleted with it. This cannot be undone.",
+    "deleteConfirm": "Delete list",
+    "deleteCancel": "Cancel",
+    "itemCount": "{{count}} words",
+    "openList": "Open {{name}}",
+    "detailEmptyTitle": "No words in this list",
+    "detailEmptyBody": "Add a word from its entry page.",
+    "detailNotFound": "This list was not found on this device.",
+    "detailBack": "All lists",
+    "removeItem": "Remove word",
+    "itemNoteLabel": "Your note",
+    "createPending": "Creating list...",
+    "renamePending": "Renaming list...",
+    "deletePending": "Deleting list...",
+    "createdToast": "Created list {{name}}.",
+    "renamedToast": "Renamed to {{name}}.",
+    "deletedToast": "List deleted.",
+    "removedItemToast": "Word removed from list.",
+    "removeItemPending": "Removing word..."
   },
   "history": {
     "metaTitle": "History",
     "metaDescription": "A record of the words you look up.",
-    "emptyTitle": "Search history",
-    "emptyBody": "Words you look up will collect here once the search field is connected. Your searches will stay on this screen so you can review them."
+    "emptyTitle": "No search history",
+    "emptyBody": "Searches are recorded on this device only. They are never sent to the server.",
+    "repeat": "Search for {{query}}",
+    "clear": "Clear history",
+    "clearTitle": "Clear search history",
+    "clearBody": "This removes every recorded search on this device. This cannot be undone.",
+    "clearConfirm": "Clear history",
+    "capNote": "Only the 500 most recent searches, and nothing older than 90 days, are kept.",
+    "clearPending": "Clearing history...",
+    "clearedToast": "Search history cleared."
   },
   "settings": {
     "metaTitle": "Settings",
@@ -66,7 +102,22 @@
     "handleLabel": "Sync handle",
     "vaultSizeLabel": "Encrypted server data size",
     "vaultSizeEmpty": "No data synced yet.",
-    "vaultSizeHint": "The server stores these encrypted bytes and cannot read them, so it can only report their size."
+    "vaultSizeHint": "The server stores these encrypted bytes and cannot read them, so it can only report their size.",
+    "devicesTitle": "Signed-in devices",
+    "devicesBody": "These devices currently have access to your synced lists and notes. The app never asked for a device name, so each one is shown by a short id.",
+    "devicesEmpty": "No other devices are signed in.",
+    "deviceCreated": "Signed in",
+    "deviceLastSeen": "Last active",
+    "deviceCurrent": "This device",
+    "deviceRevoke": "Sign out device",
+    "revokeTitle": "Sign out device",
+    "revokeBody": "The device will be signed out and must sign in again with the passphrase.",
+    "revokeConfirm": "Sign out device",
+    "exportTitle": "Export data",
+    "exportBody": "This file is built on your device in plain readable JSON. It contains your lists, saved words, notes, and search history.",
+    "exportButton": "Download export file",
+    "exportEmpty": "There is no saved data on this device to export.",
+    "revokeCancel": "Cancel"
   },
   "offline": {
     "metaTitle": "Offline",
@@ -91,7 +142,13 @@
     "sourceLabel": "Source: {{source}}",
     "sourceRecordLabel": "attribution",
     "exampleTranslationLanguage": "Translation in {{language}}",
-    "backToSearch": "Back to search"
+    "backToSearch": "Back to search",
+    "noteLabel": "Private note",
+    "notePlaceholder": "Add a note about this word",
+    "noteSave": "Save note",
+    "noteSaved": "Note saved",
+    "noteHint": "Notes stay on this device unless you sync, and the server cannot read them.",
+    "notePending": "Saving note..."
   },
   "enrichment": {
     "title": "Explanation and extra examples",
@@ -180,6 +237,21 @@
     },
     "setup": {
       "passphraseTooShort": "Your passphrase is too short, so enter at least {{min}} characters."
-    }
+    },
+    "pending": "Syncing changes to the server.",
+    "offline": "Offline. Changes are saved on this device and will sync later."
+  },
+  "addToList": {
+    "trigger": "Save to list",
+    "title": "Save word to list",
+    "description": "This meaning will be saved to your list and stored on this device.",
+    "pickLabel": "Choose a list",
+    "newListLabel": "New list name",
+    "newListPlaceholder": "Travel phrases",
+    "create": "Create list and save",
+    "saved": "Saved to {{list}}",
+    "alreadySaved": "This word is already in that list.",
+    "createPending": "Creating list and saving...",
+    "savePending": "Saving to list..."
   }
 }

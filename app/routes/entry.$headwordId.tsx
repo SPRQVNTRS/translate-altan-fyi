@@ -1,4 +1,5 @@
 import type { Route } from './+types/entry.$headwordId';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { redirect, type MetaFunction } from 'react-router';
 import { z } from 'zod';
@@ -6,6 +7,8 @@ import { DirectionChip } from '#app/components/direction-chip';
 import { EnrichmentSection } from '#app/components/enrichment-section';
 import { EntryUnavailable } from '#app/components/entry-unavailable';
 import { Link } from '#app/components/link';
+import { AddToListSheet } from '#app/components/personal/add-to-list-sheet';
+import { EntryNote } from '#app/components/personal/entry-note';
 import { ExampleLanguageBadge } from '#app/components/search-results';
 import { SenseTabs } from '#app/components/sense-tabs';
 import { SourceLink } from '#app/components/source-link';
@@ -221,6 +224,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 export default function EntryRoute({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
   const { entry, examples, direction, to, panel } = loaderData;
+  // THE SELECTION LIVES HERE, NOT IN `SenseTabs`. The save button and the chips
+  // have to agree about which meaning the reader chose, and two copies of that
+  // answer eventually disagree. Null is still the starting value: nothing is
+  // selected until the reader picks, which is the rule `sense-tabs.tsx` exists
+  // to defend.
+  const [selectedSenseId, setSelectedSenseId] = useState<string | null>(null);
 
   if (entry === null) {
     return (
@@ -232,6 +241,13 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
       </div>
     );
   }
+
+  // With exactly one sense there is nothing to choose, so that sense IS the
+  // effective selection and the snapshot comes from it. The SAVED `senseId`
+  // stays null all the same: the reader picked nothing, and recording a pick
+  // they never made would put a claim in their own data that is not true.
+  const onlySense = entry.senses.length === 1 ? entry.senses[0] : undefined;
+  const pickedSense = onlySense ?? entry.senses.find((sense) => sense.senseId === selectedSenseId);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -252,7 +268,21 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
           )}
         </div>
         <div className="mt-4">
-          <SenseTabs senses={entry.senses} to={to} />
+          <SenseTabs
+            senses={entry.senses}
+            to={to}
+            selectedSenseId={selectedSenseId}
+            onSelectSense={setSelectedSenseId}
+          />
+        </div>
+        <div className="mt-4">
+          <AddToListSheet
+            headwordId={entry.headwordId}
+            lemma={entry.lemma}
+            senseId={onlySense ? null : selectedSenseId}
+            translationSnapshot={pickedSense?.translations[0]?.lemma ?? ''}
+            senseCount={entry.senses.length}
+          />
         </div>
       </article>
 
@@ -289,6 +319,8 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
       </section>
 
       <EnrichmentSection panel={panel} headwordId={entry.headwordId} to={to} />
+
+      <EntryNote headwordId={entry.headwordId} />
 
       <Link to="/" className="text-sm text-primary hover:underline">
         {t('entry.backToSearch')}
