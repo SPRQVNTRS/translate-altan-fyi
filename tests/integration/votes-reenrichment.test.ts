@@ -56,6 +56,7 @@ import { RouterContextProvider } from 'react-router';
 import { pool } from '../../drizzle/db';
 import { getRawDb } from '../../drizzle/tenant-db';
 import {
+  accounts,
   enrichmentVotes,
   enrichments,
   headwords,
@@ -68,7 +69,6 @@ import { action } from '../../app/routes/api.enrichment-vote';
 import { isBudgetExhausted } from '../../app/lib/abuse/budget.server';
 import { ENRICHMENT_QUEUE } from '../../app/lib/enrichment/limits';
 import { enrichmentSingletonKey } from '../../app/lib/enrichment/job-payload';
-import { accountIdForUserId } from '../../app/lib/votes/account-gate.server';
 import { castVote } from '../../app/models/votes.server';
 import { getActiveModel } from '../../app/models/app-settings.server';
 import { MIN_VOTES_FOR_SCORE } from '../../app/lib/votes/score';
@@ -94,9 +94,24 @@ const ENRICHMENT_IDS = [STALE_ENRICHMENT_ID, CURRENT_ENRICHMENT_ID, UPSERT_ENRIC
 const FROM = 'de';
 const TO = 'en';
 
-/** The two signed-in readers whose votes drive the route. Ids nobody uses; nothing is looked up. */
-const VOTER_USER_ID = 900_001;
-const SECOND_VOTER_USER_ID = 900_002;
+/**
+ * The two signed-in readers whose votes drive the route.
+ *
+ * REAL ROWS NOW, NOT ARBITRARY IDS. `enrichment_votes.accountId` carries a
+ * foreign key to `accounts` since M172, so a vote by an account that does not
+ * exist is refused by Postgres. These are seeded in `before` and their ids are
+ * whatever `serial` hands out.
+ */
+const VOTER_HANDLE = `zz-voter-${randomUUID()}`;
+const SECOND_VOTER_HANDLE = `zz-voter-${randomUUID()}`;
+let voterAccountId = 0;
+let secondVoterAccountId = 0;
+
+/** A structurally valid Argon2id descriptor. Nothing in this file derives anything from it. */
+const FIXTURE_KDF_DESCRIPTOR = {
+  salt: Buffer.alloc(16, 1).toString('base64'),
+  params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
+};
 
 /** The model on the stale row. Deliberately not a real model id: nothing may resolve or call it. */
 const STALE_MODEL = 'stale-model-under-test';
@@ -121,20 +136,41 @@ const voteResponseSchema = z.object({
   messageKey: z.string().optional(),
 });
 
-/** A `Cookie` header holding a real signed session for one user id. */
-async function signedCookieFor(userId: number): Promise<string> {
+/**
+ * A `Cookie` header holding a real signed session for one account id.
+ *
+ * The tokens are placeholders. This file drives the vote route, which reads the
+ * account id and nothing else; a request that needed a live bearer token would
+ * be exercising `/api/v1/auth/*` and belongs in that file, not this one.
+ */
+async function signedCookieFor(accountId: number): Promise<string> {
   const session = await sessionStorage.getSession();
-  session.set('user', {
-    id: userId,
-    email: `voter-${userId}@example.test`,
-    name: `Voter ${userId}`,
-    isSuperadmin: false,
-    memberships: [],
-    currentOrgId: null,
-    currentOrgSlug: null,
+  session.set('account', {
+    id: accountId,
+    handle: `zz-session-${accountId}`,
+    accessToken: `unused-access-${accountId}`,
+    refreshToken: `unused-refresh-${accountId}`,
   });
   const setCookie = await sessionStorage.commitSession(session);
   return setCookie.split(';')[0] ?? '';
+}
+
+/** One throwaway account, so a vote has something to point its foreign key at. */
+async function seedAccount(handle: string): Promise<number> {
+  const [row] = await db
+    .insert(accounts)
+    .values({
+      handle,
+      displayName: null,
+      // A fixed non-secret string. This file never authenticates; it only needs
+      // a row the foreign key can resolve.
+      verifier: '0'.repeat(64),
+      recoveryVerifier: null,
+      kdfDescriptor: FIXTURE_KDF_DESCRIPTOR,
+    })
+    .returning({ id: accounts.id });
+  if (!row) throw new Error(`failed to seed the fixture account ${handle}`);
+  return row.id;
 }
 
 /** Post one vote to the route, exactly as the entry page's fetcher does. */
@@ -169,10 +205,18 @@ async function readBody(response: Response): Promise<z.infer<typeof voteResponse
   return voteResponseSchema.parse(await response.json());
 }
 
+/** Every account this file created for a pre-seeded vote, so `after` can delete them. */
+const preseededAccountIds: number[] = [];
+
 /** Fill an enrichment's tally to one vote short of the minimum, all of them down-votes. */
 async function preseedDownVotes(enrichmentId: string): Promise<void> {
   for (let index = 0; index < PRESEEDED_VOTES; index += 1) {
-    await castVote(db, { enrichmentId, accountId: randomUUID(), value: -1 });
+    // Each pre-seeded vote needs its OWN account, because the composite primary
+    // key would otherwise make the second one replace the first and the tally
+    // would never reach the minimum.
+    const accountId = await seedAccount(`zz-preseed-${randomUUID()}`);
+    preseededAccountIds.push(accountId);
+    await castVote(db, { enrichmentId, accountId, value: -1 });
   }
 }
 
@@ -227,6 +271,9 @@ before(async () => {
   await initializeWorkflows();
 
   activeModel = (await getActiveModel()).model;
+
+  voterAccountId = await seedAccount(VOTER_HANDLE);
+  secondVoterAccountId = await seedAccount(SECOND_VOTER_HANDLE);
 
   await db.insert(sources).values({
     id: SOURCE_ID,
@@ -286,6 +333,11 @@ after(async () => {
   await db.delete(senses).where(eq(senses.id, SENSE_ID));
   await db.delete(headwords).where(eq(headwords.id, HEADWORD_ID));
   await db.delete(sources).where(eq(sources.id, SOURCE_ID));
+  // Last, and after the votes: the vote foreign key cascades, but deleting the
+  // accounts first would silently take rows this file wanted to assert on.
+  for (const accountId of [voterAccountId, secondVoterAccountId, ...preseededAccountIds]) {
+    if (accountId !== 0) await db.delete(accounts).where(eq(accounts.id, accountId));
+  }
 
   await db.delete(workflows).where(sql`${workflows.context}->>'headwordId' = ${HEADWORD_ID}`);
   await db.execute(
@@ -297,7 +349,7 @@ after(async () => {
 
 describe('votes: casting one', () => {
   it('replaces the earlier vote of one reader instead of adding a second row', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
-    const cookie = await signedCookieFor(VOTER_USER_ID);
+    const cookie = await signedCookieFor(voterAccountId);
 
     const first = await postVote({ enrichmentId: UPSERT_ENRICHMENT_ID, value: '-1', cookie });
     assert.equal(first.status, 200);
@@ -338,13 +390,13 @@ describe('votes: casting one', () => {
         'last changed.',
     );
 
-    // The account id on the row is the derived one, and it is the ONLY thing on
-    // the row besides the enrichment: no headword, no query, no user id.
+    // The account id on the row is the signed-in reader's own, and it is the
+    // ONLY thing on the row besides the enrichment: no headword, no query.
     const [ownerRow] = await db
       .select({ accountId: enrichmentVotes.accountId })
       .from(enrichmentVotes)
       .where(eq(enrichmentVotes.enrichmentId, UPSERT_ENRICHMENT_ID));
-    assert.equal(ownerRow?.accountId, accountIdForUserId(VOTER_USER_ID));
+    assert.equal(ownerRow?.accountId, voterAccountId);
   });
 
   it('refuses an anonymous vote with 401 and writes nothing', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
@@ -379,7 +431,7 @@ describe('votes: what a low score buys', () => {
     );
 
     await preseedDownVotes(CURRENT_ENRICHMENT_ID);
-    const cookie = await signedCookieFor(VOTER_USER_ID);
+    const cookie = await signedCookieFor(voterAccountId);
 
     const body = await readBody(await postVote({ enrichmentId: CURRENT_ENRICHMENT_ID, value: '-1', cookie }));
 
@@ -408,7 +460,7 @@ describe('votes: what a low score buys', () => {
     );
 
     await preseedDownVotes(STALE_ENRICHMENT_ID);
-    const cookie = await signedCookieFor(VOTER_USER_ID);
+    const cookie = await signedCookieFor(voterAccountId);
 
     const body = await readBody(await postVote({ enrichmentId: STALE_ENRICHMENT_ID, value: '-1', cookie }));
 
@@ -443,7 +495,7 @@ describe('votes: what a low score buys', () => {
     // A DIFFERENT reader, so the vote is a new row rather than an upsert, and
     // the tally genuinely grows. The score stays low, so every guard except the
     // cooldown says yes.
-    const cookie = await signedCookieFor(SECOND_VOTER_USER_ID);
+    const cookie = await signedCookieFor(secondVoterAccountId);
     const body = await readBody(await postVote({ enrichmentId: STALE_ENRICHMENT_ID, value: '-1', cookie }));
 
     assert.equal(body.down, MIN_VOTES_FOR_SCORE + 1, 'the vote of the second reader was not counted');
