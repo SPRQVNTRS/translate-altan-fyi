@@ -45,6 +45,14 @@ export default [
   // =============================================================================
   layout('routes/_app.tsx', { id: '_app' }, [
     index('routes/search.tsx'),
+    // `/search` renders the SAME module as the index route, under a second id.
+    // The stage verification hits `/search`, and a redirect to `/` would be a
+    // second round trip on every linkable results URL. Two ids over one file is
+    // the shape `_auth.tsx` already uses twice further down, and React Router's
+    // typegen emits ONE `+types/search` whose `Matches` is a union of both.
+    route('/search', 'routes/search.tsx', { id: 'search-alias' }),
+    route('/entry/:headwordId', 'routes/entry.$headwordId.tsx'),
+    route('/attribution', 'routes/attribution.tsx'),
     route('/lists', 'routes/lists.tsx'),
     route('/history', 'routes/history.tsx'),
     route('/settings', 'routes/settings.tsx'),

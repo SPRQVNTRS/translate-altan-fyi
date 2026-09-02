@@ -9,7 +9,8 @@
     "openMenu": "Navigationsmenü öffnen",
     "drawerDescription": "Navigationslinks für die App.",
     "bottomBarLabel": "Hauptnavigation",
-    "back": "Zurück"
+    "back": "Zurück",
+    "attribution": "Quellen"
   },
   "theme": {
     "selector": "Farbschema",
@@ -23,7 +24,17 @@
     "fieldLabel": "Wort oder Ausdruck",
     "placeholder": "Gib ein Wort ein, zum Beispiel: Feierabend",
     "submit": "Suchen",
-    "note": "Das Suchfeld ist deaktiviert, während das Wörterbuch aufgebaut wird. Diese Ansicht zeigt, wo deine Suchanfragen stattfinden werden, zusammen mit Übersetzung, Erklärung und Beispielsätzen, die du erhältst."
+    "note": "Wort in einer der vier Sprachen eingeben. Das Wörterbuch findet Treffer auch bei Tippfehlern und zeigt Übersetzungen, Bedeutungen und Beispiele.",
+    "resultsHeading": "Ergebnisse",
+    "resultsFor": "Ergebnisse für {{query}}",
+    "noResults": "Keine Treffer für {{query}}. Schreibweise prüfen oder ein anderes Wort versuchen.",
+    "noTranslationYet": "Für dieses Wort gibt es noch keine Übersetzung.",
+    "examplesLabel": "Beispiele",
+    "directionLabel": "Suchrichtung",
+    "flipDirection": "Sprachen tauschen und erneut suchen",
+    "matchFuzzy": "Ähnlicher Treffer",
+    "emptyPrompt": "Oben ein Wort eingeben, um zu suchen.",
+    "submitting": "Wird gesucht..."
   },
   "lists": {
     "metaTitle": "Listen",
@@ -62,6 +73,37 @@
   "entry": {
     "unavailable": {
       "missing": "Dieser Eintrag ist nicht verfügbar, aber du kannst nach einem anderen Wort suchen."
-    }
+    },
+    "metaTitle": "Eintrag",
+    "metaDescription": "Bedeutungen, Übersetzungen und Beispielsätze für dieses Wort.",
+    "sensesLabel": "Bedeutungen",
+    "pickSense": "Bedeutung auswählen, um Übersetzungen und Beispiele zu sehen.",
+    "glossesLabel": "Definitionen",
+    "translationsLabel": "Übersetzungen",
+    "examplesLabel": "Beispiele",
+    "noTranslations": "Noch keine Übersetzungen für diese Bedeutung.",
+    "noExamples": "Noch keine Beispielsätze vorhanden.",
+    "sourceLabel": "Quelle: {{source}}",
+    "backToSearch": "Zurück zur Suche"
+  },
+  "enrichment": {
+    "title": "Erklärung und weitere Beispiele",
+    "idle": "Erklärungen und weitere Beispiele erscheinen hier, sobald dieser Eintrag erweitert wurde.",
+    "pending": "Erklärung wird verfasst und weitere Beispiele werden gesammelt."
+  },
+  "attribution": {
+    "metaTitle": "Quellen",
+    "metaDescription": "Datenquellen dieses Wörterbuchs, mit Lizenzen und Namensnennung.",
+    "title": "Quellen und Lizenzen",
+    "intro": "Dieses Wörterbuch nutzt offene Daten. Jede Quelle ist unten mit ihrer Lizenz und der erforderlichen Namensnennung aufgeführt.",
+    "licenceLabel": "Lizenz",
+    "attributionLabel": "Namensnennung",
+    "urlLabel": "Website",
+    "importedAtLabel": "Importiert",
+    "versionLabel": "Version",
+    "notImported": "Noch nicht importiert",
+    "generatedTitle": "Generierte Inhalte",
+    "generatedBody": "Erklärungen und Beispielsätze, die von einem Sprachmodell erstellt wurden, sind als generierte Inhalte gekennzeichnet. Für sie gilt keine vorgelagerte Lizenz.",
+    "empty": "Noch keine Quellen importiert."
   }
 }

@@ -9,7 +9,8 @@
     "openMenu": "Open navigation menu",
     "drawerDescription": "Navigation links for the app.",
     "bottomBarLabel": "Main navigation",
-    "back": "Back"
+    "back": "Back",
+    "attribution": "Sources"
   },
   "theme": {
     "selector": "Color theme",
@@ -23,7 +24,17 @@
     "fieldLabel": "Word or phrase",
     "placeholder": "Type a word, for example: Feierabend",
     "submit": "Search",
-    "note": "The search field is disabled while the dictionary is being built. This screen shows where your lookups will happen, along with the translation, explanation, and example sentences you will get back."
+    "note": "Type a word in any of the four languages. The dictionary finds matches even with spelling mistakes, and shows translations, meanings, and examples.",
+    "resultsHeading": "Results",
+    "resultsFor": "Results for {{query}}",
+    "noResults": "Nothing matched {{query}}. Check the spelling, or try another word.",
+    "noTranslationYet": "No translation yet for this word.",
+    "examplesLabel": "Examples",
+    "directionLabel": "Search direction",
+    "flipDirection": "Swap languages and search again",
+    "matchFuzzy": "Close match",
+    "emptyPrompt": "Type a word above to search.",
+    "submitting": "Searching..."
   },
   "lists": {
     "metaTitle": "Lists",
@@ -62,6 +73,37 @@
   "entry": {
     "unavailable": {
       "missing": "This entry is not available, but you can search for another word."
-    }
+    },
+    "metaTitle": "Entry",
+    "metaDescription": "Meanings, translations, and example sentences for this word.",
+    "sensesLabel": "Meanings",
+    "pickSense": "Select a meaning to see its translations and examples.",
+    "glossesLabel": "Definitions",
+    "translationsLabel": "Translations",
+    "examplesLabel": "Examples",
+    "noTranslations": "No translations for this meaning yet.",
+    "noExamples": "No example sentences yet.",
+    "sourceLabel": "Source: {{source}}",
+    "backToSearch": "Back to search"
+  },
+  "enrichment": {
+    "title": "Explanation and extra examples",
+    "idle": "Explanations and extra examples will appear here once this entry is enriched.",
+    "pending": "Writing the explanation and collecting more examples."
+  },
+  "attribution": {
+    "metaTitle": "Sources",
+    "metaDescription": "Data sources behind this dictionary, with licences and attribution.",
+    "title": "Sources and licences",
+    "intro": "This dictionary uses open data. Each source is listed below with its licence and required attribution.",
+    "licenceLabel": "Licence",
+    "attributionLabel": "Attribution",
+    "urlLabel": "Website",
+    "importedAtLabel": "Imported",
+    "versionLabel": "Version",
+    "notImported": "Not imported yet",
+    "generatedTitle": "Generated content",
+    "generatedBody": "Explanations and example sentences created by a language model are marked as generated content. No upstream licence applies to them.",
+    "empty": "No sources imported yet."
   }
 }
