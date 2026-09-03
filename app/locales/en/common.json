@@ -33,7 +33,6 @@
     "directionLabel": "Search direction",
     "flipDirection": "Swap languages and search again",
     "matchFuzzy": "Close match",
-    "emptyPrompt": "Type a word above to search.",
     "submitting": "Searching...",
     "didYouMeanLabel": "Did you mean",
     "didYouMeanAction": "Search for {{suggestion}} instead.",
@@ -327,5 +326,14 @@
     "alreadySaved": "This word is already in that list.",
     "createPending": "Creating list and saving...",
     "savePending": "Saving to list..."
+  },
+  "landing": {
+    "heading": "Clear translations with real examples",
+    "search": "A search returns translations, meanings, and credited example sentences, even with spelling mistakes.",
+    "lists": "Save words to your lists and review them later as flashcards.",
+    "privacy": "Your lists, history, and notes stay encrypted on your device, so the server cannot read them.",
+    "privacyPlaintext": "The word you type is sent to the server, because the dictionary is stored there.",
+    "privacyLink": "Read the privacy policy",
+    "exampleHeading": "Live translation result for {{word}}"
   }
 }

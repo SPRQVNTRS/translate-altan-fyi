@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Form, useNavigation, type MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
 import { DirectionChip } from '#app/components/direction-chip';
+import { Landing } from '#app/components/landing';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
 import { Button } from '#app/components/ui/button';
@@ -14,6 +15,7 @@ import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
 import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
+import { loadLandingExample } from '#app/lib/dictionary/landing-example';
 import { normalizeQuery } from '#app/lib/dictionary/normalize';
 import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
 import type { TitleHandle } from '#app/lib/route-title';
@@ -68,8 +70,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     to: url.searchParams.get('to'),
     uiLanguage,
   });
+  // NO QUERY MEANS THIS IS THE LANDING PAGE, so the loader spends one query on
+  // the worked example the pitch below the search box shows. It is a real row of
+  // the dictionary, looked up through the same function a visitor's own search
+  // uses, which is the point: the landing page cannot keep advertising a
+  // dictionary that has stopped answering.
   if (q === '') {
-    return { q, direction, hits: [], phrase: null, didYouMean: null };
+    const example = await loadLandingExample((params) => searchHeadwords(db, params));
+    return { q, direction, hits: [], phrase: null, didYouMean: null, example };
   }
 
   // ONE PIPELINE, TWO BRANCHES, AND THE BRANCH IS DECIDED HERE.
@@ -84,7 +92,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   no second query path for speech and nothing here can tell the two apart.
   if (normalizeQuery(q, direction.from).isPhrase) {
     const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
-    return { q, direction, hits: [], phrase, didYouMean: null };
+    return { q, direction, hits: [], phrase, didYouMean: null, example: null };
   }
 
   // THE WHOLE POINT OF THE DETECTION. `direction.from` and `direction.to` go
@@ -116,7 +124,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     });
   }
 
-  return { q, direction, hits, phrase: null, didYouMean };
+  return { q, direction, hits, phrase: null, didYouMean, example: null };
 }
 
 /**
@@ -125,7 +133,7 @@ export async function loader({ request }: Route.LoaderArgs) {
  */
 export default function SearchRoute({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
-  const { q, direction, hits, phrase, didYouMean } = loaderData;
+  const { q, direction, hits, phrase, didYouMean, example } = loaderData;
   const navigation = useNavigation();
   const isSearching = navigation.state !== 'idle';
   // The voice control writes into THIS box and submits THIS form. It owns no
@@ -188,7 +196,10 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           something up sees their answer first. */}
       <DailyNudge />
 
-      {q === '' && <p className="text-sm text-muted-foreground">{t('search.emptyPrompt')}</p>}
+      {/* The landing surface. With nothing typed there is no result to show, so
+          the screen explains what a search returns and shows one, rather than
+          leaving a stranger with an empty box and a full-stop. */}
+      {q === '' && <Landing example={example} />}
 
       {q !== '' && (
         <div className="flex flex-col gap-4">

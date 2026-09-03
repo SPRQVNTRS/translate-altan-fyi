@@ -33,7 +33,6 @@
     "directionLabel": "Suchrichtung",
     "flipDirection": "Sprachen tauschen und erneut suchen",
     "matchFuzzy": "Ähnlicher Treffer",
-    "emptyPrompt": "Oben ein Wort eingeben, um zu suchen.",
     "submitting": "Wird gesucht...",
     "didYouMeanLabel": "Meintest du",
     "didYouMeanAction": "Stattdessen nach {{suggestion}} suchen.",
@@ -327,5 +326,14 @@
     "alreadySaved": "Dieses Wort befindet sich bereits in dieser Liste.",
     "createPending": "Liste wird erstellt und gespeichert...",
     "savePending": "Wird in Liste gespeichert..."
+  },
+  "landing": {
+    "heading": "Klare Übersetzungen mit echten Beispielen",
+    "search": "Eine Suche liefert Übersetzungen, Bedeutungen und Beispielsätze mit Quelle, selbst bei Tippfehlern.",
+    "lists": "Speichere Wörter in deinen Listen und wiederhole sie später als Karteikarten.",
+    "privacy": "Deine Listen, dein Verlauf und deine Notizen bleiben verschlüsselt auf deinem Gerät. Der Server kann sie nicht mitlesen.",
+    "privacyPlaintext": "Das eingegebene Wort wird an den Server gesendet, da dort das Wörterbuch liegt.",
+    "privacyLink": "Datenschutzerklärung lesen",
+    "exampleHeading": "Live-Übersetzung für {{word}}"
   }
 }
