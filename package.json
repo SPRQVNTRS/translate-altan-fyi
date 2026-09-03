@@ -1,7 +1,12 @@
 {
   "name": "translate-altan-fyi",
   "version": "0.1.0",
-  "private": true,
+  "license": "MIT",
+  "homepage": "https://translate.altan.fyi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPRQVNTRS/translate-altan-fyi.git"
+  },
   "type": "module",
   "dependencies": {
     "@conform-to/react": "^1.13.3",
