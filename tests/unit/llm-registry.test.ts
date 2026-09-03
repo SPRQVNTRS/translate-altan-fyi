@@ -62,7 +62,7 @@ describe('configureActiveModel', () => {
     process.env.OPENROUTER_API_KEY = STUB_KEY;
     const configured = registry.configureActiveModel(DEFAULT_ACTIVE_MODEL);
     assert.equal(configured.provider, 'gemini');
-    assert.equal(configured.model, 'google/gemini-3.7-flash');
+    assert.equal(configured.model, 'google/gemini-3.8-flash');
     assert.equal(configured.transport, 'openrouter');
     assert.equal(configured.reasoningEffort, undefined);
   });
@@ -91,7 +91,10 @@ describe('configureActiveModel', () => {
       () =>
         registry.configureActiveModel({
           provider: 'gemini',
-          model: 'google/gemini-3.7-flash',
+          // Any catalog id for this provider proves the point; picked deliberately
+          // NOT the default, so this case does not need editing every time the
+          // default Gemini model rotates.
+          model: 'google/gemini-3.5-flash-lite',
           options: { reasoningEffort: 'high' },
         }),
       LlmCapabilityError,
@@ -103,7 +106,8 @@ describe('configureActiveModel', () => {
     process.env.OPENROUTER_API_KEY = STUB_KEY;
     const configured = registry.configureActiveModel({
       provider: 'gemini',
-      model: 'google/gemini-3.7-flash',
+      // Deliberately not the default model, for the same reason as above.
+      model: 'google/gemini-3.5-flash-lite',
       options: { reasoningEffort: 'none' },
     });
     assert.equal(configured.reasoningEffort, 'none');
@@ -173,7 +177,10 @@ describe('the injected port', () => {
     assert.equal(result.costUsd, 0.0012);
     assert.ok(result.latencyMs >= 0, 'the call was not timed');
     assert.equal(result.provider, 'gemini');
-    assert.equal(result.model, 'google/gemini-3.7-flash');
+    // Not pinning the default here: this case is about the port seeing the
+    // prompt/schema and returning what it's given, so it echoes back whatever
+    // DEFAULT_ACTIVE_MODEL configures rather than hardcoding a model id.
+    assert.equal(result.model, DEFAULT_ACTIVE_MODEL.model);
     assert.equal(seen.length, 1);
     assert.equal(seen[0].prompt, 'define the word run');
     assert.equal(seen[0].schema, schema);

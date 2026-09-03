@@ -101,7 +101,7 @@ function readApiKey(envVar: string): string | null {
  *      that goes stale silently, so the library wins whenever it has an answer.
  *   2. Our `MODEL_PRICES` row times the token counts the provider reported. The
  *      library returns `cost: null` for any model missing from its own pricing
- *      table, and the DEFAULT model `google/gemini-3.7-flash` is one of them:
+ *      table, and the DEFAULT model `google/gemini-3.8-flash` is one of them:
  *      without this step `cost_usd` was null on every row ever written, and a
  *      budget cap in currency would have had nothing to read.
  *   3. null, when the call reported no usage at all or the model has no price

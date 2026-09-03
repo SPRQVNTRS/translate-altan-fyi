@@ -104,6 +104,7 @@ export const PROVIDERS = {
     models: [
       { id: 'openai/gpt-5.6-luna', label: 'GPT-5.6 Luna' },
       { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5' },
+      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
       { id: 'google/gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
     ],
     note: null,
@@ -157,6 +158,7 @@ export const PROVIDERS = {
       temperature: 'unsupported',
     },
     models: [
+      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
       { id: 'google/gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
       { id: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite' },
       { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
@@ -207,6 +209,7 @@ export interface ModelPrice {
 
 export const MODEL_PRICES = {
   // OpenRouter ids, which carry the vendor prefix.
+  'google/gemini-3.8-flash': { inputUsdPerMTok: 0.75, outputUsdPerMTok: 3.75 },
   'google/gemini-3.7-flash': { inputUsdPerMTok: 0.75, outputUsdPerMTok: 3.75 },
   'google/gemini-3.5-flash-lite': { inputUsdPerMTok: 0.3, outputUsdPerMTok: 2.5 },
   'google/gemini-3.1-pro-preview': { inputUsdPerMTok: 2, outputUsdPerMTok: 12 },
@@ -257,12 +260,13 @@ export function estimateCostUsd(price: ModelPrice, promptTokens: number, complet
 /**
  * The model used when the `llm.active` setting is absent or unreadable.
  *
- * Gemini 3.7 Flash with no options: the cheapest entry that still produces
- * structured output, and the one whose reasoning is off by default.
+ * Gemini 3.8 Flash with no options: the latest Gemini Flash release, priced
+ * the same as 3.7 (see MODEL_PRICES), and the one whose reasoning is off by
+ * default.
  */
 export const DEFAULT_ACTIVE_MODEL = {
   provider: 'gemini',
-  model: 'google/gemini-3.7-flash',
+  model: 'google/gemini-3.8-flash',
   options: {},
 } satisfies ActiveModelSelection;
 
