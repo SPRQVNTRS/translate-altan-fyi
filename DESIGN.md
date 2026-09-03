@@ -1,52 +1,61 @@
 # translate.altan.fyi Design Language
 
-Adapted from openplate (`openplate/DESIGN.md`), which is a sibling product and shares the family
-DNA: a teal-tinted neutral scale carrying every surface, a single teal brand accent, and a
-display serif that gives the chrome its character. The overall feel is "calm study tool", clean,
-text-forward, unhurried. It is not a playful consumer app and it is not a dense dashboard.
+This design language adapts openplate (`openplate/DESIGN.md`), a sibling
+product. Both products share core traits: a teal-tinted neutral scale on every
+surface, a single teal brand accent, and a display serif font for the chrome.
+The chrome means the surrounding browser frame and UI shell. The visual feel is
+a quiet study tool: clean, text-forward, and unhurried. It is neither a playful
+consumer app nor a dense dashboard.
 
-The tokens, the shadcn primitives and the shell came over whole from openplate, so the two
-products feel related and the component library does not have to be rediscovered. What follows is
-the charter for THIS product. When adding UI, follow the recipes here instead of inventing new
-ones.
+Tokens, shadcn primitives, and the outer shell come directly from openplate.
+This shared base keeps both products related and saves work on the component
+library. This document defines the interface rules for THIS product. Use these
+recipes for all new UI. Do not invent new patterns.
 
 ---
 
 ## 0. Two rules that override everything
 
-These are operator rules. They are enforced by a unit test (`tests/unit/design-rules.test.ts`),
-not by review, because review forgets.
+These operator rules are enforced by a unit test
+(`tests/unit/design-rules.test.ts`). Code review forgets, but tests run on every
+build.
 
-1. **Never use a thick left border to accentuate an element.** No `border-l-4`, no
-   `border-l-[3px]`, no `border-left: 4px`, no `border-left: 3px`. To lift a block, use a
-   background wash, a full hairline, or an icon.
-2. **Never use em dashes in copy, use a comma instead.** This covers user-facing strings, code
-   comments and CLI output alike.
+1. **Never use a thick left border to accentuate an element.** Do not use
+   `border-l-4`, `border-l-[3px]`, `border-left: 4px`, or `border-left: 3px`.
+   Lift a block with a background wash, a full hairline border, or an icon.
+2. **Never use em dashes in copy, use a comma instead.** This rule applies to
+   user-facing strings, code comments, and CLI output.
 
 ---
 
 ## 1. Principles
 
-1. **Neutrals carry the chrome, teal carries the brand.** Almost everything is neutral. Teal
-   appears only where attention belongs: the primary button, the active nav item, the focus ring,
-   links, and the one hero card per screen.
-2. **The word is the subject.** A search result is a piece of writing, not a data row. Set it with
-   real typographic care: readable measure, generous leading, clear hierarchy between the
-   translation, the explanation and the examples.
-3. **Feedback is mandatory.** Every async action shows its state. A pending button gets a spinner
-   and a progressive label, a mutation confirms with a toast, a destructive action gets a real
-   dialog. `window.confirm` is banned. Nothing the user triggers may look frozen.
-4. **Dark mode is a first-class parallel palette**, not an inversion. Every recipe below has an
-   explicit dark variant, and every new component ships both.
-5. **Soft but dense.** Generous radii, subtle shadows, compact information density.
+1. **Neutrals carry the chrome, teal carries the brand.** Most elements use
+   neutral colors. Reserve teal for elements that need user focus: the primary
+   button, the active nav item, the focus ring, links, and the single hero card
+   on a screen.
+2. **The word is the subject.** Treat a search result as writing, not as a data
+   row. Format text with care: set a readable line width, add generous line
+   spacing, and maintain clear contrast between the translation, the
+   explanation, and the examples.
+3. **Feedback is mandatory.** Every asynchronous action shows its state. A
+   pending button displays a spinner and a dynamic label. A data update triggers
+   a toast message. A destructive action opens a confirmation dialog.
+   `window.confirm` is banned. Never leave the interface looking frozen.
+4. **Dark mode is a first-class parallel palette**, not an inversion. Every
+   recipe below includes an explicit dark variant. Ship both palettes with every
+   new component.
+5. **Soft but dense.** Combine generous corner curves, subtle shadows, and
+   compact data density.
 
 ---
 
 ## 2. Color tokens
 
-Semantic tokens live in `app/app.css` as HSL triplets (shadcn convention). Every surface and
-hairline sits on the brand's own hue (192 degrees) at low chroma, so the chrome, the page and the
-cards read as one teal-tinted family instead of a teal accent dropped onto a cold grey app.
+Semantic tokens live in `app/app.css` as HSL triplets, following shadcn
+convention. Every surface and hairline border uses the brand hue of 192 degrees
+at low saturation. The chrome, the page, and the cards form a single teal-tinted
+system instead of a teal accent placed on cold grey.
 
 | Token                  | Light                   | Dark                      | Usage                         |
 | ---------------------- | ----------------------- | ------------------------- | ----------------------------- |
@@ -61,30 +70,33 @@ cards read as one teal-tinted family instead of a teal accent dropped onto a col
 | `--destructive`        | `0 72% 45%`             | `0 70% 45%`               | delete, disconnect            |
 | `--ring`               | same as `--primary`     | same as `--primary`       | focus rings                   |
 
-`--card` stays pure white in light mode so cards lift off the tinted page. `--foreground` clears
-15:1 on both the card and the page, `--muted-foreground` clears about 7.6:1 on white and 7:1 in
-dark.
+`--card` stays pure white in light mode so cards stand out from the tinted page.
+`--foreground` maintains a contrast ratio above 15:1 against the card and page.
+`--muted-foreground` maintains about 7.6:1 against white and 7:1 in dark mode.
 
-Openplate's macro, adherence and carb-status token families did NOT come over. They describe food,
-which this product knows nothing about. Do not port them back "for later". A token earns its place
-when a screen needs it.
+The macro, adherence, and carb-status tokens from openplate were omitted. Those
+tokens describe food, which this product does not handle. Do not add them back
+speculatively. Add tokens only when a concrete screen needs them.
 
-**Brand discipline.** The neutrals are teal-tinted everywhere, but a *saturated* teal surface is
-rationed. Exactly three utilities may paint one, all defined in `app.css`, all expressed as
-`hsl(var(--primary) / ...)` gradients, never a literal:
+**Brand discipline.** Neutrals use a teal tint across the whole app. Limit
+saturated teal surfaces strictly. Only three utilities in `app.css` apply one.
+Each uses an `hsl(var(--primary) / ...)` gradient, never a raw literal value:
 
-- `.surface-brand` for the ONE hero card per screen. One per screen, never two.
-- `.surface-brand-soft` for empty-state panels, paired with `border-dashed`.
-- `.brand-glow` for a hero backdrop only.
+- `.surface-brand` styles the ONE hero card on a screen. Use it once per screen,
+  never twice.
+- `.surface-brand-soft` styles empty-state panels, paired with `border-dashed`.
+- `.brand-glow` styles backdrops behind hero elements only.
 
-Everything else keeps `bg-card`. Ordinary cards, list rows and inputs never get a brand fill.
+Other components use `bg-card`. Standard cards, list rows, and inputs never take
+a brand fill.
 
-**One hero per screen, named:** Search gets the search hero card. Lists gets its empty state or,
-once lists exist, nothing (a list of rows has no hero). History likewise. Adding a second
-`.surface-brand` to a screen is a bug.
+**One hero per screen, named:** The Search view uses the search hero card. The
+Lists view uses its empty state panel, and once lists exist, it uses no hero at
+all. History also uses no hero. Placing a second `.surface-brand` on any screen
+is a bug.
 
-**Where the brand shows up outside a hero**, these are the only sanctioned treatments, all
-token-only:
+**Where the brand shows up outside a hero**, use only these token-based
+treatments:
 
 | Surface                          | Treatment                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
@@ -98,148 +110,167 @@ token-only:
 
 ## 3. Surfaces
 
-The four v1 surfaces and the recipe each one is built from. Adding a fifth means adding a row
-here first.
+Build all UI from these four v1 surfaces. To introduce a fifth surface, define
+it here first.
 
-**Search hero card.** The one `.surface-brand` on the Search screen. `rounded-2xl`, a large
-`Input`, a primary `Button`, and one muted line underneath saying what the search will do. It is
-the first thing on the page and the reason the app exists, so it gets the brand wash and nothing
-else on that screen does.
+**Search hero card.** This is the only `.surface-brand` element on the Search
+screen. Style it with `rounded-2xl`, a large `Input`, a primary `Button`, and
+one muted line explaining the search. It sits at the top of the page as the main
+app entry point. Because of this role, it receives the brand wash while all
+other elements on the screen stay plain.
 
-**Entry card** (a word or phrase and its translation). `rounded-lg border bg-card shadow-sm`,
-`hover:shadow-md hover:border-primary/40 transition-all duration-200`. Inside, in order: the
-source term as the `CardTitle` in `font-display`, the translation at `text-base`, the explanation
-at `text-sm text-muted-foreground`, then the examples. Sense chips sit under the title as a row
-of `rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary` pills, one per distinct sense of
-the word. A chip is a filter and a label at once, so it is never the only place a sense is named.
+**Entry card** (a word or phrase and its translation). Use `rounded-lg border
+bg-card shadow-sm` and `hover:shadow-md hover:border-primary/40 transition-all
+duration-200`. Arrange child elements in this order: the source term in
+`font-display` using `CardTitle`, the translation at `text-base`, the
+explanation at `text-sm text-muted-foreground`, and the examples. Place sense
+chips directly below the title. Render them as a row of `rounded-full
+bg-primary/10 px-2 py-0.5 text-xs text-primary` pills, one per word meaning. A
+chip acts as both a filter and a label, so always explain the sense elsewhere on
+the card too.
 
-**List row.** A saved word inside a list. `flex items-center gap-3 rounded-lg px-3 py-2`, the term
-at `text-sm font-medium`, the translation at `text-sm text-muted-foreground truncate`, the row
-hover from the table above. Rows are separated by their own hover state and a hairline, never by a
-left border.
+**List row.** This surface represents a saved word inside a list. Apply `flex
+items-center gap-3 rounded-lg px-3 py-2`. Render the term with `text-sm
+font-medium` and the translation with `text-sm text-muted-foreground truncate`.
+Apply the row hover tokens from the table above. Separate rows using their hover
+states and hairline borders. Never use a left border accent.
 
-**History row.** The same skeleton as a list row plus a right-aligned relative timestamp at
-`text-xs text-muted-foreground tabular-nums`. History is chronological and repetitive, so it is set
-quieter than a list: no card, no shadow, just rows on the page.
+**History row.** Use the same base structure as a list row. Add a right-aligned
+relative timestamp with `text-xs text-muted-foreground tabular-nums`. History
+lists are chronological and repeat often. Keep them visual-light: omit the card
+container and shadow, and render simple rows on the page.
 
 ---
 
 ## 4. Typography
 
-- **Body font: Inter Variable (`font-sans`) on `<body>`.** Victor Mono Variable is available as
-  `font-mono` for genuinely technical strings, phonetic transcriptions and code. Inter is the
-  prose and UI voice.
-- **Display serif: Fraunces (`font-display`)**, self-hosted from `public/fonts/`. It carries the
-  wordmark, page titles and card titles, which is the cheapest way to give screens past the hero
-  some brand character.
-  **Never on a live figure.** The Fraunces subset has no tabular-figure feature, so digits jitter
-  in width as they update. Any number that changes stays in `font-sans` with `tabular-nums`.
-- Fonts are **self-hosted**: Inter and Victor Mono via `@fontsource-variable/*` imports in
-  `root.tsx`, Fraunces via the `@font-face` block in `app/app.css`. Never a Google Fonts link, never
-  a CDN. This is a privacy rule, not a performance one.
-- Scale (plain Tailwind, applied consistently):
+- **Body font: Inter Variable (`font-sans`) on `<body>`.** Use Victor Mono
+  Variable (`font-mono`) only for technical strings, phonetic transcriptions,
+  and code blocks. Inter serves as the voice for UI text and prose.
+- **Display serif: Fraunces (`font-display`)**, self-hosted in `public/fonts/`.
+  Use Fraunces for the wordmark, page titles, and card titles. This adds brand
+  character to views past the hero card. **Never on a live figure.** Fraunces
+  does not include tabular figures, so numbers shift width when values change.
+  Always render dynamic numbers in `font-sans` with `tabular-nums`. Tabular
+  figures have equal widths so columns align.
+- Fonts are **self-hosted**: Import Inter and Victor Mono using
+  `@fontsource-variable/*` packages in `root.tsx`. Declare Fraunces using the
+  `@font-face` block in `app/app.css`. Never load fonts from Google Fonts or an
+  external CDN. This protects user privacy.
+- Scale (standard Tailwind utilities):
   - Page title: `text-2xl font-semibold tracking-tight`
   - Hero: `text-4xl font-bold tracking-tight sm:text-5xl`
   - Card title: `text-lg font-semibold`
-  - Body: `text-sm` default, `text-base` for a translation or an example sentence
-  - Meta, labels, badges: `text-xs`, muted meta: `text-xs text-muted-foreground`
-- Emphasis weight is `font-semibold`.
-- **Foreign-language text carries a `lang` attribute.** A screen reader switching voice for a
-  German example sentence is the difference between the app working and not working. This is not
-  optional polish.
+  - Body: `text-sm` by default, `text-base` for translations or example
+    sentences
+  - Meta, labels, badges: `text-xs`; muted meta: `text-xs text-muted-foreground`
+- Set emphasis weights to `font-semibold`.
+- **Foreign-language text carries a `lang` attribute.** Screen readers need this
+  attribute to load the right voice for foreign text, such as a German example
+  sentence. This accessibility feature is required.
 
 ---
 
 ## 5. Shape, elevation, spacing
 
-- Radii: `rounded-md` buttons, inputs and thumbnails, `rounded-lg` cards and dialogs (dominant),
-  `rounded-xl` feature tiles, `rounded-2xl` the search hero, `rounded-full` pills, chips and dots.
-  `--radius: 0.5rem` stays.
-- Shadows: `shadow-sm` at rest, `hover:shadow-md` on interactive cards, `shadow-lg` for overlays.
-  Never heavier at rest.
-- Interactive-card hover recipe: `transition-all duration-200 hover:shadow-md
-  hover:border-primary/40`. No `dark:` variant is needed, `primary` is already per-theme.
-- Page container: `mx-auto max-w-3xl px-4 sm:px-6`. This is a focused single-column app, keep it
-  narrow. A translation reads badly at full width.
-- Vertical rhythm: `space-y-6` between page sections, `space-y-4` within cards, `gap-2` from a
-  label to its input.
+- Corner radii: Use `rounded-md` for buttons, inputs, and thumbnails. Use
+  `rounded-lg` for cards and dialogs as the default curve. Use `rounded-xl` for
+  feature tiles and `rounded-2xl` for the search hero. Use `rounded-full` for
+  pills, chips, and status dots. Keep `--radius: 0.5rem`.
+- Shadows: Use `shadow-sm` at rest, `hover:shadow-md` on interactive cards, and
+  `shadow-lg` on overlays. Never apply heavier shadows to elements at rest.
+- Interactive-card hover recipe: Apply `transition-all duration-200
+  hover:shadow-md hover:border-primary/40`. Omit `dark:` prefixes because
+  `primary` colors adapt to the active theme automatically.
+- Page container: Use `mx-auto max-w-3xl px-4 sm:px-6`. Keep the single-column
+  layout narrow. Full-width translation text is hard to read.
+- Vertical rhythm: Use `space-y-6` between page sections, `space-y-4` inside
+  cards, and `gap-2` between form labels and inputs.
 
 ---
 
 ## 6. The shell
 
-One wrapper, `app/components/app-wrapper.tsx`, renders both layouts:
+The wrapper in `app/components/app-wrapper.tsx` renders both responsive layouts:
 
-- **Mobile:** a fixed bottom tab bar (`app/components/bottom-nav.tsx`) with Search, Lists and
-  History, plus a left-slide drawer holding the full map including Settings and Account.
-- **Desktop (`md` and up):** a collapsible sidebar (`app/components/app-sidebar.tsx`) showing the
-  same map, with the configuration group below a rule.
+- **Mobile:** A fixed bottom tab bar (`app/components/bottom-nav.tsx`) links to
+  Search, Lists, and History. A left-side slide-out drawer holds the full site
+  map, including Settings and Account.
+- **Desktop (`md` and up):** A collapsible sidebar
+  (`app/components/app-sidebar.tsx`) displays the full site map, placing
+  configuration options below a divider rule.
 
-All three nav surfaces read ONE catalog, exported from `app-sidebar.tsx`. A label or an href
-changes in one place. Two navs disagreeing about a destination is a bug, and it is the bug this
-catalog exists to prevent.
+All three navigation views read from ONE catalog exported by `app-sidebar.tsx`.
+Update labels and paths in that single file. This shared source prevents routing
+mismatches between menus.
 
-The bottom bar has three equal flat tabs. Openplate's raised centre button did not come over,
-because this app has no single flagship verb that is tapped several times a session.
+The bottom bar provides three equal, flat tabs. The raised center button from
+openplate was removed because this app has no single primary action that users
+tap repeatedly.
 
 ---
 
 ## 7. Motion and feedback (non-negotiables)
 
-- **Pending buttons:** every submit button disables and shows `Loader2` with `animate-spin` plus a
-  progressive label ("Searching...", "Saving..."). No bare text swaps.
-- **Long operations** (a model call for an explanation): staged status copy driven by elapsed
-  time. Never leave a silent multi-second gap.
-- **Toasts** (sonner, mounted once in `root.tsx`): a success confirmation for every mutation.
-  Theme-aware, never a hardcoded `theme="light"`. The bottom of the screen belongs to the tab bar,
-  so toasts never cover it.
-- **Destructive actions:** an `AlertDialog` confirmation with a destructive button and a pending
-  spinner.
-- **Radix enter and exit:** `tw-animate-css` data-state animations as shipped.
-- **View transitions:** every in-app link goes through `app/components/link.tsx`, which defaults
-  react-router's `viewTransition` to true. The effect is a 200ms opacity cross-fade of the whole
-  document, nothing else. No shared-element morphs until something actually has a stable
-  counterpart across two routes.
-- **Reduced motion** is honoured through the media queries in `app.css`, which kill every view
-  transition and every toast animation. The app has no in-app motion toggle, so that media query
-  is the only switch.
-- **The waiting vocabulary** is two classes in `app.css`, `.pulse-soft` and `.loading-dots`, used
-  only where the app is genuinely waiting. Never as decoration on static content.
+- **Pending buttons:** Every active submit button disables itself and renders
+  `Loader2` with `animate-spin` and status copy ("Searching...", "Saving...").
+  Never swap text without an indicator.
+- **Long operations** (such as language model calls for explanations): Display
+  phased status copy based on elapsed time. Avoid multi-second delays without
+  feedback.
+- **Toasts** (sonner, mounted once in `root.tsx`): Show a success notification
+  for every data change. Support theme changes dynamically without hardcoding
+  `theme="light"`. Position toasts clear of the bottom tab bar.
+- **Destructive actions:** Require an `AlertDialog` confirmation with a
+  destructive button style and a loading spinner.
+- **Radix enter and exit:** Apply the default `tw-animate-css` state animations.
+- **View transitions:** Wrap internal links in `app/components/link.tsx`. This
+  file defaults react-router's `viewTransition` setting to true, creating a
+  200ms document cross-fade. Avoid custom shared-element transitions until views
+  share stable elements across routes.
+- **Reduced motion** is handled by media queries in `app.css`. These queries
+  disable view transitions and toast animations. Because the app lacks a manual
+  motion setting, the system media query is the sole control.
+- **The waiting vocabulary** uses two classes from `app.css`: `.pulse-soft` and
+  `.loading-dots`. Use them only when an operation is pending. Never apply them
+  as decoration on static content.
 
 ---
 
 ## 8. Dark mode
 
-Class-based (`.dark` on `<html>`), with a hand-rolled localStorage toggle offering light, dark and
-system. An inline boot script in `root.tsx` applies the class before first paint, so there is no
-flash. Rules: every new component ships both palettes, and overlays and toasts resolve the active
-theme rather than hardcoding one.
+Dark mode uses class-based styling via `.dark` on `<html>`. A custom toggle in
+localStorage supports light, dark, and system options. An inline script in
+`root.tsx` injects the class before the browser paints to prevent theme
+flashing. Provide both light and dark styles for every new component. Overlays
+and toast notifications must read the active theme instead of hardcoding one.
 
 ---
 
 ## 9. Voice
 
-One register everywhere: **warm, plainspoken, non-shaming, and literally true.** Rules, in
-priority order:
+Use one consistent voice: **warm, plainspoken, non-shaming, and literally
+true.** Apply these priority rules:
 
-1. **Never imply the user failed.** Not knowing a word is the normal case, it is why the app
-   exists. Copy describes the WORD or the DATA, never the person. No streak scolding, no "you
-   haven't studied since...".
-2. **Never claim more than is true.** If the dictionary has no entry, say the dictionary has no
-   entry. If a translation came from a model rather than a curated source, say so where the user
-   can see it. Rewrite honesty copy for warmth, never for comfort.
-3. **Sentence case, ordinary words.** No Title Case buttons. No operator jargon ("instance",
-   "invalid", "payload") anywhere a normal user can reach. "Log in" everywhere, never "Login",
-   never a second synonym.
-4. **Confirmations end in a period and state the outcome.** "Saved to your list." "List deleted."
-5. **Empty is not an error.** "Your saved words will collect here." Never "No data", never
-   "Nothing found", never "No results".
-6. **"Coming soon" is a dead end.** Say what is not built, what works instead today, and how long
-   the workaround takes.
-7. **One phrasing per idea.** A sentence that appears on two screens is a bug in one of them.
-8. **All copy and all translations go through `pnpm -C djinn wordsmith`.** Never hand-written,
-   never hand-translated. The tool refuses a run that drops a key or translates a placeholder,
-   which is exactly the failure a human makes.
+1. **Never imply the user failed.** The app exists because users need help with
+   unfamiliar words. Focus copy on the WORD or the DATA, not the user. Avoid
+   streak guilt and warnings like "you haven't studied since...".
+2. **Never claim more than is true.** State clearly when a dictionary lacks an
+   entry. Disclose when translations come from a model instead of a curated
+   dictionary. Write honest messages with warmth, not false comfort.
+3. **Sentence case, ordinary words.** Use sentence case for button text. Avoid
+   technical terms like "instance", "invalid", or "payload" in user-facing
+   views. Use "Log in" everywhere instead of "Login" or other variations.
+4. **Confirmations end in a period and state the outcome.** Write "Saved to your
+   list." or "List deleted."
+5. **Empty is not an error.** Write "Your saved words will collect here." Never
+   write "No data", "Nothing found", or "No results".
+6. **"Coming soon" is a dead end.** Explain what is missing, provide current
+   workarounds, and estimate how long the alternative takes.
+7. **One phrasing per idea.** Do not duplicate text across different screens.
+8. **All copy and all translations go through `pnpm -C djinn wordsmith`.** Never
+   write or translate interface strings by hand. The tool blocks changes that
+   drop keys or translate code placeholders, preventing human errors.
 
 ---
 
@@ -247,12 +278,15 @@ priority order:
 
 - No em dashes. See section 0.
 - No thick left border accents. See section 0.
-- No new accent colors. Brand washes are allowed but rationed to the three `app.css` utilities, in
-  the places section 2 lists, and never as a raw color literal in a component.
-- No `text-teal-*`, `bg-emerald-*` or `bg-zinc-*` literals in app code. Every brand and neutral
-  value is a token. Color literals belong in `app/app.css` and nowhere else.
+- No new accent colors. Use brand washes sparingly via the three `app.css`
+  utilities in the locations listed in section 2. Never hardcode color values in
+  components.
+- No `text-teal-*`, `bg-emerald-*`, or `bg-zinc-*` utility classes in app code.
+  Reference brand and neutral values through design tokens. Place raw color
+  values in `app/app.css` only.
 - No `window.confirm` and no `window.alert`.
-- No unlabeled spinners as page content. A spinner attaches to the thing that is pending.
-- No Google Fonts and no CDN assets. Self-hosted only.
-- No new one-off card or badge class combos when a recipe above fits.
-- No second `.surface-brand` on a screen that already has one.
+- No unlabeled spinners in page content. Attach spinners directly to the
+  triggering element.
+- No Google Fonts and no CDN assets. Self-host all resources.
+- No custom card or badge utility combinations when an existing recipe applies.
+- No second `.surface-brand` on a screen that already uses one.

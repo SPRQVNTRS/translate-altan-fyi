@@ -1,44 +1,48 @@
 # translate.altan.fyi
 
-A vocabulary and translation web app. You type a word or a phrase, and you get a
-translation, a plain explanation and example sentences, and you can collect what
-you want to learn into lists. It works with no account: search, lists and history
-live on your device. An account exists for one reason only, syncing to a second
-device, and when you make one your personal data is end to end encrypted. The
-hosted instance is [translate.altan.fyi](https://translate.altan.fyi). This
-repository is the whole thing, under the MIT licence, and it is meant to be
-self-hosted.
+A vocabulary and translation web app. You type a word or a phrase. The app
+returns a translation, a plain explanation, and example sentences. You can
+collect terms into learning lists. The app works without an account. Search,
+lists, and history stay on your local device. An account serves one purpose:
+syncing data to a second device. When you create an account, the app encrypts
+your personal data end to end. The hosted instance lives at
+[translate.altan.fyi](https://translate.altan.fyi). This repository contains the
+entire codebase under the MIT licence. You can host it yourself.
 
 ## Architecture in five lines
 
-1. One service. TypeScript, Vite, React Router v8 and Express in a single
-   process, with a second process for background work.
-2. Postgres is the only datastore. Drizzle owns the schema and the migrations.
-3. pg-boss carries the background jobs, and `worker.ts` is what runs them.
-4. The encrypted personal zone is copied from `openplate-sync` rather than shared
-   as a package, for the reasons in [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
-5. The dictionary is built from open data: Wikidata lexicographical data (CC0)
-   and Tatoeba sentences (CC0 and CC BY 2.0 FR). Attribution travels with the
-   data in the `sources` table.
+1. One service. TypeScript, Vite, React Router v8, and Express run in a single
+   process, with a second process for background tasks.
+2. Postgres is the only datastore. Drizzle manages the schema and migrations.
+3. pg-boss manages background jobs, and `worker.ts` runs them.
+4. The encrypted personal zone code comes directly from `openplate-sync` instead
+   of an external package, as explained in
+   [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
+5. The dictionary uses open data: Wikidata lexicographical entries (CC0) and
+   Tatoeba sentences (CC0 and CC BY 2.0 FR). The `sources` table stores
+   attribution data.
 
 ## Self-hosting
 
 ### What you need
 
-- Node.js 22 or newer. `.nvmrc` pins 24 for development, and the production
-  image (`Dockerfile.pnpm`) builds on 22.
-- pnpm 11. The repository declares it in `packageManager`, so
-  [corepack](https://nodejs.org/api/corepack.html) will pick the right one.
-- PostgreSQL 15 or newer, with the `pg_trgm` extension available. Search uses
-  trigram similarity for the "did you mean" branch.
+- Node.js 22 or newer. The `.nvmrc` file specifies version 24 for development,
+  and the production image (`Dockerfile.pnpm`) runs on version 22.
+- pnpm 11. The repository sets this in `packageManager`, so
+  [corepack](https://nodejs.org/api/corepack.html) installs the correct version
+  automatically.
+- PostgreSQL 15 or newer, with the `pg_trgm` extension enabled. Search uses
+  trigram similarity, which measures text overlap, for the "did you mean"
+  feature.
 
-There is **no private registry token**. All four `@sprqvntrs/*` dependencies are
-published to npmjs.com under MIT, and `.npmrc` pins the scope to
-`https://registry.npmjs.org/` so the install works even on a machine whose
-`~/.npmrc` routes that scope somewhere else.
+You do not need a private registry token. All four `@sprqvntrs/*` dependencies
+exist on npmjs.com under the MIT licence. The `.npmrc` file routes this scope
+directly to `https://registry.npmjs.org/`. Installs work even if your global
+`~/.npmrc` file redirects the scope.
 
-Those packages ship raw TypeScript, so `vite.config.ts` lists them in
-`ssr.noExternal`. Vite has to compile them rather than hand them to Node.
+These packages publish uncompiled TypeScript. Because of this, `vite.config.ts`
+includes them in `ssr.noExternal`. Vite compiles these dependencies instead of
+passing them directly to Node.
 
 ### Install and run
 
@@ -61,58 +65,60 @@ pnpm drizzle:migrate   # create the schema
 pnpm dev               # dev server and worker together
 ```
 
-The app is served at `http://localhost:${PORT}`, which is `3000` by default.
+The app runs at `http://localhost:${PORT}`, which defaults to `3000`.
 
-`pnpm dev` runs two processes: `dev:server` (Express with React Router SSR) and
-`dev:worker` (the pg-boss worker). Each can run alone with `pnpm run dev:server`
-or `pnpm run dev:worker`.
+The `pnpm dev` command starts two processes: `dev:server` (Express running React
+Router SSR) and `dev:worker` (the pg-boss job processor). You can run each
+process separately with `pnpm run dev:server` or `pnpm run dev:worker`.
 
 ### Migrations and the worker in a deployment
 
-`scripts/start.sh` is the container entrypoint, and it does three things in
-order:
+The container entrypoint script is `scripts/start.sh`. It executes three tasks
+in sequence:
 
-1. `pnpm drizzle:migrate` applies pending schema migrations.
-2. `pnpm cli data-migration run` applies pending data migrations, which are
-   TypeScript one-shots tracked in a `data_migrations` table. See
+1. It applies pending schema migrations with `pnpm drizzle:migrate`.
+2. It runs pending data migrations with `pnpm cli data-migration run`. These
+   one-time TypeScript scripts are tracked in a `data_migrations` table. See
    [ADR-0002](.adr/0002-data-migrations.md).
-3. It starts the web process and the **worker** process side by side and
-   supervises both. If either one dies, the container exits so it restarts as a
-   unit.
+3. It boots the web process and the **worker** process together, monitoring
+   both. If either process crashes, the entire container shuts down to force a
+   full restart.
 
-The worker is not optional. Word enrichment is a pg-boss job, and a queued job
-that nothing dequeues is a page that never finishes loading.
+You must run the worker process. Word enrichment tasks depend on pg-boss queues.
+If no worker processes those tasks, page requests will hang indefinitely.
 
-Build and run the image with:
+Build and run the container image:
 
 ```bash
 docker build -f Dockerfile.pnpm -t translate-altan-fyi .
 docker run --env-file .env -p 3000:3000 translate-altan-fyi
 ```
 
-Without Docker, `pnpm build` then `pnpm start` runs the web process, and
-`pnpm worker` runs the worker. You still have to run `pnpm drizzle:migrate`
-yourself before the first start.
+To run outside Docker, build with `pnpm build`. Start the web server with `pnpm
+start`, and start the worker with `pnpm worker`. You must run `pnpm
+drizzle:migrate` manually before your first run.
 
 ## The seed dump
 
-Building the dictionary from scratch means downloading multi-GB Wikidata and
-Tatoeba dumps and running the importers for hours. You do not have to. A seed
-dump of the shared dictionary zone is published as a release asset:
+You can populate the database quickly without processing raw dumps. Building the
+dictionary from scratch requires downloading large dumps from Wikidata and
+Tatoeba, which takes hours. Instead, you can use a pre-built seed dump of the
+shared dictionary tables:
 
-- **Download:** [`dictionary-seed-2026-09-02.dump`](https://github.com/SPRQVNTRS/translate-altan-fyi/releases/download/seed-2026-09-02/dictionary-seed-2026-09-02.dump)
-  (45 MB, custom pg_dump format), with an
-  [md5 checksum](https://github.com/SPRQVNTRS/translate-altan-fyi/releases/download/seed-2026-09-02/dictionary-seed-2026-09-02.dump.md5)
-  next to it.
+- **Download:**
+  [`dictionary-seed-2026-09-02.dump`](https://github.com/SPRQVNTRS/translate-altan-fyi/releases/download/seed-2026-09-02/dictionary-seed-2026-09-02.dump)
+  (45 MB, custom pg_dump format), with an [md5
+  checksum](https://github.com/SPRQVNTRS/translate-altan-fyi/releases/download/seed-2026-09-02/dictionary-seed-2026-09-02.dump.md5)
+  file.
 - **Generated:** 2026-09-02.
-- **Contents:** 383,185 headwords, 102,335 senses, 107,085 sense versions,
-  1,862 translations, 99,744 example sentences, 829,264 example-to-headword
-  links, and the 4 `sources` rows.
+- **Contents:** 383,185 headwords, 102,335 senses, 107,085 sense versions, 1,862
+  translations, 99,744 example sentences, 829,264 example-to-headword links, and
+  4 `sources` rows.
 
 ### Licence and attribution
 
-The dump carries data from three sources, and its `sources` table is what a
-running instance renders as attribution:
+The seed dump includes data from three sources. The application presents
+attribution directly from the `sources` table:
 
 | Source | Licence | What it is |
 |--------|---------|------------|
@@ -120,59 +126,62 @@ running instance renders as attribution:
 | Tatoeba (CC0 sentences) | CC0 1.0 | example sentences |
 | Tatoeba | CC BY 2.0 FR | example sentences |
 
-**The CC BY 2.0 FR rows carry an attribution obligation.** If you serve this
-data you must credit Tatoeba and link back to the sentence. The app does this
-already, using the `attribution` column. Do not delete the `sources` rows and do
-not strip the attribution from the UI, or your instance is out of compliance.
+**The CC BY 2.0 FR records require clear attribution.** If you publish this
+data, you must credit Tatoeba and link to the source sentence. The app does this
+automatically through the `attribution` column. Keep the `sources` records in
+your database and keep the UI attributions intact to stay compliant.
 
 ### Restore
 
-The dump carries rows only, never schema. Run the migrations first, then:
+The seed dump contains table rows without any schema definitions. Run database
+migrations first, then run these commands:
 
 ```bash
 curl -LO https://github.com/SPRQVNTRS/translate-altan-fyi/releases/download/seed-2026-09-02/dictionary-seed-2026-09-02.dump
 scripts/dictionary-restore.sh --truncate-first dictionary-seed-2026-09-02.dump
 ```
 
-The script reads the same `DB_*` variables as the app and passes
-`--single-transaction`, which matters more than it looks: without it,
-`pg_restore --data-only` exits 0 after every single row failed to load.
-`--truncate-first` empties the nine dictionary tables before the load, which you
-need because one migration seeds a `sources` row that the dump also carries.
-The restore needs superuser rights, because `--disable-triggers` does.
+The script uses your existing `DB_*` environment variables. It uses
+`--single-transaction` during restore. This flag is critical: without it,
+`pg_restore --data-only` can return an exit code of 0 even when all rows fail to
+load. The `--truncate-first` flag clears the nine dictionary tables before
+loading. This cleanup prevents conflicts with migration scripts that insert an
+initial `sources` row. The restore command requires database superuser access
+because it uses `--disable-triggers`.
 
-Expect a few minutes. Then count the rows, do not trust the exit code:
+The import takes several minutes. Verify the imported row counts directly
+instead of relying on exit codes:
 
 ```bash
 psql -d "$DB_NAME" -c 'SELECT count(*) FROM headwords;'
 ```
 
-`scripts/verify-seed-restore.sh` does all of that against a throwaway database
-and prints the counts, and `scripts/make-seed-dump.sh` is what regenerates the
-dump from an instance of your own.
+The `scripts/verify-seed-restore.sh` script tests this process against a
+temporary database and outputs record counts. The `scripts/make-seed-dump.sh`
+script exports a new seed dump from your current database instance.
 
 ## Language model provider
 
-The generated explanation and the generated example sentence come from a
-language model, reached through [OpenRouter](https://openrouter.ai). This is
-**optional**. Set `OPENROUTER_API_KEY` in `.env` to turn it on. With no key the
-app still works and serves dictionary results only: translations, senses and the
-imported Tatoeba examples. Nothing crashes and no page breaks, you simply get
-less on an entry.
+The application can generate explanations and example sentences via a language
+model through [OpenRouter](https://openrouter.ai). This feature is **optional**.
+Add `OPENROUTER_API_KEY` to your `.env` file to enable it. Without this key, the
+application works normally using local dictionary data: translations, senses,
+and imported Tatoeba examples. Entries show less text, but pages load cleanly
+without errors.
 
-Generated text is labelled as such in the UI and recorded against the
-`Generated explanations` source, so a reader can tell it from imported data.
+The UI identifies generated text clearly. It links AI text to the `Generated
+explanations` source so users can distinguish it from imported database entries.
 
-Spending is capped. A daily budget with a warning threshold lives in
-`app_settings`, and `ALERT_WEBHOOK_URL` gets a POST when it is crossed. With no
-webhook the alert is written to the log instead, which is a complete alert for a
-self-hosted install.
+The system enforces spending limits. The `app_settings` table stores daily
+spending caps alongside warning thresholds. When spending exceeds these
+thresholds, the system sends an HTTP POST request to `ALERT_WEBHOOK_URL`. If you
+do not configure a webhook, the system logs alerts to standard output.
 
 ## Configuration
 
-`.env.example` lists every variable the app reads, with a comment on each and
-placeholder values only. Environment access is centralised in `app/config/`, so
-that directory and `.env.example` are the two places to look.
+The `.env.example` file outlines every supported variable with commentary and
+placeholder values. Application configuration logic lives in `app/config/`.
+Check that directory and `.env.example` for details.
 
 ```typescript
 import { CONFIG } from '#config';
@@ -181,12 +190,13 @@ const port = CONFIG.server.port;
 const dbUrl = CONFIG.database.url;
 ```
 
-Two secrets deserve a second look before you deploy:
+Review two important secrets before deploying:
 
-- `SESSION_SECRET` signs the session cookie.
-- `SERVER_SECRET` is the root of the encrypted personal zone. It cannot decrypt
-  anything, but rotating it invalidates every stored verifier, which means every
-  account has to recover. `.env.example` explains exactly what it does.
+- `SESSION_SECRET` encrypts and signs the user session cookie.
+- `SERVER_SECRET` forms the root key for the encrypted personal storage layer.
+  It cannot decrypt stored content. However, changing this value invalidates all
+  stored authentication verifiers, forcing all users to run account recovery.
+  The `.env.example` file describes this behavior.
 
 ### Database connection pooling
 
@@ -197,57 +207,61 @@ Two secrets deserve a second look before you deploy:
 | `DB_IDLE_TIMEOUT_MS` | `30000` | Idle connection close timeout |
 | `DB_CONNECTION_TIMEOUT_MS` | `5000` | Connection acquisition timeout |
 
-In production, pool statistics are logged every 60 seconds, and a warning fires
-when `waitingCount > 5`.
+In production environments, the application logs connection pool metrics every
+60 seconds. It logs a warning whenever `waitingCount > 5`.
 
 ### Schema changes
 
-`drizzle/schema.ts` is the source of truth. Use `pnpm drizzle:push` while a
-change is in flux locally, and `pnpm drizzle:generate` plus `pnpm drizzle:migrate`
-once you want it recorded. A deploy only ever runs `drizzle:migrate`.
+The `drizzle/schema.ts` file acts as the single source of truth for the database
+schema. Run `pnpm drizzle:push` to test local schema modifications. Run `pnpm
+drizzle:generate` and `pnpm drizzle:migrate` to create and save migration files.
+Production deployments run only `drizzle:migrate`.
 
-The `drizzle:*` scripts invoke `drizzle-kit` through `tsx` rather than directly,
-because Node does not strip TypeScript inside `node_modules` and the schema
-imports from TS-only packages.
+The `drizzle:*` npm scripts execute `drizzle-kit` via `tsx`. Node does not strip
+TypeScript inside `node_modules`, and the database schema imports types from
+TypeScript packages.
 
 ## Accounts and the encrypted personal layer
 
-The app is **anonymous by default**. Search, vocabulary lists and history all
-work with no account, stored on the device. There is no signup prompt, and
-nothing on those paths requires an account.
+The application is **anonymous by default**. Search, word lists, and history
+save locally on your device without an account. The UI presents no signup
+prompts, and core routes require no login.
 
-An account exists for exactly one reason: syncing to a second device. It is
-offered in one place, a card on `/settings`.
+Accounts exist only to sync state across multiple devices. Users can create an
+account from a single settings card at `/settings`.
 
-When a user opts in, their personal data is **end to end encrypted**:
+When a user enables sync, the system protects their data with **end-to-end
+encryption**:
 
-- The browser derives an Argon2id key from a passphrase, then splits it into two
-  independent HKDF branches. One is the key-encryption key that wraps the data
-  key. The other is an auth hash.
-- The server stores only `HMAC(pepper, authHash)`, with the pepper held outside
-  the database in `SERVER_SECRET`. It never sees the passphrase, the
-  key-encryption key or the data key, so it cannot decrypt anything. That is a
-  property of the construction, not a policy.
-- Accounts are identified by an opaque **handle**, not an email address. The
-  service stores no email, so there is no verification mail and no reset link.
-- Recovery is a **recovery code**, which is a second authenticator that wraps the
-  same data key under its own key. It is shown once and must be retyped before
-  setup completes, because a code you were shown and never typed is a code you
-  do not have.
+- The browser derives an Argon2id key from a passphrase. It splits this key into
+  two separate branches using HKDF, a key derivation function. One branch acts
+  as a key-encryption key to wrap the user data key. The other branch serves as
+  an authentication hash.
+- The server stores only `HMAC(pepper, authHash)`. The pepper resides outside
+  the database in `SERVER_SECRET`. The server never receives the passphrase, the
+  key-encryption key, or the raw data key. The server cannot read decrypted user
+  data by cryptographic design.
+- The system identifies accounts using an opaque **handle** rather than an email
+  address. The database stores no email records, so the app provides no
+  verification emails or password reset links.
+- Users recover accounts with a **recovery code**. This code serves as an
+  alternate authenticator that encrypts the same underlying data key. The UI
+  displays this code once. The user must re-enter the code before finishing
+  setup, ensuring they have saved it.
 
-**Nobody can restore access.** If the passphrase and the recovery code are both
-lost, that account's synced data is unrecoverable. There is no operator override,
-because there is no key to override with.
+**Lost credentials cannot be restored.** If a user loses both their passphrase
+and their recovery code, their synced data is permanently inaccessible.
+Operators cannot restore access because the server holds no recovery keys.
 
-The protocol is specified in [`PROTOCOL.md`](PROTOCOL.md) and the implementation
-is copied from `openplate-sync` rather than shared, for the reasons in
+[`PROTOCOL.md`](PROTOCOL.md) documents the complete sync protocol. The system
+imports this implementation directly from `openplate-sync`, as documented in
 [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
 
 ## CLI
 
-The CLI is a thin client over the same REST API the web UI uses. Set
-`TRANSLATE_API_KEY`, and every command goes through HTTP auth, tenancy
-enforcement and audit.
+The CLI communicates with the same HTTP REST API that powers the web interface.
+Provide a `TRANSLATE_API_KEY` to run commands through standard HTTP
+authentication, tenant checks, and audit logging.
 
 ```bash
 pnpm cli api-key list --org=default
@@ -255,27 +269,31 @@ pnpm cli --remote=http://localhost:3000 workflow list --format=json
 TRANSLATE_PROD_URL=https://app.example.com pnpm cli --prod org list
 ```
 
-See [`.claude/cli.md`](.claude/cli.md) for the full command surface, and
-[`AGENTS.md`](AGENTS.md) for the API-first pattern.
+See [`.claude/cli.md`](.claude/cli.md) for full command documentation, and see
+[`AGENTS.md`](AGENTS.md) for API conventions.
 
 ## Multi-tenancy
 
-The app supports multi-tenant deployments with organization-based isolation
-enforced in **application code** via a typed query wrapper (`tenantDb(ctx)` from
-`#drizzle/tenant-db`). Postgres RLS is **not** used. See
-[ADR-0003](.adr/0003-app-enforced-multi-tenancy.md) for the rationale, and
+The application supports multi-tenant deployments. It isolates organization data
+in **application code** using a typed query wrapper named `tenantDb(ctx)` from
+`#drizzle/tenant-db`. It does **not** use Postgres Row-Level Security (RLS).
+Read [ADR-0003](.adr/0003-app-enforced-multi-tenancy.md) for background on this
+decision, and see
 [`.claude/skills/tenant-safe-db/SKILL.md`](.claude/skills/tenant-safe-db/SKILL.md)
-for the patterns.
+for implementation patterns.
 
-A single-tenant deployment creates one organization at startup and assigns new
-users to it. The schema does not change between the two modes.
+Single-tenant setups initialize one default organization on startup and assign
+all new users to it. Both modes use an identical database schema.
 
-The wrapper assumes this app's server is the only writer to Postgres. If you
-expose the database directly, to a BI tool with shared credentials or to
-PostgREST or to an agent writing arbitrary SQL, put RLS back for the exposed
-tables. The wrapper does not protect against actors that bypass it.
+The query wrapper assumes that only this application server writes to Postgres.
+If external tools query your database directly, such as BI tools, PostgREST, or
+custom SQL agents, you must enable Postgres RLS on sensitive tables. The
+application wrapper cannot protect database tables from external queries that
+bypass it.
 
 ## Tests
+
+Run the test suites with these commands:
 
 ```bash
 pnpm lint                 # oxlint, anti-slop plus correctness
@@ -284,19 +302,20 @@ pnpm test:unit            # node --test over tests/unit
 pnpm test:integration     # node --test against a live server
 ```
 
-There is no cloud CI. `.githooks/pre-push` is the whole gate, and it runs lint,
-typecheck, unit tests, content validation and a production build before every
-push. It only exists in a clone where `make hooks` or `pnpm install` has run.
+The repository does not use a cloud CI pipeline. The `.githooks/pre-push` script
+provides the only testing gate. It executes linting, type checks, unit tests,
+content validation, and production build checks before pushing commits. You must
+run `make hooks` or `pnpm install` in your local clone to install this hook.
 
-The integration suite spawns CLI subcommands against a running server. Every
-case skips itself when `TEST_API_KEY` is unset, so the suite is safe to run with
-no seeded credentials.
+The integration test suite executes CLI commands against an active application
+server. Tests skip automatically when `TEST_API_KEY` is not present, allowing
+safe runs without test credentials.
 
 ## Architecture decisions
 
-Significant choices are recorded as ADRs in [`.adr/`](.adr/). Read the relevant
-one before changing that area, and write a new one when you make a decision of
-similar weight.
+The project records major architectural choices as Architecture Decision Records
+(ADRs) in [`.adr/`](.adr/). Review the relevant record before editing an
+architectural subsystem. Add a new ADR when making major architectural changes.
 
 | # | Title |
 |---|-------|
@@ -310,19 +329,22 @@ similar weight.
 
 ## Contributing
 
-Issues and pull requests are welcome. Two things to know before you open one:
+We welcome issues and pull requests. Keep two details in mind before
+contributing:
 
-1. Read [`AGENTS.md`](AGENTS.md). It is the coding standard, and it is written
-   for humans as much as for coding agents.
-2. Run `make hooks` after cloning. The pre-push gate is the only test gate there
-   is, and a fresh clone does not have it.
+1. Read [`AGENTS.md`](AGENTS.md). This file outlines our coding standards for
+   both human contributors and automated agents.
+2. Run `make hooks` after cloning the repository. The pre-push hook acts as the
+   sole test runner, and local clones do not include it by default.
 
-Commits use [Conventional Commits](https://www.conventionalcommits.org).
+All commit messages must follow the [Conventional
+Commits](https://www.conventionalcommits.org) format.
 
 ## Licence
 
 MIT. See [`LICENSE`](LICENSE).
 
-The **code** is MIT. The **dictionary data** in the seed dump is not: it is CC0
-and CC BY 2.0 FR, and the CC BY rows oblige you to attribute Tatoeba. See
-[the seed dump section](#licence-and-attribution) above.
+The application **code** uses the MIT licence. The **dictionary data** in the
+seed dump uses CC0 and CC BY 2.0 FR licences. The CC BY data requires
+attribution to Tatoeba. See [the seed dump section](#licence-and-attribution)
+for complete licensing terms.
