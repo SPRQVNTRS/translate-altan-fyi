@@ -6,9 +6,12 @@
  * here, the PWA keeps working fully offline in either language without a
  * separate cache entry for the translations.
  *
- * ONE namespace. `common` is the whole UI and is loaded on every page. A second
- * namespace earns its place when a route carries enough prose that dragging it
- * into every page's bundle is wasteful, and no route here does yet.
+ * TWO namespaces. `common` is the whole UI and is loaded on every page. `legal`
+ * is the second, and it earned its place the way the rule above says one has
+ * to: the imprint, privacy and terms pages carry more prose than the rest of
+ * the app put together, none of it is read on any other screen, and a
+ * translation run over the legal documents must not be able to disturb a nav
+ * label. Route components ask for it explicitly with `useTranslation('legal')`.
  *
  * Detection is pinned to the COOKIE ONLY. The server renders from that same
  * cookie and nothing else (see `app/i18n/language-prefs.ts`), so any additional
@@ -24,19 +27,21 @@ import { initReactI18next } from 'react-i18next';
 import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, SUPPORTED_LANGUAGES } from './language-prefs';
 import enCommon from '../locales/en/common.json';
 import deCommon from '../locales/de/common.json';
+import enLegal from '../locales/en/legal.json';
+import deLegal from '../locales/de/legal.json';
 
 void i18next
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon },
-      de: { common: deCommon },
+      en: { common: enCommon, legal: enLegal },
+      de: { common: deCommon, legal: deLegal },
     },
     fallbackLng: DEFAULT_LANGUAGE,
     supportedLngs: [...SUPPORTED_LANGUAGES],
     defaultNS: 'common',
-    ns: ['common'],
+    ns: ['common', 'legal'],
     detection: {
       order: ['cookie'],
       lookupCookie: LANGUAGE_COOKIE,

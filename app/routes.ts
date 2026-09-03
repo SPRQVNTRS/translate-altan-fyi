@@ -122,8 +122,17 @@ export default [
 
   layout('routes/_public.tsx', { id: '_public' }, [
     route('/logout', 'routes/logout.tsx'),
-    route('/terms', 'routes/legal/terms.tsx'),
-    route('/privacy', 'routes/legal/privacy.tsx'),
+
+    // The three legal documents, all under `/legal/` rather than at the root.
+    // One prefix keeps them together in a sitemap, in a footer and in a link
+    // somebody pastes into a support thread, and it leaves the root namespace
+    // to the product. `/terms` and `/privacy` used to sit at the root carrying
+    // the ts-factory-stack boilerplate, which described accounts, payment
+    // processors and profile data this product does not have; nothing links to
+    // the old paths, so they are gone rather than redirected.
+    route('/legal/imprint', 'routes/legal/imprint.tsx'),
+    route('/legal/privacy', 'routes/legal/privacy.tsx'),
+    route('/legal/terms', 'routes/legal/terms.tsx'),
 
     // Catch-all: unmatched URLs get 404 inside the layout
     route('*', 'routes/$.tsx'),

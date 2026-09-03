@@ -142,3 +142,51 @@ saved under meanings that have no translation yet, so the card lists them with
 the shared `search.noTranslationYet` line, which is the entry's own state. And
 the nudge renders on `/search` as well as on `/`, because both URLs are the same
 route module; that is the index screen either way.
+
+## M175/04 browser check
+
+Date: 2026-09-03
+Browser: Chromium 142 (via agent-browser), HEADLESS, see the caveat below.
+Target: the local production build (`pnpm build` then `pnpm start`) at
+`http://localhost:3312`, viewport 390 x 844 with the UI language set to German
+(`translate-language=de`).
+
+**Headed was not possible from this workstation session.** Chrome refuses to
+start without an X server (`Missing X server or $DISPLAY`), and the sandbox this
+check ran in reaches neither the X sockets nor the Wayland socket. What headless
+cannot see is hover state and native scrollbars. Neither is load-bearing on
+three pages of static prose, and the one layout fault found below was found by
+measuring `scrollWidth` against `clientWidth`, which headless reports honestly.
+A headed pass is owed the next time someone drives this app with a display.
+
+What was seen, in German:
+
+1. **The way in.** `/settings` shows a `Rechtliches` card with three links,
+   `Impressum`, `Datenschutz` and `Nutzungsbedingungen`. There is still no link
+   in the app shell itself; that is owed work in
+   `app/components/app-wrapper.tsx`.
+2. **All three pages render German copy.** `/legal/imprint` is `Impressum`,
+   `/legal/privacy` is `Datenschutzerklärung`, `/legal/terms` is
+   `Nutzungsbedingungen`, and each `<title>` matches its heading.
+3. **No missing-key placeholders.** A scan of the rendered text for a raw dotted
+   catalogue path (`privacy.`, `terms.`, `imprint.`, `links.`) returned zero
+   matches on all three pages.
+4. **One date, formatted for the reader.** All three print
+   `Zuletzt aktualisiert: 2. September 2026`, from `LEGAL_LAST_UPDATED`. The
+   English pages print `September 2, 2026` from the same constant.
+5. **The identifiers are not translated.** The imprint shows
+   `SPARQ VENTURES UG (haftungsbeschränkt)`, `Straße 73 49`, `13125 Berlin`,
+   `HRB 174062 B` and `DE312546809`, byte-identical to the English page.
+6. **One `h1` per page**, and the cross-link strip at the foot of each document
+   renders the current page as plain text and the other two as links.
+7. **A layout fault, found and fixed.** At 390 px the imprint measured
+   `scrollWidth` 397 against `clientWidth` 390: the heading
+   `Verbraucherstreitbeilegung` is wider than the column at the `H2` `default`
+   size. Fixed with `break-words` on the article and by moving the section
+   headings to `H2 variant="sectionHeader"`, which is also smaller than the
+   page's own `h1` (the `default` variant was larger, so every section heading
+   outranked the title). Re-measured after the fix: 390 against 390 on all
+   three pages.
+8. **Register.** The legal copy is Sie-form while the app UI is du-form. That is
+   deliberate and matches openplate's German legal pages: a contract and a
+   privacy policy are addressed formally in German, the app is not.

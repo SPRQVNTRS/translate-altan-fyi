@@ -32,18 +32,57 @@ import { z } from 'zod';
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from './language-prefs';
 import enCommon from '../locales/en/common.json';
 import deCommon from '../locales/de/common.json';
+import enLegal from '../locales/en/legal.json';
+import deLegal from '../locales/de/legal.json';
 
 /** A translation catalog: nested objects bottoming out in strings. */
 type Catalog = { readonly [key: string]: string | Catalog };
 
 /**
- * Both shipped catalogs, keyed by language. Static imports, the same bundles
- * `i18n.ts` feeds i18next, so a title can never drift from the rest of the UI.
+ * Every shipped catalog, keyed by language and then by NAMESPACE. Static
+ * imports, the same bundles `i18n.ts` feeds i18next, so a title can never drift
+ * from the rest of the UI.
  */
 const CATALOGS = {
-  en: enCommon,
-  de: deCommon,
-} satisfies Record<LanguageCode, Catalog>;
+  en: { common: enCommon, legal: enLegal },
+  de: { common: deCommon, legal: deLegal },
+} satisfies Record<LanguageCode, Record<Namespace, Catalog>>;
+
+/** The namespaces `i18n.ts` registers, and the only ones a key may name. */
+const NAMESPACES = ['common', 'legal'] as const;
+
+/** One of the registered namespaces. */
+type Namespace = (typeof NAMESPACES)[number];
+
+/** The namespace a bare key without a `ns:` prefix is looked up in, as in `i18n.ts`. */
+const DEFAULT_NAMESPACE: Namespace = 'common';
+
+/** Narrows an arbitrary prefix to a registered namespace. */
+function isNamespace(value: string): value is Namespace {
+  return NAMESPACES.some((namespace) => namespace === value);
+}
+
+/**
+ * Splits an i18next-style `namespace:dotted.key` into its two halves.
+ *
+ * A key with no colon belongs to `common`, which is what every existing call
+ * site passes, so adding the `legal` namespace changed no caller.
+ *
+ * An UNREGISTERED prefix is not a namespace: the whole key is looked up in
+ * `common` instead, misses, and the caller gets the key itself back. That is
+ * the same visible-but-harmless outcome as any other unknown key, and it is
+ * deliberately not a throw, because this code runs in a document head.
+ *
+ * @param key either `'search.metaTitle'` or `'legal:privacy.title'`.
+ * @returns the namespace and the dotted path inside it.
+ */
+function splitNamespace(key: string) {
+  const colon = key.indexOf(':');
+  if (colon === -1) return { namespace: DEFAULT_NAMESPACE, path: key };
+  const prefix = key.slice(0, colon);
+  if (!isNamespace(prefix)) return { namespace: DEFAULT_NAMESPACE, path: key };
+  return { namespace: prefix, path: key.slice(colon + 1) };
+}
 
 /** The root route's id, as registered by React Router for `app/root.tsx`. */
 const ROOT_ROUTE_ID = 'root';
@@ -129,7 +168,8 @@ function interpolate(template: string, values: Readonly<Record<string, string>>)
  * result against the key it passed.
  *
  * @param language - the active language, e.g. `i18n.language` or a stored code.
- * @param key - a dotted catalog key, e.g. `'search.metaTitle'`.
+ * @param key - a dotted catalog key, e.g. `'search.metaTitle'`, optionally
+ *   prefixed with a namespace, e.g. `'legal:privacy.title'`.
  * @param values - `{{name}}` interpolation values, as i18next's `t` takes them.
  * @returns the translated string.
  */
@@ -138,7 +178,11 @@ export function translateStatic(
   key: string,
   values: Readonly<Record<string, string>> = {},
 ): string {
-  const template = lookup(CATALOGS[toLanguageCode(language)], key) ?? lookup(CATALOGS[DEFAULT_LANGUAGE], key) ?? key;
+  const { namespace, path } = splitNamespace(key);
+  const template =
+    lookup(CATALOGS[toLanguageCode(language)][namespace], path) ??
+    lookup(CATALOGS[DEFAULT_LANGUAGE][namespace], path) ??
+    key;
   return interpolate(template, values);
 }
 
@@ -148,7 +192,7 @@ export function translateStatic(
  * written for.
  *
  * @param language - the active language, e.g. from `metaLanguage(matches)`.
- * @param key - a dotted catalog key, e.g. `'search.metaTitle'`.
+ * @param key - a dotted catalog key, optionally namespaced as `'legal:...'`.
  * @returns the translated string.
  */
 export function metaTitle(language: string | null | undefined, key: string): string {

@@ -3,6 +3,7 @@ import { Layers, User, LogOut, Settings } from 'lucide-react';
 import * as React from 'react';
 import { Link, Form, useNavigation } from 'react-router';
 import { cn } from '#app/lib/utils';
+import { APP_NAME } from '#app/lib/app-name';
 import { useLoading } from '#app/context/loading';
 import { useOptionalUser } from '#app/hooks/use-user';
 import {
@@ -55,7 +56,7 @@ export default function PublicWrapper({
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Layers className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="text-lg font-semibold text-foreground">AppName</span>
+              <span className="font-display text-lg font-semibold text-foreground">{APP_NAME}</span>
             </a>
           )}
         </div>
@@ -100,7 +101,7 @@ export default function PublicWrapper({
             </DropdownMenu>
           ) : null}
           {/* NO SIGN-IN LINK, AND NOTHING BELONGS IN ITS PLACE. This wrapper is
-              the chrome for `/terms`, `/privacy` and the 404 page, and this
+              the chrome for the `/legal/*` pages and the 404 page, and this
               product has no general "log in" concept for a visitor: an account
               is an opt-in for syncing to a second device, offered once, on
               `/settings`. The link that used to sit here pointed at the deleted

@@ -1,62 +1,120 @@
+import type { MetaFunction } from 'react-router';
+import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
+
 import { H1, H2, P } from '#app/components/typography';
 import PublicWrapper from '#app/components/public-wrapper';
-import type { MetaFunction } from 'react-router';
+import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
+import { LEGAL_LAST_UPDATED, formatLegalDate } from './last-updated';
+import { LegalPageLinks } from './page-links';
 
-export const meta: MetaFunction = () => {
-  return [{ title: 'Terms of Service' }];
-};
+/**
+ * The terms of use for the hosted instance.
+ *
+ * NOTHING COMMERCIAL LIVES HERE, AND THAT IS DELIBERATE. Payment was scrapped
+ * on 2026-09-01 (see the M175 milestone README). There is no plan, no price, no
+ * refund and no subscription clause, because there is no payment to write one
+ * about. If money ever enters this product, that is a new document, not an
+ * amendment squeezed into section 1.
+ *
+ * SECTION 5 IS THE ONE WITH A REAL OBLIGATION IN IT. The dictionary is built
+ * from CC0 and CC BY sources only (`app/lib/dictionary/licences.ts` is the
+ * allowlist that enforces it), and the CC BY half carries an attribution
+ * requirement that this document PASSES THROUGH to anyone reusing the content.
+ * We cannot waive it, so the terms say so and point at `/attribution`, which
+ * renders every source, its licence and its version from the database.
+ *
+ * The party is the legal person in `operator.ts`, named on the imprint page and
+ * linked from the lead, never a product name.
+ */
+export const meta: MetaFunction = ({ matches }) => [
+  { title: metaTitle(metaLanguage(matches), 'legal:meta.termsTitle') },
+];
+
+export function TermsContent() {
+  const { t, i18n } = useTranslation('legal');
+
+  return (
+    <article className="prose prose-zinc dark:prose-invert max-w-none break-words">
+      <H1 variant="pageHeader" className="mb-4 text-3xl">
+        {t('terms.title')}
+      </H1>
+
+      <P variant="subtle" className="mb-8">
+        {t('lastUpdated', { date: formatLegalDate(LEGAL_LAST_UPDATED, i18n.language) })}
+      </P>
+
+      <P className="mb-8">{t('terms.lead')}</P>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s1Heading')}</H2>
+        <P className="mt-4">{t('terms.s1Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s2Heading')}</H2>
+        <P className="mt-4">{t('terms.s2Body1')}</P>
+        <P className="mt-4">{t('terms.s2Body2')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s3Heading')}</H2>
+        <P className="mt-4">{t('terms.s3Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s4Heading')}</H2>
+        <P className="mt-4">{t('terms.s4Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s5Heading')}</H2>
+        <P className="mt-4">{t('terms.s5Body1')}</P>
+        <P className="mt-4">{t('terms.s5Body2')}</P>
+        <P className="mt-4">
+          <Link to="/attribution">{t('terms.attributionLink')}</Link>
+        </P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s6Heading')}</H2>
+        <P className="mt-4">{t('terms.s6Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s7Heading')}</H2>
+        <P className="mt-4">{t('terms.s7Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s8Heading')}</H2>
+        <P className="mt-4">{t('terms.s8Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s9Heading')}</H2>
+        <P className="mt-4">{t('terms.s9Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s10Heading')}</H2>
+        <P className="mt-4">{t('terms.s10Body')}</P>
+      </section>
+
+      <section className="mb-8">
+        <H2 variant="sectionHeader">{t('terms.s11Heading')}</H2>
+        <P className="mt-4">{t('terms.s11Body')}</P>
+      </section>
+
+      <LegalPageLinks current="terms" />
+    </article>
+  );
+}
 
 export default function Terms() {
   return (
     <PublicWrapper>
-      <article className="prose prose-zinc dark:prose-invert max-w-none">
-            <H1 variant="default" className="mb-8">Terms of Service</H1>
-            
-            <P variant="subtle" className="mb-8">Last updated: January 27, 2025</P>
-            
-            <section className="mb-8">
-              <H2 variant="default">1. Acceptance of Terms</H2>
-              <P>By accessing and using this service, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.</P>
-            </section>
-
-            <section className="mb-8">
-              <H2 variant="default">2. Use License</H2>
-              <P>Permission is granted to temporarily download one copy of the materials on our application for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:</P>
-              <ul className="mt-4">
-                <li>modify or copy the materials;</li>
-                <li>use the materials for any commercial purpose or for any public display;</li>
-                <li>attempt to reverse engineer any software contained on our application;</li>
-                <li>remove any copyright or other proprietary notations from the materials.</li>
-              </ul>
-            </section>
-
-            <section className="mb-8">
-              <H2 variant="default">3. Privacy Policy</H2>
-              <P>Your use of our application is also governed by our Privacy Policy. Please review our Privacy Policy, which also governs the Site and informs users of our data collection practices.</P>
-            </section>
-
-            <section className="mb-8">
-              <H2 variant="default">4. Prohibited Uses</H2>
-              <P>In addition to other prohibitions as set forth in the Terms of Service, you are prohibited from using the application or its content:</P>
-              <ul className="mt-4">
-                <li>for any unlawful purpose or to solicit others to perform or participate in any unlawful acts;</li>
-                <li>to infringe upon or violate our intellectual property rights or the intellectual property rights of others;</li>
-                <li>to harass, abuse, insult, harm, defame, slander, disparage, intimidate, or discriminate;</li>
-                <li>to submit false or misleading information;</li>
-                <li>to upload or transmit viruses or any other type of malicious code.</li>
-              </ul>
-            </section>
-
-            <section className="mb-8">
-              <H2 variant="default">5. Termination</H2>
-              <P>We may terminate or suspend your access to our Service immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.</P>
-            </section>
-
-            <section className="mb-8">
-              <H2 variant="default">6. Contact Information</H2>
-              <P>Questions about the Terms of Service should be sent to us at legal@example.com.</P>
-            </section>
-      </article>
+      <TermsContent />
     </PublicWrapper>
   );
 }
