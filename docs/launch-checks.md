@@ -64,7 +64,28 @@ localhost render no tag, which `tests/unit/landing-and-analytics.test.ts` proves
 not counted. `setCustomUrl` reports the PATH only: a results page is `/?q=<word>`,
 and the privacy policy states that Matomo is never told what you searched for.
 
-**Evidence of a real visit:** see below, filled in after the deploy.
+**Evidence of a real visit (2026-09-03):** a headless browser loaded
+`https://translate.altan.fyi/`, ran one search and opened `/lists`. The browser
+posted twice to `matomo.php?idsite=19` (HTTP 204), with
+`url=https%3A%2F%2Ftranslate.altan.fyi%2F` and `.../lists`. Neither carried the
+query string, which is the privacy claim holding.
+
+```
+$ pnpm -C djinn matomo live --site translate --count 5
+Time (UTC)           Country  Pages  Duration  Referrer  Entry Page
+2026-09-03 08:53:18  Germany      2       26s  direct    Search
+
+$ pnpm -C djinn matomo summary --site translate
+  Visits: 1   Unique visitors: 1   Pageviews: 2   Avg duration: 26s
+```
+
+**A zero here does not mean nobody came.** For roughly 20 minutes the summary
+read 0 while `Live.getCounters` already reported the visit: reports are served
+from ARCHIVES, and this site id had none yet. The scheduled archiver on the
+Matomo host had not covered the new site. Forcing one archive
+(`&trigger=archivephp` on a `VisitsSummary.get` call) produced the numbers above.
+If a later summary reads 0 while `matomo live` shows visits, that is the archiver
+and not the tag.
 
 ## M175/03 announcement
 
