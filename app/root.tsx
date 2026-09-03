@@ -30,6 +30,8 @@ import {
   type LanguageCode,
 } from '#app/i18n/language-prefs';
 import { shouldFallbackOffline } from '#app/lib/local-store';
+import { isAnalyticsHost } from '#app/lib/analytics-host';
+import { Matomo, MatomoRouteTracker } from '#app/components/site/matomo';
 
 // The two variable body faces are self-hosted through fontsource, so the app
 // makes no request to a third-party font host. Fraunces, the display face, is
@@ -66,10 +68,17 @@ export async function loader({ request }: Route.LoaderArgs) {
   // there is no cookie to read yet.
   const language = resolveRequestLanguage(request.headers.get('cookie'));
 
+  // WHETHER THIS HOST COUNTS VISITS, decided on the server so the tag is in the
+  // first byte of HTML rather than appearing after hydration. Behind Traefik
+  // the browser's host arrives in `X-Forwarded-Host`; direct, it is `Host`.
+  // Stage and localhost fall through both and render no tag at all.
+  const isAnalyticsEnabled = isAnalyticsHost(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
+
   return {
     toast,
     user,
     language,
+    isAnalyticsEnabled,
     headers: combineHeaders(toastHeaders),
   };
 }
@@ -145,6 +154,8 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
       toast: null,
       user: null,
       language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
+      // Offline there is nothing to report and no tracker to report it to.
+      isAnalyticsEnabled: false,
       headers: NO_SERIALIZED_HEADERS,
     };
   }
@@ -156,6 +167,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // There is no data in that case and the default is the right answer.
   const rootData = useRouteLoaderData<typeof loader>('root');
   const language: LanguageCode = rootData?.language ?? DEFAULT_LANGUAGE;
+  // No loader data means the root error boundary is rendering, which is not a
+  // page view worth counting, so the tag stays off.
+  const isAnalyticsEnabled = rootData?.isAnalyticsEnabled ?? false;
 
   return (
     <html lang={language} suppressHydrationWarning>
@@ -227,6 +241,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             `,
           }}
         />
+        {/* Production only. See `#app/lib/analytics-host`: stage and a laptop
+            would otherwise be counted as real use of the product. */}
+        {isAnalyticsEnabled && <Matomo />}
       </head>
       <body className="font-sans">
         <I18nProvider language={language}>{children}</I18nProvider>
@@ -256,6 +273,9 @@ export default function App() {
 
   return (
     <LoadingProvider>
+      {/* Every screen change after the first document is a router transition,
+          which the head snippet cannot see. This renders nothing. */}
+      {loaderData?.isAnalyticsEnabled && <MatomoRouteTracker />}
       <Outlet />
       {/* `system`, not a hardcoded `light`. The app has a class-based dark
           mode, so a fixed light value gave a dark-mode user a white toast on a

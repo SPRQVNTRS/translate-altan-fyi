@@ -47,16 +47,18 @@ export const meta: MetaFunction = ({ matches }) => [
 /**
  * Whether THIS instance actually measures anything.
  *
- * FOR M175/03 TO FLIP, AND FOR NOBODY ELSE. There is no Matomo snippet in
- * `app/root.tsx` today, so the honest sentence is `s11BodyNone` and that is
- * what renders. Spec M175/03 adds the Matomo site id; the agent that lands it
- * sets this to `true` in the same change, which swaps in `s11BodyMatomo`.
+ * TRUE SINCE M175/03. `app/components/site/matomo.tsx` carries the tag and
+ * `app/root.tsx` renders it on the production host, so `s11BodyMatomo` is now
+ * the honest sentence and `s11BodyNone` would be a false one. A self-hosted
+ * install that drops the tag flips this back in the same change.
  *
  * The rule this encodes, taken from openplate's own correction: a policy that
  * describes measurement which is switched off is a false statement in a legally
  * operative document, even though it over-discloses rather than under-discloses.
+ * The reverse is worse, and it is what this constant now asserts against:
+ * measurement that runs while the page denies it.
  */
-const ANALYTICS_ENABLED = false;
+const ANALYTICS_ENABLED = true;
 
 export function PrivacyContent() {
   const { t, i18n } = useTranslation('legal');
