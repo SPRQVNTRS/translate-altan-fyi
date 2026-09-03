@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Menu } from 'lucide-react';
 import { Link } from '#app/components/link';
 import { ThemeToggle } from '#app/components/theme-toggle';
+import { APP_NAME } from '#app/lib/app-name';
 import { routeTitle } from '#app/lib/route-title';
 import { cn } from '#app/lib/utils';
 import {
@@ -19,13 +20,6 @@ import { Button } from './ui/button';
 import { Separator } from './ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from './ui/sidebar';
-
-/**
- * The product name, a lowercase wordmark and a proper noun. It stays literal in
- * every language: a name is not copy, and translating it would give the app two
- * identities.
- */
-const APP_NAME = 'translate';
 
 /**
  * A thin navigation indicator across the top of the chrome, shown only while a
@@ -117,6 +111,41 @@ function NavDrawer() {
         </nav>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * The imprint and privacy links, at the bottom of every screen in the shell.
+ *
+ * A German Impressum has to be reachable from every page in two clicks, and
+ * `/settings` was the only entry point these two documents had. They are NOT in
+ * the nav catalog on purpose: the sidebar and the tab bar are places a person
+ * goes, and a privacy policy is not one of them. A quiet footer line is where a
+ * reader looks for them, and it costs the navigation nothing.
+ *
+ * The labels come from the `legal` namespace, so the footer and the strip at
+ * the bottom of each document read the same word.
+ */
+function LegalFooter() {
+  const { t } = useTranslation('legal');
+
+  return (
+    <footer className="border-t px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] pt-4 text-xs text-muted-foreground md:px-6 md:pb-4">
+      <nav aria-label={t('links.title')}>
+        <ul className="flex list-none flex-wrap gap-x-4 gap-y-1 pl-0">
+          <li>
+            <Link to="/legal/imprint" className="underline underline-offset-4 hover:text-foreground">
+              {t('links.imprint')}
+            </Link>
+          </li>
+          <li>
+            <Link to="/legal/privacy" className="underline underline-offset-4 hover:text-foreground">
+              {t('links.privacy')}
+            </Link>
+          </li>
+        </ul>
+      </nav>
+    </footer>
   );
 }
 
@@ -212,6 +241,7 @@ function InnerContent({ title, backTo, children }: { title?: string; backTo?: st
           hidden behind it. The sidebar owns navigation at md and up, where the
           bar is gone and the padding drops back to normal. */}
       <div className="flex-1 p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:p-6 md:pb-6">{children}</div>
+      <LegalFooter />
       <BottomNav />
     </>
   );

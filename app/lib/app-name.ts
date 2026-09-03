@@ -4,9 +4,8 @@
  * A lowercase wordmark and a proper noun, so it is never translated and never
  * capitalised by a stylesheet.
  *
- * `app/components/app-wrapper.tsx` holds an identical private `APP_NAME` for
- * the signed-in shell. Two copies of a wordmark is one too many, and that file
- * should import this one, but it was being edited in another thread when this
- * module was written. Folding it in is owed work, not a decision.
+ * `app/components/app-wrapper.tsx` used to hold a second private copy for the
+ * app shell. It imports this one since M175/03: two copies of a wordmark is one
+ * too many, and a rename that reaches only one of them renames half the app.
  */
 export const APP_NAME = 'translate';
