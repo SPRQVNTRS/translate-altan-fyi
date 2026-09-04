@@ -71,8 +71,18 @@ const DB_HOST = process.env.DB_HOST;
 
 const db = getRawDb();
 
-/** The route whose ordering the last case reads. */
-const ENTRY_ROUTE = fileURLToPath(new URL('../../app/routes/entry.$headwordId.tsx', import.meta.url));
+/**
+ * The module whose ordering the last case reads.
+ *
+ * IT MOVED, AND THE CHECK MOVED WITH IT. This used to be
+ * `app/routes/entry.$headwordId.tsx`, which held the trigger inline while the
+ * entry page was its only caller. M185/03 extracted the decision into this
+ * shared module, which the entry page and the search screen now both call, so
+ * the file that carries the ordering is this one. Pointing the check back at
+ * the route would make it read a file with no limiter call in it and fail on an
+ * absence rather than on a defect.
+ */
+const TRIGGER_MODULE = fileURLToPath(new URL('../../app/lib/enrichment/trigger.server.ts', import.meta.url));
 
 /** An address from the documentation range, with a random host part so no run can share a bucket with another. */
 function documentationAddress(): string {
@@ -198,7 +208,7 @@ describe('abuse: the trigger rate limit', () => {
     // SOURCE INSPECTION, NOT BEHAVIOUR. See the file comment for why: the
     // function that holds this ordering is not exported, and driving it would
     // need a whole cached entry as a fixture.
-    const code = stripComments(readFileSync(ENTRY_ROUTE, 'utf8'));
+    const code = stripComments(readFileSync(TRIGGER_MODULE, 'utf8'));
 
     // Vacuity guard. A stripper that ate the file would satisfy every index
     // check below by finding nothing at all.
@@ -208,7 +218,7 @@ describe('abuse: the trigger rate limit', () => {
     assert.equal(
       calls.length,
       1,
-      `the entry route calls checkTriggerRateLimit ${calls.length} time(s). Exactly one call site is what makes ` +
+      `the shared enrichment trigger calls checkTriggerRateLimit ${calls.length} time(s). Exactly one call site ` +
         'the ordering below a fact about every trigger rather than about one branch.',
     );
 
@@ -216,8 +226,8 @@ describe('abuse: the trigger rate limit', () => {
     const limiterCall = code.indexOf('checkTriggerRateLimit(');
     const refusalCall = code.indexOf('refuseTrigger(request)');
 
-    assert.ok(readyGuard > 0, "the entry route no longer returns early for a 'ready' panel, so a cache hit is counted");
-    assert.ok(refusalCall > 0, 'the entry route no longer routes its trigger through refuseTrigger');
+    assert.ok(readyGuard > 0, "the trigger no longer returns early for a 'ready' panel, so a cache hit is counted");
+    assert.ok(refusalCall > 0, 'the trigger no longer routes its refusal through refuseTrigger');
     assert.ok(
       readyGuard < refusalCall && refusalCall < limiterCall,
       'the cache-hit early return no longer sits above the rate-limit call. A ready panel queues nothing and ' +

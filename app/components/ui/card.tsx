@@ -26,13 +26,13 @@ const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivE
     // read flat against its own body copy. Callers that want another size still
     // override through `className`.
     //
-    // Titles also carry the display serif (`font-display`, Fraunces: see
-    // app.css). This is the highest-leverage place to spread the brand voice
+    // Titles also carry the display face (`font-display`, Bricolage Grotesque:
+    // see app.css). This is the highest-leverage place to spread the brand voice
     // past the hero, because Search, Lists, History and Settings all render card
     // titles. It is safe HERE and nowhere near a live figure: a card TITLE is
     // always a label ("Recent searches", "Your lists", a headword), while
     // counts and dates live in card CONTENT and stay in Inter with
-    // `tabular-nums`. The Fraunces subset has no tabular figures, so digits set
+    // `tabular-nums`. The display subset has no tabular figures, so digits set
     // in it would jitter in width as they update.
     <div
       ref={ref}

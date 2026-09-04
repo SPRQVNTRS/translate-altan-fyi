@@ -20,11 +20,18 @@
  * HKDF branch; the passphrase-KEK is another, with a different `info` label.
  * `wrappedDek` bytes pass through as opaque input to the store.
  */
-import type { AccountRecord, AccountStore, KeyRecordSubmission, NewTokenInput } from './account-store';
+import type { AccountAdmission, AccountRecord, AccountStore, KeyRecordSubmission, NewTokenInput } from './account-store';
 import type { KdfDescriptor } from './kdf-descriptor';
 import { deriveDummyKdfDescriptor } from './kdf-descriptor';
 import { computeVerifier, verifierMatches } from './verifier';
-import { classifyToken, computeExpiry, hashToken, TOKEN_TTL_MS, type GeneratedToken } from './tokens';
+import {
+  classifyToken,
+  computeExpiry,
+  hashToken,
+  isSignupInviteToken,
+  TOKEN_TTL_MS,
+  type GeneratedToken,
+} from './tokens';
 import {
   asFields,
   parseAuthHashField,
@@ -54,6 +61,36 @@ export interface AuthLogger {
   warn(message: string, context?: JsonObject): void;
 }
 
+/**
+ * The two admission primitives `handleSignup` needs and must not import.
+ *
+ * NOT COPIED, and it is the one addition this file carries over its upstream
+ * (ADR-0008, ADR-0009). Upstream reaches its own invite hashing directly; here
+ * the pepper is a THIRD labelled subkey of `SERVER_SECRET` derived in
+ * `app/lib/invites/token.ts`, which is this app's module and not part of the
+ * transcription. Injecting it as a port rather than importing it keeps this
+ * file free of an app-local import, keeps the signup suite DB-free AND
+ * secret-free, and puts the one constant-time comparison in one place instead
+ * of two.
+ */
+export interface SignupAdmissionPort {
+  /**
+   * `HMAC-SHA-256(inviteTokenPepper, token)`, hex: exactly the value
+   * `invites.token_hash` stores. The plaintext goes no further than this call.
+   */
+  hashInviteToken(token: string): string;
+  /**
+   * Whether the presented string is this instance's `ACCOUNT_BOOTSTRAP_TOKEN`.
+   *
+   * MUST be constant-time, and MUST be `false` when the operator configured no
+   * token, so an installation that never set one cannot be bootstrapped by
+   * presenting the empty string. Being true here is NOT sufficient to create an
+   * account: the store still requires `accounts` to be empty, counted under a
+   * lock inside the insert's transaction.
+   */
+  isBootstrapToken(token: string): boolean;
+}
+
 /** Everything the handlers need from the outside world. All of it injected — none of it imported. */
 export interface AuthContext {
   store: AccountStore;
@@ -64,13 +101,25 @@ export interface AuthContext {
   /**
    * How this instance treats new accounts.
    *
-   * `'invite'` IS REFUSED HERE rather than implemented. Upstream it redeems an
-   * operator-minted token inside the account-creation transaction; this
-   * service has open signup and copied none of that. An operator who sets
-   * invite mode therefore gets a CLOSED instance, not a silently open one —
-   * the fail-safe reading of a mode we cannot honour.
+   * `'invite'` IS NOW THE ONLY MODE THAT CREATES ANYTHING, and the inversion is
+   * deliberate. Until M184 this said the opposite: invite mode was refused
+   * because none of upstream's redemption had been copied, and `'open'` was
+   * what this service ran. Both halves have swapped. Redemption is implemented
+   * below, and `'open'` is refused for the reason invite mode used to be: it is
+   * a mode this installation will not honour, and the fail-safe reading of a
+   * mode we will not honour is a CLOSED instance rather than a silently open
+   * one.
+   *
+   * That leaves no value of this field that creates an account without an
+   * admission, which is the property the whole gate rests on
+   * (.adr/0009-invite-only-accounts.md). The composition root
+   * (`e2ee-context.server.ts`) hard-codes `'invite'`; there is no environment
+   * variable that can move it, so the gate cannot be lifted by a typo in a
+   * deployment.
    */
   signupMode: SignupMode;
+  /** Admission policy the pure signup path needs and cannot own. See {@link SignupAdmissionPort}. */
+  admission: SignupAdmissionPort;
   now(): Date;
   mintToken(): GeneratedToken;
   mintFamilyId(): string;
@@ -127,6 +176,24 @@ const LOGIN_REJECTED = 'invalid handle or passphrase';
  * see `handleRecover` for why the list has to be that long.
  */
 const RECOVERY_REJECTED = 'invalid handle or recovery code';
+
+/**
+ * The ONE refusal every failed admission gets, and the reason it names all four
+ * causes at once.
+ *
+ * A missing token, a token that was never issued, one already redeemed, one
+ * past its expiry and a bootstrap token presented after the first account are
+ * ONE answer, byte for byte, with ONE status. Telling them apart would build
+ * the token-enumeration oracle PROTOCOL.md §5.8.1 forbids: "already redeemed"
+ * discloses that a token was once real, which is exactly what an attacker
+ * harvesting a leaked chat log wants confirmed.
+ *
+ * The text lists the causes rather than hiding behind "invalid", because a
+ * message that names all of them can be read as evidence for none of them,
+ * and the person it usually reaches is somebody who mistyped an invite.
+ */
+const SIGNUP_NOT_ADMITTED =
+  'signup needs a valid invite: this one is missing, unrecognised, already used or expired';
 
 function summarize(account: AccountRecord): AccountSummary {
   return {
@@ -236,21 +303,82 @@ export async function handleGetKdfDescriptor(
 // Signup
 // ---------------------------------------------------------------------------
 
+/**
+ * Decides WHICH admission a signup body presents, without deciding whether it
+ * is still spendable, and that question belongs to the transaction
+ * (see {@link AccountAdmission}).
+ *
+ * `null` means "refuse", and every route to it is the same refusal: no field,
+ * a field that is not a non-empty string, a string that is neither the
+ * operator's bootstrap token nor `si_`-shaped.
+ *
+ * THE BOOTSTRAP TOKEN IS TRIED FIRST, and that is a usability call with no
+ * security cost. It is a constant-time comparison against one configured value
+ * whether it runs first or second, and trying it first means an operator whose
+ * token happens to begin with `si_` is not silently sent down the invite
+ * lookup to fail.
+ *
+ * `isSignupInviteToken` THEN RUNS BEFORE ANY LOOKUP, and it is right to. It is
+ * a pure prefix test over a prefix PROTOCOL.md §5.8.1 publishes, so it
+ * discloses nothing a reader of the spec did not already have, and it means a
+ * token belonging to another service (openplate-gateway's `gi_`, pasted from
+ * the wrong half of a join link) is refused without ever being hashed against
+ * this installation's invite rows or costing a database round trip. Its
+ * rejection is the same `403` and the same message as every other bad invite,
+ * so it adds no oracle.
+ */
+function classifyAdmission(value: JsonValue | undefined, ctx: AuthContext): AccountAdmission | null {
+  const token = parseTokenField(value, 'inviteToken');
+  if (!token.ok) return null;
+  if (ctx.admission.isBootstrapToken(token.value)) return { kind: 'bootstrap' };
+  if (!isSignupInviteToken(token.value)) return null;
+  return { kind: 'invite', tokenHash: ctx.admission.hashInviteToken(token.value) };
+}
+
+/**
+ * `POST /v1/auth/signup` (PROTOCOL.md §5.8), invite-gated since M184.
+ *
+ * THE ORDER OF THE THREE GATES IS THE SECURITY DESIGN, not house-keeping:
+ *
+ *  1. **Mode**, before any field is parsed. A closed instance must answer the
+ *     same `403` to a well-formed body and a malformed one; parsing first would
+ *     leak, through the difference between a `400` and a `403`, which
+ *     submissions were structurally valid.
+ *  2. **Which admission was presented**, also before any other field is parsed,
+ *     for exactly the same reason one level down: a caller holding no invite
+ *     must not be able to use the `400`/`403` split to find out whether the
+ *     rest of their body was acceptable.
+ *  3. **Whether that admission is spendable**, and this one cannot happen here
+ *     at all. It happens inside `createAccount`'s transaction, together with
+ *     the insert. A check performed here, before the transaction opened, would
+ *     be precisely the read-then-write race ADR-0009 rejected its Option A
+ *     over: two holders of one invite would both read it unredeemed and both
+ *     get an account.
+ *
+ * WHAT THIS DID TO THE `409` ORACLE. It narrowed it. Admission is settled
+ * before the handle is ever looked at, so an uninvited caller can no longer
+ * reach the conflict at all, and handle probing now costs an unspent invite per
+ * probe. The oracle is documented below where it is returned, and this gate
+ * makes it smaller rather than larger, the discipline the route's own header
+ * demands of anything added here.
+ */
 export async function handleSignup(
   body: JsonValue | undefined,
   ctx: AuthContext,
 ): Promise<AuthOutcome<SessionResponse>> {
-  // Mode is checked BEFORE any field is parsed, and the order is deliberate: a
-  // closed instance must answer the same `403` to a well-formed body and a
-  // malformed one. Parsing first would leak, through the difference between a
-  // `400` and a `403`, which submissions were structurally valid.
+  // Gate 1. See the header for why nothing is parsed above this line.
   //
-  // `'invite'` lands here too, with the same answer — see {@link AuthContext.signupMode}.
-  if (ctx.signupMode !== 'open') {
+  // `'open'` lands here too, with the same answer. See {@link AuthContext.signupMode}.
+  if (ctx.signupMode !== 'invite') {
     return { status: 'forbidden', reason: 'this instance is not accepting new accounts' };
   }
 
   const fields = asFields(body);
+
+  // Gate 2, still above every other parse.
+  const admission = classifyAdmission(fields.inviteToken, ctx);
+  if (admission === null) return { status: 'forbidden', reason: SIGNUP_NOT_ADMITTED };
+
   const handle = parseHandle(fields.handle);
   if (!handle.ok) return invalid(handle.reason);
   const authHash = parseAuthHashField(fields.authHash);
@@ -275,13 +403,21 @@ export async function handleSignup(
         ? null
         : computeVerifier({ authHash: recoveryAuthHash.value, pepper: ctx.pepper }),
     kdfDescriptor: kdfDescriptor.value,
+    admission,
   };
 
-  // ONE path, because this service has open signup. The store owns no
-  // transaction on this path, which is what keeps every outcome here testable
-  // without a database.
+  // Gate 3, and it is the STORE's, not this function's. The invite is claimed,
+  // the row is inserted and the invite is stamped with the account it created,
+  // all inside one transaction that rolls back together. See
+  // `AccountStore.createAccount`.
   const created = await ctx.store.createAccount(accountInput);
   if (!created.ok) {
+    // The invite was not spendable at commit time: never issued, already
+    // redeemed, expired, or a bootstrap token presented once an account
+    // existed. All four are one answer. See {@link SIGNUP_NOT_ADMITTED}.
+    if (created.reason === 'not-admitted') {
+      return { status: 'forbidden', reason: SIGNUP_NOT_ADMITTED };
+    }
     // ACCEPTED ENUMERATION ORACLE, not an oversight. This 409 tells the caller
     // the handle is registered — the one place in this service that does. It
     // is unavoidable: a duplicate signup MUST fail loudly rather than silently
@@ -295,6 +431,9 @@ export async function handleSignup(
     // per-server handle rather than a person's email address, so a confirmed
     // hit no longer hands anybody a way to contact, correlate or phish the
     // account holder.
+    //
+    // M184 made it smaller again: it is now reachable only by a caller holding
+    // a spendable invite, and every probe costs one.
     //
     // Full reasoning: SECURITY.md and PROTOCOL.md §5.8.
     return { status: 'conflict', reason: 'an account already exists for this handle' };

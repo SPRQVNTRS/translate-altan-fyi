@@ -212,12 +212,31 @@ export type SyncKeyRecordKind = 'passphrase' | 'recovery';
  * The fields below are exactly section 5.8's list and nothing else.
  * `displayName` is omitted rather than sent as `null`: the protocol makes it
  * optional and this product has no display name to put in it.
+ *
+ * ── `inviteToken`, and the second silent failure it exists to prevent ────
+ *
+ * This installation is invite only (M184, ADR-0009), so `POST
+ * /v1/auth/signup` refuses with `403` unless the body carries a token
+ * section 5.8.1 recognises. This client sent no such field, which meant every
+ * browser signup was refused, the operator's own first one included: the
+ * server half of the gate shipped and the form had no way to satisfy it. The
+ * shape of that defect is the same as the `keyRecords` one above, a client and
+ * a document disagreeing about one key, so it is recorded in the same place.
+ *
+ * IT IS OMITTED WHEN ABSENT, never sent as `null` or as `''`. The service reads
+ * an empty string as "no token presented" and refuses it, which is correct, but
+ * a field that is present and meaningless is a request nobody can reason about.
+ * One field carries either an invite or the one-shot bootstrap token, because
+ * the service accepts them in the same place and a person holding one has no
+ * way to tell you which kind it is.
  */
 export interface SignupRequestBody {
   handle: string;
   authHash: string;
   kdfDescriptor: PassphraseKdfDescriptor;
   recoveryAuthHash: string;
+  /** An invite, or the bootstrap token. Absent, not empty, when the caller has neither. */
+  inviteToken?: string;
 }
 
 export function buildSignupRequest(input: {
@@ -225,13 +244,20 @@ export function buildSignupRequest(input: {
   authHash: string;
   recoveryAuthHash: string;
   kdfDescriptor: PassphraseKdfDescriptor;
+  /** Trimmed by the caller. An empty value leaves the key out entirely. */
+  inviteToken?: string;
 }): SignupRequestBody {
-  return {
+  const body: SignupRequestBody = {
     handle: input.handle,
     authHash: input.authHash,
     kdfDescriptor: input.kdfDescriptor,
     recoveryAuthHash: input.recoveryAuthHash,
   };
+  // Assigned rather than spread, so an absent invite omits the field instead of
+  // sending an explicit `undefined`. `auth-client.ts` does the same, for the
+  // same reason.
+  if (input.inviteToken !== undefined && input.inviteToken !== '') body.inviteToken = input.inviteToken;
+  return body;
 }
 
 /**
@@ -389,7 +415,18 @@ async function deleteHalfBuiltAccount(authHash: string): Promise<void> {
  * `generateHandle` reads the CSPRNG and a value drawn during render would
  * differ between the server pass and the client pass and break hydration.
  */
-export async function createSyncAccount({ passphrase }: { passphrase: string }): Promise<CreatedSyncAccount> {
+export async function createSyncAccount({
+  passphrase,
+  inviteToken,
+}: {
+  passphrase: string;
+  /**
+   * The invite or bootstrap token the person typed, already trimmed by the
+   * form. It travels from here to the signup body and nowhere else: it is a
+   * bearer credential, so nothing may log it, store it or put it in a URL.
+   */
+  inviteToken?: string;
+}): Promise<CreatedSyncAccount> {
   const recoveryCode = generateRecoveryCode();
   const keys = await setupSyncKeys({
     passphrase,
@@ -398,7 +435,7 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
   });
   const recoveryAuthHash = await deriveRecoveryAuthHash(recoveryCode.raw);
 
-  const created = await signUp({ keys, recoveryAuthHash });
+  const created = await signUp({ keys, recoveryAuthHash, inviteToken });
 
   try {
     // Sequential, not concurrent. Two writes against the same account through
@@ -434,6 +471,8 @@ export async function createSyncAccount({ passphrase }: { passphrase: string }):
 async function signUp(input: {
   keys: SyncKeySetupResult;
   recoveryAuthHash: string;
+  /** Carried through unchanged. A retry re-presents the SAME token under a new handle. */
+  inviteToken?: string;
 }): Promise<{ handle: string; accountId: number }> {
   let attempt = 1;
   while (attempt <= MAX_HANDLE_ATTEMPTS) {
@@ -447,6 +486,7 @@ async function signUp(input: {
           authHash: input.keys.authHash,
           recoveryAuthHash: input.recoveryAuthHash,
           kdfDescriptor: input.keys.kdfDescriptor,
+          inviteToken: input.inviteToken,
         }),
         schema: sessionSchema,
       });
@@ -455,10 +495,19 @@ async function signUp(input: {
       // A taken handle is the ONE retryable signup failure: the handle is
       // machine-minted, so a collision is our problem to solve and not
       // something to report to a user who did not choose it. The classifier
-      // owns the status-to-meaning mapping, and `null` for the signup mode is
-      // honest, this client does not fetch the handshake so it must not
-      // promise that an invite would help.
-      if (classifySignupFailure(cause, null) !== 'handle-taken') throw cause;
+      // owns the status-to-meaning mapping.
+      //
+      // THE MODE IS `'invite'` AND NOT `null`. It used to be `null`, which was
+      // the honest answer while this client did not know what the service
+      // wanted. It knows now: this client and the service are the same
+      // deployment, and `e2ee-context.server.ts` hard-codes invite-only with a
+      // comment saying no environment variable can move it. Reporting `null`
+      // here would collapse an invite problem into the generic refusal and send
+      // a person hunting for a door that is not shut.
+      //
+      // A RETRY RE-PRESENTS THE SAME INVITE, and that is safe: a `409` means the
+      // signup never reached the redemption, so the token is still unspent.
+      if (classifySignupFailure(cause, 'invite') !== 'handle-taken') throw cause;
       attempt += 1;
     }
   }

@@ -9,24 +9,35 @@
 @variant dark (&:where(.dark, .dark *));
 
 /*
- * Fraunces, the self-hosted display serif. It carries the wordmark, the page
- * titles and the card titles. It never carries a live figure: this subset has
- * no tabular-figure feature, so digits change width as they update. Numbers
- * stay in the sans face with `tabular-nums`.
+ * Bricolage Grotesque, the self-hosted display face. It carries the wordmark,
+ * the page titles and the card titles.
  *
- * Inter Variable and Victor Mono Variable load from the
- * `@fontsource-variable/*` packages, imported in `root.tsx`. Every face is
- * self-hosted. No Google Fonts, no third-party font host.
+ * IT IS A GROTESQUE, NOT A SERIF, AND THAT IS THE POINT. The product used to
+ * set its chrome in Fraunces, the same display serif openplate uses in the same
+ * role, which is a large part of why the two read as siblings. A contemporary
+ * display sans over monospaced headwords reads as a tool rather than as a
+ * storybook, which is what this product is.
+ *
+ * IT NEVER CARRIES A LIVE FIGURE. This subset offers no tabular-figure feature,
+ * so digits change width as a value updates. Numbers stay in the sans face with
+ * `tabular-nums`.
+ *
+ * The file is the `latin` weight-axis subset of the `@fontsource-variable`
+ * release, copied into the static tree rather than imported as a package, so
+ * the weight range and the unicode range below are the package's own. Inter
+ * Variable and Victor Mono Variable load from the `@fontsource-variable/*`
+ * packages, imported in `root.tsx`. Every face is self-hosted. No Google Fonts,
+ * no third-party font host.
  */
 @font-face {
-  font-family: 'Fraunces';
-  src: url('/fonts/fraunces-latin-var.woff2') format('woff2');
-  font-weight: 300 700;
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/bricolage-grotesque-latin-var.woff2') format('woff2');
+  font-weight: 200 800;
   font-style: normal;
   font-display: swap;
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
-    U+FEFF, U+FFFD;
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+    U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @theme {
@@ -37,9 +48,9 @@
 
   --font-sans: 'Inter Variable', sans-serif;
   --font-mono: 'Victor Mono Variable', monospace;
-  /* Display serif for the wordmark, page titles and card titles. Exposed as
+  /* Display face for the wordmark, page titles and card titles. Exposed as
      the `font-display` Tailwind utility. */
-  --font-display: 'Fraunces', serif;
+  --font-display: 'Bricolage Grotesque', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -131,87 +142,94 @@
 
 @layer base {
   :root {
-    /* Teal-tinted light surface family. Hue 192 is the brand teal's own hue.
-       The page sits at a readable pale teal, `--card` stays pure white so
+    /* Blue-tinted light surface family. Hue 208 is the brand blue's own hue.
+       The page sits at a readable pale blue, `--card` stays pure white so
        cards lift off it, and the greys carry the same hue so nothing reads as
-       a cold, unrelated grey beside a warm teal one.
+       a cold, unrelated grey beside a warm blue one.
+
+       These are the operator's chosen palette, "Open blue", picked on
+       2026-09-04 from three rendered candidates. The token SHAPE is unchanged
+       from the teal system it replaces: one hue drives the page, the cards,
+       the hairlines and the brand together.
 
        Contrast: `--foreground` is a near-black, so body text clears 15:1 on
-       both the card and the tinted page. `--muted-foreground` clears ~7.6:1
+       both the card and the tinted page. `--muted-foreground` clears ~7.5:1
        on white. */
-    --background: 192 34% 96%;
-    --foreground: 200 18% 8%;
+    --background: 208 46% 95%;
+    --foreground: 209 26% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 200 18% 8%;
+    --card-foreground: 209 26% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 200 18% 8%;
-    --primary: 179 92% 25%;
+    --popover-foreground: 209 26% 9%;
+    --primary: 206 86% 34%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 192 26% 93%;
-    --secondary-foreground: 200 20% 14%;
-    --muted: 192 26% 93%;
-    --muted-foreground: 197 14% 38%;
-    --accent: 192 30% 91%;
-    --accent-foreground: 200 20% 14%;
+    --secondary: 208 38% 91%;
+    --secondary-foreground: 209 26% 14%;
+    --muted: 208 38% 91%;
+    --muted-foreground: 207 18% 37%;
+    --accent: 208 42% 88%;
+    --accent-foreground: 209 26% 14%;
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 192 22% 85%;
-    --input: 192 22% 85%;
-    --ring: 179 92% 25%;
+    --border: 208 30% 82%;
+    --input: 208 30% 82%;
+    --ring: 206 86% 34%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --sidebar-background: 192 30% 97%;
-    --sidebar-foreground: 197 14% 30%;
-    --sidebar-primary: 179 92% 25%;
+    --sidebar-background: 208 42% 96%;
+    --sidebar-foreground: 207 18% 29%;
+    --sidebar-primary: 206 86% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 192 30% 91%;
-    --sidebar-accent-foreground: 200 20% 14%;
-    --sidebar-border: 192 22% 86%;
-    --sidebar-ring: 179 92% 25%;
+    --sidebar-accent: 208 42% 88%;
+    --sidebar-accent-foreground: 209 26% 14%;
+    --sidebar-border: 208 30% 83%;
+    --sidebar-ring: 206 86% 34%;
   }
   .dark {
-    /* Teal-tinted near-black. Hue 192 with real chroma makes the dark theme
-       read as deep teal-black rather than grey-black, and the greys around it
+    /* Blue-tinted near-black. Hue 208 with real chroma makes the dark theme
+       read as deep blue-black rather than grey-black, and the greys around it
        share the hue so the tint does not cancel out.
 
        `--card` sits ~3.5 lightness points above `--background` so cards keep
        reading as elevated. `--foreground` clears 17:1 on both.
-       `--muted-foreground` clears 7:1. */
-    --background: 192 24% 4.5%;
-    --foreground: 180 12% 97%;
-    --card: 192 20% 8%;
-    --card-foreground: 180 12% 97%;
-    --popover: 192 20% 8%;
-    --popover-foreground: 180 12% 97%;
-    --primary: 172 70% 52%;
-    --primary-foreground: 187 90% 8%;
-    --secondary: 192 16% 15%;
-    --secondary-foreground: 180 12% 97%;
-    --muted: 192 16% 15%;
-    --muted-foreground: 190 12% 68%;
-    --accent: 192 18% 17%;
-    --accent-foreground: 180 12% 97%;
+       `--muted-foreground` clears 7:1. The brand lifts to a brighter, more
+       open blue here, the way the teal system lifted its own hue: a 34%
+       lightness brand reads as a bruise on a near-black page. */
+    --background: 208 34% 5%;
+    --foreground: 200 16% 97%;
+    --card: 208 28% 8.5%;
+    --card-foreground: 200 16% 97%;
+    --popover: 208 28% 8.5%;
+    --popover-foreground: 200 16% 97%;
+    --primary: 199 90% 58%;
+    --primary-foreground: 205 82% 8%;
+    --secondary: 208 20% 15%;
+    --secondary-foreground: 200 16% 97%;
+    --muted: 208 20% 15%;
+    --muted-foreground: 203 14% 69%;
+    --accent: 208 22% 17%;
+    --accent-foreground: 200 16% 97%;
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 192 16% 17%;
-    --input: 192 16% 17%;
-    --ring: 172 70% 52%;
+    --border: 208 20% 17%;
+    --input: 208 20% 17%;
+    --ring: 199 90% 58%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 192 22% 7%;
-    --sidebar-foreground: 190 12% 88%;
-    --sidebar-primary: 172 70% 52%;
-    --sidebar-primary-foreground: 187 90% 8%;
-    --sidebar-accent: 192 18% 15%;
-    --sidebar-accent-foreground: 180 12% 97%;
-    --sidebar-border: 192 16% 15%;
-    --sidebar-ring: 172 70% 52%;
+    --sidebar-background: 208 32% 7.5%;
+    --sidebar-foreground: 203 14% 89%;
+    --sidebar-primary: 199 90% 58%;
+    --sidebar-primary-foreground: 205 82% 8%;
+    --sidebar-accent: 208 22% 15%;
+    --sidebar-accent-foreground: 200 16% 97%;
+    --sidebar-border: 208 20% 15%;
+    --sidebar-ring: 199 90% 58%;
   }
 }
 
@@ -226,28 +244,28 @@
  * actually renders from: the `@theme inline` block below maps `--color-sidebar-*`
  * to them and overrides the mapping in the first `@theme` block. Both sets are
  * kept in sync deliberately, so whichever mapping wins, the chrome stays on the
- * same teal-tinted family as the page.
+ * same blue-tinted family as the page.
  */
 :root {
-  --sidebar: hsl(192 30% 97%);
-  --sidebar-foreground: hsl(197 14% 30%);
-  --sidebar-primary: hsl(179 92% 25%);
+  --sidebar: hsl(208 42% 96%);
+  --sidebar-foreground: hsl(207 18% 29%);
+  --sidebar-primary: hsl(206 86% 34%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(192 30% 91%);
-  --sidebar-accent-foreground: hsl(200 20% 14%);
-  --sidebar-border: hsl(192 22% 86%);
-  --sidebar-ring: hsl(179 92% 25%);
+  --sidebar-accent: hsl(208 42% 88%);
+  --sidebar-accent-foreground: hsl(209 26% 14%);
+  --sidebar-border: hsl(208 30% 83%);
+  --sidebar-ring: hsl(206 86% 34%);
 }
 
 .dark {
-  --sidebar: hsl(192 22% 7%);
-  --sidebar-foreground: hsl(190 12% 88%);
-  --sidebar-primary: hsl(172 70% 52%);
-  --sidebar-primary-foreground: hsl(187 90% 8%);
-  --sidebar-accent: hsl(192 18% 15%);
-  --sidebar-accent-foreground: hsl(180 12% 97%);
-  --sidebar-border: hsl(192 16% 15%);
-  --sidebar-ring: hsl(172 70% 52%);
+  --sidebar: hsl(208 32% 7.5%);
+  --sidebar-foreground: hsl(203 14% 89%);
+  --sidebar-primary: hsl(199 90% 58%);
+  --sidebar-primary-foreground: hsl(205 82% 8%);
+  --sidebar-accent: hsl(208 22% 15%);
+  --sidebar-accent-foreground: hsl(200 16% 97%);
+  --sidebar-border: hsl(208 20% 15%);
+  --sidebar-ring: hsl(199 90% 58%);
 }
 
 @theme inline {

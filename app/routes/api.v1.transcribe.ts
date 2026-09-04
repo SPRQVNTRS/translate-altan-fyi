@@ -6,6 +6,7 @@ import { registry } from '#app/lib/llm/registry.server';
 import { createComponentLogger } from '#app/lib/logger';
 import { audioFormatForMimeType, TRANSCRIBE_LANGUAGE_PARAM } from '#app/lib/voice/limits';
 import { getActiveModel } from '#app/models/app-settings.server';
+import { getAccountSession } from '#app/services/account-session.server';
 import {
   MAX_AUDIO_BYTES,
   TRANSCRIPTION_RESERVE_USD,
@@ -27,12 +28,22 @@ import {
  *   temporary file on this route, and the operator brief says so in as many
  *   words. Nothing may be added here that keeps the audio.
  *
- * IT IS FREE, AND FREE IS EXACTLY WHY IT IS GUARDED.
- *   There is no payment and no account gate on this route: anybody may speak a
- *   word. That makes it the cheapest way in the product to spend the operator's
- *   money, so it takes the SAME per-IP and per-session hourly limits as the
- *   enrichment trigger and it reserves against the SAME daily cap before the
- *   provider is called.
+ * IT NEEDS AN ACCOUNT SINCE M184, AND IT DID NOT BEFORE.
+ *   This paragraph used to read: "There is no payment and no account gate on
+ *   this route: anybody may speak a word." That was a deliberate design choice,
+ *   not an oversight, and it is recorded here rather than deleted, because the
+ *   next reader deserves to know it was reversed on purpose. M184 reversed it
+ *   (ADR-0009). The sentence that made it a choice is the same sentence that
+ *   ended it: this is the cheapest way in the product to spend the operator's
+ *   money, one provider call per request, and the milestone exists to stop
+ *   anonymous strangers spending it. A caller now needs an account, and the
+ *   account now needs an invite.
+ *
+ *   THE OLD GUARDS ALL STAY, as defence in depth. An invited account is still
+ *   one browser session behind the SAME per-IP and per-session hourly limits as
+ *   the enrichment trigger, and it still reserves against the SAME daily cap
+ *   before the provider is called. An installation-wide circuit breaker has
+ *   value whoever is behind it.
  *
  * A REFUSAL IS AN ANSWER, NOT AN ERROR.
  *   At the cap, with no key configured, or after a failed call, this route
@@ -47,10 +58,10 @@ import {
  *   developer-facing line an API client and a log reader see.
  *
  * THE ORDER OF THE GUARDS IS THE POINT.
- *   Cheapest and most certain first: a body too big is refused from a header
- *   before it is read, then the rate limit, then the body itself, then the
- *   provider configuration, and only then is money reserved. A request that is
- *   going to be turned away costs as little as possible on its way out.
+ *   Coarsest and cheapest first: the account, then the format and the size from
+ *   the headers, then the rate limit, then the body itself, then the provider
+ *   configuration, and only then is money reserved. A request that is going to
+ *   be turned away costs as little as possible on its way out.
  */
 
 const log = createComponentLogger('TranscribeRoute');
@@ -138,17 +149,47 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
     });
   }
 
-  // 1. THE FORMAT, FROM THE HEADER. A body we could not send to a provider
+  // 1. THE ACCOUNT, AND IT IS FIRST AMONG THE REAL GUARDS.
+  //    The coarsest question this route asks is whether the caller may spend
+  //    anything at all, so it is answered before the request is examined in any
+  //    other way. It costs one cookie unseal and one indexed token lookup, and
+  //    it never throws: `getAccountSession` folds every way of being signed out
+  //    into one `null`, which is exactly the shape a refusal needs here.
+  //
+  //    IT REFUSES, IT DOES NOT REDIRECT. Every other gated surface in this app
+  //    throws a redirect to the sign-in page, and that is right for a screen. A
+  //    `fetch` from the voice control cannot follow a redirect to an HTML page
+  //    and make anything of it: it would read the sign-in document as a
+  //    transcript response and fail on the parse, which is a 500-shaped ending
+  //    for a person holding a microphone. So this answers the same JSON union
+  //    every other refusal on this route answers, with a `messageKey` the
+  //    client renders in the reader's own language.
+  //
+  //    BEFORE THE RATE LIMITER ON PURPOSE. The limiter WRITES counter rows
+  //    keyed on the caller's address, so putting it first would let an
+  //    anonymous flood fill a table on requests that were never going to be
+  //    served.
+  const session = await getAccountSession(request);
+  if (session === null) {
+    return refuse({
+      status: 401,
+      error: 'account-required',
+      message: 'Voice input needs an account on this installation',
+      messageKey: 'voice.serverAccountRequired',
+    });
+  }
+
+  // 2. THE FORMAT, FROM THE HEADER. A body we could not send to a provider
   //    anyway is refused before it is read off the socket.
   const contentType = request.headers.get('content-type');
   if (audioFormatForMimeType(contentType) === null) return refuseOutcome('unsupported-format');
 
-  // 2. THE SIZE, ALSO FROM THE HEADER. This is the guard that keeps a large
+  // 3. THE SIZE, ALSO FROM THE HEADER. This is the guard that keeps a large
   //    upload out of this process's memory entirely.
   const declaredLength = Number(request.headers.get('content-length') ?? '');
   if (Number.isFinite(declaredLength) && declaredLength > MAX_AUDIO_BYTES) return refuseTooLarge();
 
-  // 3. THE SHARED HOURLY LIMITS, the same two the enrichment trigger takes.
+  // 4. THE SHARED HOURLY LIMITS, the same two the enrichment trigger takes.
   const verdict = await checkTriggerRateLimit(request);
   if (!verdict.allowed) {
     return refuse({
@@ -159,7 +200,7 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
     });
   }
 
-  // 4. THE BODY. It becomes one array in memory and is never written down.
+  // 5. THE BODY. It becomes one array in memory and is never written down.
   //    The header can lie, so the real length is checked again here.
   const audio = new Uint8Array(await request.arrayBuffer());
   if (audio.byteLength > MAX_AUDIO_BYTES) return refuseTooLarge();
@@ -169,7 +210,7 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
   const requestedLanguage = url.searchParams.get(TRANSCRIBE_LANGUAGE_PARAM);
   const language: LanguageCode = isServedLanguage(requestedLanguage) ? requestedLanguage : 'en';
 
-  // 5. IS THERE A PROVIDER AT ALL? Asked BEFORE the reservation, so a
+  // 6. IS THERE A PROVIDER AT ALL? Asked BEFORE the reservation, so a
   //    deployment with no key never books spend it cannot use. The registry is
   //    the only thing in this app that knows what a provider key is called.
   const active = await getActiveModel();
@@ -179,7 +220,7 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
     return refuseOutcome('not-configured');
   }
 
-  // 6. RESERVE BEFORE THE CALL, ALWAYS. Counting afterwards has a window in
+  // 7. RESERVE BEFORE THE CALL, ALWAYS. Counting afterwards has a window in
   //    which every parallel request reads the same low total and every one of
   //    them charges. See `app/lib/abuse/budget.server.ts`.
   const reservation = await reserve(TRANSCRIPTION_RESERVE_USD);

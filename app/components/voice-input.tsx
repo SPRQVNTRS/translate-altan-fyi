@@ -581,7 +581,7 @@ export function ServerVoiceControl({
 
 /** What the fallback needs from the screen around it. */
 export interface ServerVoiceFallbackProps {
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<TranscriptSink | null>;
   formRef: RefObject<HTMLFormElement | null>;
   language: LanguageCode;
   onLanguageChange: (code: LanguageCode) => void;
@@ -699,10 +699,20 @@ export function ServerVoiceFallback({
   );
 }
 
-/** What the search screen hands the voice control. */
+/**
+ * What the search screen hands the voice control.
+ *
+ * `inputRef` is typed as a `TranscriptSink`, not as an `HTMLInputElement`,
+ * because writing `.value` is the only thing this component ever does with it.
+ * The narrower DOM type was a false constraint: the search box is a
+ * `<textarea>` now, and both elements are exactly as much of a sink as each
+ * other. The widening is deliberate and it keeps the contract honest, since a
+ * reader of the type can see that nothing here reaches for an input's
+ * selection, its validity or its files.
+ */
 export interface VoiceInputProps {
   /** The search box the recognised words are written into. */
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<TranscriptSink | null>;
   /** The search form a settled phrase submits. */
   formRef: RefObject<HTMLFormElement | null>;
   /** The language the reader is looking a word up FROM, the best guess at what they will say. */

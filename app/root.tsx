@@ -34,8 +34,9 @@ import { isAnalyticsHost } from '#app/lib/analytics-host';
 import { Matomo, MatomoRouteTracker } from '#app/components/site/matomo';
 
 // The two variable body faces are self-hosted through fontsource, so the app
-// makes no request to a third-party font host. Fraunces, the display face, is
-// declared as an `@font-face` in `app.css` over a file in `public/fonts`.
+// makes no request to a third-party font host. Bricolage Grotesque, the display
+// face, is declared as an `@font-face` in `app.css` over a file in
+// `public/fonts`.
 export const links: Route.LinksFunction = () => [
   { rel: 'stylesheet', href: stylesheet },
   // The two PWA links. The manifest is what makes the app installable, and the

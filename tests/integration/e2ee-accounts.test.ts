@@ -32,9 +32,21 @@
  * ISOLATION
  *   Every handle this file creates carries a run-scoped random suffix, and
  *   every account it creates is deleted again in `after()`. Deleting the
- *   account is enough: `account_tokens` and `sync_key_records` both cascade
- *   from it, which is the same `ON DELETE CASCADE` the self-serve erasure path
- *   relies on. Nothing pre-existing is read, written or deleted.
+ *   account is enough for its tokens and key records: `account_tokens` and
+ *   `sync_key_records` both cascade from it, which is the same
+ *   `ON DELETE CASCADE` the self-serve erasure path relies on. The `invites`
+ *   rows this file mints are deleted by id SEPARATELY, because their
+ *   `redeemed_by_account_id` is `ON DELETE SET NULL` on purpose: a redeemed
+ *   invite must survive its account rather than hand a spent token a second
+ *   life. Nothing pre-existing is read, written or deleted.
+ *
+ * SIGNUP IS INVITE-GATED (ADR-0009)
+ *   Every signup below mints a real `invites` row first and redeems it, which
+ *   is the only way an account can be created at all since M184. The gate's own
+ *   properties are proven in `signup-requires-invite.test.ts`,
+ *   `invite-single-use.test.ts` and
+ *   `bootstrap-token-single-first-account.test.ts`; here the invite is scaffold
+ *   for the cases that were always about something else.
  *
  * WHAT THIS FILE MUST NEVER PRINT
  *   No assertion message may carry a raw token, an authHash, a passphrase or a
@@ -50,7 +62,7 @@ import pg from 'pg';
 
 import * as schema from '../../drizzle/schema';
 import { closePool } from '../../drizzle/db';
-import { accountTokens, accounts } from '../../drizzle/schema';
+import { accountTokens, accounts, invites } from '../../drizzle/schema';
 import type { AuthContext, AuthLogger } from '../../app/lib/e2ee/auth-handlers';
 import {
   handleLogin,
@@ -64,6 +76,11 @@ import { createDrizzleStorageAdapter } from '../../app/services/e2ee-storage-ada
 import { deriveServerSecrets } from '../../app/lib/e2ee/server-secrets';
 import { generateFamilyId, generateToken, hashToken } from '../../app/lib/e2ee/tokens';
 import { computeVerifier } from '../../app/lib/e2ee/verifier';
+import {
+  computeInviteTokenHash,
+  deriveInviteTokenPepper,
+  generateInviteToken,
+} from '../../app/lib/invites/token';
 import { DEFAULT_ARGON2_PARAMS } from '../../app/lib/e2ee/kdf-descriptor';
 import type { JsonObject } from '../../app/lib/e2ee/json';
 
@@ -82,11 +99,37 @@ const db = drizzle(pool, { schema });
 /** Every handle this run creates carries this suffix, so cleanup can be exact. */
 const RUN = randomUUID().slice(0, 8);
 
-/** The account ids this run created. `after()` deletes exactly these; the rest cascades. */
+/** The account ids this run created. `after()` deletes exactly these; tokens and key records cascade. */
 const createdAccountIds: number[] = [];
 
+/** The invite ids this run minted. Deleted explicitly, because they do NOT cascade from the account. */
+const createdInviteIds: number[] = [];
+
 /** A test-only root secret. Nothing here reads the environment's `SERVER_SECRET`. */
-const secrets = deriveServerSecrets(`test-root-secret-${RUN}`);
+const ROOT_SECRET = `test-root-secret-${RUN}`;
+const secrets = deriveServerSecrets(ROOT_SECRET);
+
+/** The third subkey, derived exactly as the composition root derives it. */
+const inviteTokenPepper = deriveInviteTokenPepper(ROOT_SECRET);
+
+/**
+ * Mints one real invite row and returns the plaintext token.
+ *
+ * The row is written directly rather than through the CLI: this file is about
+ * the handlers, and the minting command has its own coverage. What matters here
+ * is that the stored value is the same `HMAC(inviteTokenPepper, token)` the
+ * redemption path recomputes, so nothing about the redemption is faked.
+ */
+async function mintInvite(): Promise<string> {
+  const token = generateInviteToken();
+  const [row] = await db
+    .insert(invites)
+    .values({ tokenHash: computeInviteTokenHash({ token, pepper: inviteTokenPepper }) })
+    .returning({ id: invites.id });
+  if (!row) throw new Error('could not mint an invite');
+  createdInviteIds.push(row.id);
+  return token;
+}
 
 /** Silent, because a real logger in a test suite is noise and these handlers log account ids. */
 const silentLogger: AuthLogger = { info: () => {}, warn: () => {} };
@@ -96,7 +139,14 @@ function createContext(): AuthContext {
     store: createDrizzleAccountStore(db),
     pepper: secrets.verifierPepper,
     enumerationSecret: secrets.enumerationSecret,
-    signupMode: 'open',
+    signupMode: 'invite',
+    admission: {
+      hashInviteToken: (token: string) => computeInviteTokenHash({ token, pepper: inviteTokenPepper }),
+      // No bootstrap token: every case here goes through a real invite. The
+      // bootstrap branch has its own file, which needs an EMPTY accounts table
+      // and cannot share one with these.
+      isBootstrapToken: () => false,
+    },
     now: () => new Date(),
     mintToken: generateToken,
     mintFamilyId: generateFamilyId,
@@ -153,6 +203,7 @@ async function signUp(label: string): Promise<SignedUpAccount> {
     authHash: authHash(),
     kdfDescriptor: kdfDescriptor(),
     recoveryAuthHash: authHash(),
+    inviteToken: await mintInvite(),
   };
 
   const outcome = await handleSignup(body, createContext());
@@ -182,6 +233,11 @@ after(async () => {
     // `ON DELETE CASCADE` on `account_id`, which is the same mechanism the
     // self-serve erasure path relies on, so cleaning up this way exercises it.
     await db.delete(accounts).where(inArray(accounts.id, createdAccountIds));
+  }
+  if (DB_HOST && createdInviteIds.length > 0) {
+    // Separately, and by id: `invites.redeemed_by_account_id` is
+    // `ON DELETE SET NULL`, so the delete above leaves these rows behind.
+    await db.delete(invites).where(inArray(invites.id, createdInviteIds));
   }
   await pool.end();
 

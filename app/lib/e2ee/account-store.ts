@@ -57,6 +57,37 @@ export interface NewTokenInput {
   expiresAt: Date;
 }
 
+/**
+ * What entitles a signup to create an account here (PROTOCOL.md §5.8.1,
+ * .adr/0009-invite-only-accounts.md).
+ *
+ * IT IS NOT A CHECK THE HANDLER CAN PERFORM. The handler decides which KIND of
+ * admission was presented, because that is policy and is testable without a
+ * database; whether the presented thing is still SPENDABLE is a question only
+ * the account-insert transaction can answer without leaving a race. So this
+ * value crosses the port as an intention, and the store either honours it or
+ * refuses the whole insert.
+ *
+ * THE PLAINTEXT TOKEN NEVER CROSSES. What travels is the hash the `invites`
+ * table stores, so no implementation of this port is ever holding a usable
+ * signup credential, and a store that logged its own input would log nothing
+ * replayable.
+ *
+ * THERE IS NO "no admission needed" MEMBER, and its absence is the point: a
+ * defaulted or nullable field would make an ungated signup one forgotten
+ * argument away, which is the exact hole this milestone closed.
+ */
+export type AccountAdmission =
+  /** A single-use invite, identified by `HMAC(inviteTokenPepper, token)`, the value `invites.token_hash` holds. */
+  | { kind: 'invite'; tokenHash: string }
+  /**
+   * The operator's one-shot `ACCOUNT_BOOTSTRAP_TOKEN`, which the handler has
+   * already matched. The store still has work to do: this admission is valid
+   * ONLY while `accounts` is empty, and that count has to be taken under a
+   * lock inside the insert's own transaction.
+   */
+  | { kind: 'bootstrap' };
+
 export interface CreateAccountInput {
   handle: string;
   displayName: string | null;
@@ -64,10 +95,27 @@ export interface CreateAccountInput {
   /** Optional at creation: an account may exist with no second authenticator (see {@link AccountRecord.recoveryVerifier}). */
   recoveryVerifier: string | null;
   kdfDescriptor: KdfDescriptor;
+  /**
+   * REQUIRED, and enforced INSIDE the insert's transaction. See
+   * {@link AccountAdmission}, and `createAccount` for the ordering rule.
+   */
+  admission: AccountAdmission;
 }
 
-/** `handle-taken` is the ONLY expected failure; anything else is a real fault and throws. */
-export type CreateAccountResult = { ok: true; account: AccountRecord } | { ok: false; reason: 'handle-taken' };
+/**
+ * `handle-taken` and `not-admitted` are the ONLY expected failures; anything
+ * else is a real fault and throws.
+ *
+ * `not-admitted` covers every way an admission can fail to be spendable at
+ * commit time: an invite that was never issued, one already redeemed, one past
+ * its `expiresAt`, and a bootstrap token presented once an account exists.
+ * ONE reason for all four, deliberately: the caller turns it into one `403`
+ * with one message, and a store that distinguished them would hand the route a
+ * distinction it must then remember not to publish.
+ */
+export type CreateAccountResult =
+  | { ok: true; account: AccountRecord }
+  | { ok: false; reason: 'handle-taken' | 'not-admitted' };
 
 /** A client-re-wrapped DEK submitted as part of a credential rotation. */
 export interface KeyRecordSubmission {
@@ -140,6 +188,29 @@ export type RecoverAndRotatePassphraseResult = { ok: true } | { ok: false; reaso
 export interface AccountStore {
   findAccountByHandle(handle: string): Promise<AccountRecord | null>;
   findAccountById(accountId: number): Promise<AccountRecord | null>;
+  /**
+   * ATOMIC admission-and-insert: the invite is claimed, the account row is
+   * written, and the invite is stamped with the account it created, in ONE
+   * transaction.
+   *
+   * IT HAS TO BE ONE TRANSACTION, and this is the requirement
+   * .adr/0009-invite-only-accounts.md rejected its Option A over. Split it and
+   * there is a window in either direction, both bad: a token marked spent with
+   * no account behind it silently destroys somebody's invitation, and an
+   * account created against a token still marked unspent hands the same
+   * capability to the next person who asks.
+   *
+   * ADMISSION IS CHECKED FIRST, BEFORE THE HANDLE. That ordering is a security
+   * property, not a preference: it means an uninvited caller can no longer
+   * reach the `409`, so the accepted enumeration oracle
+   * (see `auth-handlers.ts`'s `handleSignup`) is now narrower than it was
+   * before this gate existed rather than wider.
+   *
+   * A FAILURE AFTER THE CLAIM MUST UNCLAIM IT. PROTOCOL.md §5.8.1 requires that
+   * a `409` leaves the invite spendable, so a mistyped handle does not cost
+   * somebody their invitation. The rollback is what delivers that, which is
+   * another reason the claim cannot sit outside the transaction.
+   */
   createAccount(input: CreateAccountInput): Promise<CreateAccountResult>;
   /**
    * Cascades to `sync_key_records` and `enrichment_votes` via the schema's

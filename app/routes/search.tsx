@@ -1,26 +1,20 @@
 import type { Route } from './+types/search';
-import { useRef } from 'react';
-import { Loader2 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-import { Form, useNavigation, type MetaFunction } from 'react-router';
+import type { MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
-import { DirectionChip } from '#app/components/direction-chip';
 import { Landing } from '#app/components/landing';
 import { RecordSearch } from '#app/components/personal/record-search';
-import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
-import { Button } from '#app/components/ui/button';
-import { Input } from '#app/components/ui/input';
-import { VoiceInput } from '#app/components/voice-input';
+import { SearchPanes } from '#app/components/search-panes';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
 import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
+import { entrySensesQuery } from '#app/lib/dictionary/entry.server';
 import { loadLandingExample } from '#app/lib/dictionary/landing-example';
 import { normalizeQuery } from '#app/lib/dictionary/normalize';
-import { enqueueEnrichmentInBackground } from '#app/lib/enrichment/enqueue.server';
+import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
-import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
+import { requireAccountSession } from '#app/services/account-session.server';
 import { getRawDb } from '#drizzle/tenant-db';
 
 // `meta()` runs outside the React tree, so it has no `t`. It goes through the
@@ -59,6 +53,36 @@ export const handle = { titleKey: 'nav.search' } satisfies TitleHandle;
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim();
+
+  // THE ACCOUNT GATE, AND IT IS KEYED ON THE REQUEST RATHER THAN ON THE PATH.
+  //   This one line is what M184 is for. A typed search is the entrance to
+  //   every LLM call this product makes: the single-word branch below hands the
+  //   top hit to `resolveTriggeredPanel`, which queues a billed enrichment job,
+  //   and opening a word from a phrase result queues another. An empty `q` does
+  //   none of that, so it stays open to everyone.
+  //
+  //   IT SITS HERE, ABOVE EVERYTHING, ON PURPOSE. Before `getRawDb()`, before
+  //   the language detection, before `searchPhrase`, before `searchHeadwords`
+  //   and before the enrichment call at the foot of this loader. A signed-out
+  //   request therefore costs one cookie unseal and one indexed token lookup,
+  //   and reaches no dictionary query and no queue.
+  //
+  //   IT CANNOT BE A LAYOUT MIDDLEWARE, AND IT MUST NOT BE A PATH RULE. `/` and
+  //   `/search` are two route ids over THIS ONE FILE (`app/routes.ts`), and the
+  //   product's real URL is `/?q=<word>`, the index carrying a query. A rule
+  //   hung off `/search` would gate the alias and leave the primary open, which
+  //   is precisely the bug this milestone was written to fix; a rule on the
+  //   `_app` layout would gate `/` as well and break the public landing render
+  //   below. A rule inside the one loader both ids share can do neither, and a
+  //   third alias inherits it for free.
+  //
+  //   `requireAccountSession` THROWS A REDIRECT to `/sync/login`. It does not
+  //   return a flag, so there is no way to forget to act on the answer, and the
+  //   throw is a `Response` the router turns into an ordinary 302. Nothing here
+  //   touches the device's own store: the gate blocks the screen, and a
+  //   visitor's local lists and history are untouched by the redirect.
+  const account = q === '' ? null : await requireAccountSession(request);
+
   const db = getRawDb();
   // The UI language comes from the request cookie, not from the i18next
   // singleton: that instance is process-wide and would leak one reader's
@@ -77,7 +101,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // dictionary that has stopped answering.
   if (q === '') {
     const example = await loadLandingExample((params) => searchHeadwords(db, params));
-    return { q, direction, hits: [], phrase: null, didYouMean: null, example };
+    return { q, direction, hits: [], phrase: null, didYouMean: null, example, phraseWordsOmitted: 0, panel: null };
   }
 
   // ONE PIPELINE, TWO BRANCHES, AND THE BRANCH IS DECIDED HERE.
@@ -90,9 +114,37 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   A spoken query reaches this same line. `VoiceInput` writes the
   //   recogniser's text into the search box and submits the form, so there is
   //   no second query path for speech and nothing here can tell the two apart.
-  if (normalizeQuery(q, direction.from).isPhrase) {
+  //
+  // WHAT PHRASE-FIRST COSTS: NOTHING NEW AT SEARCH TIME. Verified 2026-09-03 by
+  //   reading `searchPhrase` in `app/lib/dictionary/search.server.ts` end to
+  //   end: it does NOT enqueue any enrichment job, and it makes no LLM call of
+  //   any kind. It runs `searchHeadwords` once per looked-up word plus one
+  //   example query, all of them plain SQL. So a translator-shaped box, which
+  //   makes this the MAIN path rather than the edge case it used to be, adds no
+  //   new provider spend by itself. Said the other way round: phrase-first is
+  //   no new LLM cost at search time. The only warm on this whole screen is the
+  //   single-word branch's top-hit call below.
+  //
+  //   The cost surface that DOES move is downstream and is not this route's:
+  //   opening a word FROM a phrase result enriches that word, so a long phrase
+  //   can cost per word if the reader opens them. What bounds that is M184's
+  //   invite gate and budget cap, not anything here. Do not "fix" this by
+  //   warming the phrase's words: that is the exact multiplication the comment
+  //   on the single-word branch below refuses.
+  //
+  //   THE WORD LIST IS CAPPED AND THE SCREEN SAYS SO. `searchPhrase` looks up
+  //   at most `PHRASE_TOKEN_LIMIT` words, so a pasted paragraph gets entries
+  //   for its first few words and silence about the rest. Under the old
+  //   one-line box nobody typed a paragraph, so the cap was invisible.
+  //   `phraseWordsOmitted` carries the difference out to the pane, which is
+  //   what keeps a partly read query from rendering as a whole answer. It is
+  //   computed from what the search ACTUALLY looked at rather than from the
+  //   constant, so it cannot drift if the cap moves.
+  const query = normalizeQuery(q, direction.from);
+  if (query.isPhrase) {
     const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
-    return { q, direction, hits: [], phrase, didYouMean: null, example: null };
+    const phraseWordsOmitted = query.tokens.length - phrase.tokens.length;
+    return { q, direction, hits: [], phrase, didYouMean: null, example: null, phraseWordsOmitted, panel: null };
   }
 
   // THE WHOLE POINT OF THE DETECTION. `direction.from` and `direction.to` go
@@ -107,127 +159,103 @@ export async function loader({ request }: Route.LoaderArgs) {
   // does not re-run the search with the suggestion. See `did-you-mean.ts`.
   const didYouMean = hits.length === 0 ? await suggestDidYouMean(db, { query: q, languageCode: direction.from }) : null;
 
-  // THE TOP HIT ONLY, AND FIRE AND FORGET.
+  // THE TOP HIT ONLY, AND NOW IT IS SHOWN RATHER THAN ONLY WARMED.
   //   Warming the whole result page would multiply the provider spend by ten
-  //   for a reader who opens one word, and the top hit is the one they open.
-  //   The call never awaits and never rejects, so the results render at
-  //   dictionary speed whether or not a job was queued. Nothing on this screen
-  //   changes: the warmed notes show up on the entry page the reader clicks
-  //   through to.
+  //   for a reader who opens one word, and the top hit is the one they open. So
+  //   the top hit is still the only word this screen enriches. What changed in
+  //   M185/03 is where the answer lands: the output pane renders the panel
+  //   itself, so a reader gets the translator-shaped answer without a click
+  //   through to `/entry/:headwordId`.
+  //
+  //   THIS IS THE SAME MACHINE THE ENTRY PAGE RUNS, NOT A SECOND ONE.
+  //   `resolveTriggeredPanel` reads the cache and decides whether to queue, and
+  //   `entry.$headwordId.tsx` calls exactly this function with exactly these
+  //   arguments. A copy here would be two screens quietly disagreeing about the
+  //   same word.
+  //
+  //   IT IS AWAITED WHERE THE OLD WARM WAS NOT, AND IT HAS TO BE. The old call
+  //   was fire and forget because nothing on this screen rendered its answer.
+  //   This one IS the answer, and the two spend guards inside it decide whether
+  //   a job starts at all, so a decision taken after the response had gone
+  //   would be no decision. The cost is a handful of local statements, no
+  //   provider call: the enqueue behind them is still fire and forget.
   const topHit = hits[0];
-  if (topHit) {
-    enqueueEnrichmentInBackground({
-      headwordId: topHit.headwordId,
-      from: direction.from,
-      to: direction.to,
-      promptVersion: PROMPT_VERSION,
-    });
-  }
+  const panel = topHit === undefined
+    ? null
+    : await resolveTriggeredPanel({
+        db,
+        request,
+        headwordId: topHit.headwordId,
+        // The senses the panel covers, read here because a search hit does not
+        // carry them: `SearchHit` is a lemma with its glosses and examples. It
+        // is one indexed query on the single-word branch only.
+        senseIds: (await entrySensesQuery(db, topHit.headwordId)).map((row) => row.senseId),
+        from: direction.from,
+        to: direction.to,
+        // The reader's own votes on the rows the panel renders. It comes from
+        // the session the gate above already resolved and validated, rather
+        // than from a second read of the same cookie: this branch is only
+        // reachable with `q !== ''`, so `account` is never null here, and
+        // re-reading would risk two answers to one question in one request.
+        accountId: account?.accountId ?? null,
+      });
 
-  return { q, direction, hits, phrase: null, didYouMean, example: null };
+  return { q, direction, hits, phrase: null, didYouMean, example: null, phraseWordsOmitted: 0, panel };
 }
 
 /**
- * The home screen. The hero card is the one `.surface-brand` on this screen, a
- * design rule, so nothing else here may carry the brand wash.
+ * The home screen, laid out the way a translator is.
+ *
+ * THE SURFACE ITSELF LIVES IN `SearchPanes`, and this route is what feeds it.
+ * The split is not decoration: the loader above gates every non-empty query
+ * behind an account, so the only way to render an ANSWERED surface without a
+ * session is to hand the answer to the component directly. M186's review page
+ * did exactly that while the palette and the display face were being chosen,
+ * and it rendered THIS component rather than a copy, which is what stopped the
+ * reviewed surface and the shipped one from drifting apart. That page is gone
+ * now, the decision is applied, and the split is worth keeping for the next
+ * time a surface has to be shown to somebody without a session.
+ *
+ * WHAT STAYS HERE IS EVERYTHING THAT IS NOT THE SURFACE: the day's nudge above
+ * it, the history write beside it, and the landing pitch under it. Each one is
+ * a side effect or a screen of its own, and none of them is part of what the
+ * two panes look like.
  */
 export default function SearchRoute({ loaderData }: Route.ComponentProps) {
-  const { t } = useTranslation();
-  const { q, direction, hits, phrase, didYouMean, example } = loaderData;
-  const navigation = useNavigation();
-  const isSearching = navigation.state !== 'idle';
-  // The voice control writes into THIS box and submits THIS form. It owns no
-  // query state of its own, so a spoken word and a typed one reach the loader
-  // by exactly the same route.
-  const inputRef = useRef<HTMLInputElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
-  // A detected direction is a guess, so it is NOT pinned into the next
-  // submission: retyping should let the guess change. A direction the reader
-  // chose by flipping the chip IS pinned, because they asked for it.
-  const isDirectionPinned = !direction.detected;
+  const { q, direction, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <div className="surface-brand rounded-2xl border p-5">
-        {/* GET, so the query lands in the URL and the results page is a place
-            rather than the outcome of a POST nobody can link to. */}
-        <Form method="get" ref={formRef}>
-          <label htmlFor="search-word" className="text-sm font-medium">
-            {t('search.fieldLabel')}
-          </label>
-          <div className="mt-2 flex gap-2">
-            <Input
-              ref={inputRef}
-              id="search-word"
-              name="q"
-              type="text"
-              defaultValue={q}
-              placeholder={t('search.placeholder')}
-              autoComplete="off"
-            />
-            {isDirectionPinned && (
-              <>
-                <input type="hidden" name="from" value={direction.from} />
-                <input type="hidden" name="to" value={direction.to} />
-              </>
-            )}
-            {/* The label changes with the state, it does not just gain a
-                spinner. A button that still reads "Search" while a search runs
-                is telling the reader nothing happened. */}
-            <Button type="submit" disabled={isSearching}>
-              {isSearching && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              {isSearching ? t('search.submitting') : t('search.submit')}
-            </Button>
-          </div>
-          <VoiceInput
-            className="mt-3"
-            inputRef={inputRef}
-            formRef={formRef}
-            sourceLanguage={direction.from}
-          />
-        </Form>
-        <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
-      </div>
-
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 md:max-w-5xl">
       {/* Today's three words, on the home screen and nowhere else. Client only:
           it renders nothing on the server and nothing until the device's own
           store has been read, so the HTML this route sends is unchanged. It
-          sits above the results area, so a reader who came here to look
-          something up sees their answer first. */}
+          sits above the two-pane surface, which is where it sat above the
+          results area before the relayout: with the answer now beside the box
+          rather than under it, "above both panes" is the only position that
+          still means the same thing. */}
       <DailyNudge />
+
+      <SearchPanes
+        q={q}
+        direction={direction}
+        hits={hits}
+        phrase={phrase}
+        didYouMean={didYouMean}
+        phraseWordsOmitted={phraseWordsOmitted}
+        panel={panel}
+      />
+
+      {/* The history WRITE, and it renders nothing. It is here rather than in
+          the loader because the loader runs on the server, which must never
+          learn what anybody looked up. It sits beside the surface rather than
+          inside it because it is not part of the surface: a review page that
+          renders the panes must not record searches nobody made. */}
+      <RecordSearch query={q} from={direction.from} to={direction.to} headwordId={hits[0]?.headwordId ?? null} />
 
       {/* The landing surface. With nothing typed there is no result to show, so
           the screen explains what a search returns and shows one, rather than
           leaving a stranger with an empty box and a full-stop. */}
       {q === '' && <Landing example={example} />}
-
-      {q !== '' && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
-            <DirectionChip direction={direction} query={q} />
-          </div>
-          {phrase !== null && <PhraseResults phrase={phrase} from={direction.from} to={direction.to} />}
-          {phrase === null && hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
-          {phrase === null && hits.length === 0 && (
-            <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>
-          )}
-          {/* The correction is a link and nothing else. It renders under the
-              empty-result message rather than in place of it, so the reader can
-              see that their own spelling found nothing before they are offered
-              another one. */}
-          {didYouMean !== null && <DidYouMean suggestion={didYouMean} from={direction.from} to={direction.to} />}
-          {/* The history WRITE, and it renders nothing. It is here rather than
-              in the loader because the loader runs on the server, which must
-              never learn what anybody looked up. */}
-          <RecordSearch
-            query={q}
-            from={direction.from}
-            to={direction.to}
-            headwordId={hits[0]?.headwordId ?? null}
-          />
-        </div>
-      )}
     </div>
   );
 }

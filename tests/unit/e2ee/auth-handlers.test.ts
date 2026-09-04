@@ -43,13 +43,20 @@ const OTHER_AUTH_HASH = sampleAuthHash(22);
 const RECOVERY_AUTH_HASH = sampleAuthHash(33);
 const NEW_RECOVERY_AUTH_HASH = sampleAuthHash(44);
 
-function signupBody(overrides: JsonObject = {}) {
+/**
+ * A signup body carrying a FRESH invite from the fixture's store, because
+ * signup is invite-gated (ADR-0009) and an invite is single-use: two bodies
+ * built from one token would make the second signup fail admission rather than
+ * whatever the test was actually about.
+ */
+function signupBody(fixture: AuthFixture, overrides: JsonObject = {}) {
   return {
     handle: HANDLE,
     authHash: AUTH_HASH,
     kdfDescriptor: sampleKdfDescriptor(),
     displayName: 'A Person',
     recoveryAuthHash: RECOVERY_AUTH_HASH,
+    inviteToken: fixture.mintInvite(),
     ...overrides,
   };
 }
@@ -68,7 +75,7 @@ function recoverRotateBody(overrides: JsonObject = {}) {
 
 /** Signs up and returns the created session, failing the test loudly if signup did not succeed. */
 async function signUp(fixture: AuthFixture): Promise<SessionResponse> {
-  const outcome = await handleSignup(signupBody(), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture), fixture.ctx);
   assert.equal(outcome.status, 'created');
   if (outcome.status !== 'created') throw new Error('unreachable');
   return outcome.body;
@@ -156,7 +163,7 @@ test("signup refuses a handle containing '@', and the reason names the rule", as
   // THE LOAD-BEARING REJECTION. Without it the handle column drifts back into
   // being an address register, one user at a time, and M181 is undone.
   const fixture = createAuthFixture();
-  const outcome = await handleSignup(signupBody({ handle: 'person@example.test' }), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture, { handle: 'person@example.test' }), fixture.ctx);
   assert.equal(outcome.status, 'invalid');
   if (outcome.status !== 'invalid') throw new Error('unreachable');
   assert.match(outcome.reason, /@/);
@@ -169,7 +176,7 @@ test('a handle is canonicalised, so casing and Unicode form cannot fork an accou
   // NFKC folds the fullwidth Latin letters; lowercasing folds the casing; the
   // trim folds the pasted whitespace. All three must reach the SAME account.
   const fullwidth = 'ｂright-otter-42';
-  const duplicate = await handleSignup(signupBody({ handle: '  BRIGHT-Otter-42 ' }), fixture.ctx);
+  const duplicate = await handleSignup(signupBody(fixture, { handle: '  BRIGHT-Otter-42 ' }), fixture.ctx);
   assert.equal(duplicate.status, 'conflict');
 
   assert.equal((await handleLogin({ handle: fullwidth, authHash: AUTH_HASH }, fixture.ctx)).status, 'ok');
@@ -178,13 +185,13 @@ test('a handle is canonicalised, so casing and Unicode form cannot fork an accou
 
 test('an over-long handle is refused', async () => {
   const fixture = createAuthFixture();
-  const outcome = await handleSignup(signupBody({ handle: 'x'.repeat(65) }), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture, { handle: 'x'.repeat(65) }), fixture.ctx);
   assert.equal(outcome.status, 'invalid');
 });
 
 test('signup is refused when the instance is closed', async () => {
   const fixture = createAuthFixture({ signupMode: 'closed' });
-  const outcome = await handleSignup(signupBody(), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture), fixture.ctx);
   assert.equal(outcome.status, 'forbidden');
 });
 
@@ -196,33 +203,129 @@ test('a closed instance refuses before parsing, so a malformed body still gets 4
   assert.equal(outcome.status, 'forbidden');
 });
 
-test('invite mode is refused, not silently treated as open', async () => {
-  // This service copied no invite redemption. An operator who sets the mode
-  // anyway must get a CLOSED instance, never an open one — the fail-safe
-  // reading of a mode the handlers cannot honour. Delete this case and the
-  // `!== 'open'` guard can be loosened to `=== 'closed'` with nothing failing.
-  const fixture = createAuthFixture({ signupMode: 'invite' });
-  const outcome = await handleSignup(signupBody({ inviteToken: 'si_anything-at-all' }), fixture.ctx);
+test('OPEN mode is refused, not silently honoured', async () => {
+  // The inverse of the case that stood here until M184, and it inverted with
+  // the gate. This installation refuses to have an ungated signup path at all,
+  // so `'open'` is now the mode the handlers will not honour, and the
+  // fail-safe reading of a mode we will not honour is a CLOSED instance.
+  // Delete this case and the `!== 'invite'` guard can be loosened with nothing
+  // failing.
+  const fixture = createAuthFixture({ signupMode: 'open' });
+  const outcome = await handleSignup(signupBody(fixture), fixture.ctx);
+  assert.equal(outcome.status, 'forbidden');
+});
+
+test('signup with no invite token is refused, and nothing is created', async () => {
+  const fixture = createAuthFixture();
+  const outcome = await handleSignup(signupBody(fixture, { inviteToken: null }), fixture.ctx);
+  assert.equal(outcome.status, 'forbidden');
+  assert.equal(await fixture.ctx.store.findAccountByHandle(HANDLE), null);
+});
+
+test('an unknown, a spent and an expired invite are ONE indistinguishable refusal', async () => {
+  // THE PROPERTY THAT MATTERS. Telling the three apart would let a caller probe
+  // which tokens exist and confirm that a leaked one had once been real
+  // (PROTOCOL.md §5.8.1).
+  const fixture = createAuthFixture();
+
+  const spent = fixture.mintInvite();
+  const first = await handleSignup(signupBody(fixture, { inviteToken: spent }), fixture.ctx);
+  assert.equal(first.status, 'created');
+
+  const expired = fixture.mintInvite({ expiresAt: new Date(fixture.now().getTime() - 1) });
+  const outcomes = await Promise.all(
+    [spent, expired, 'si_never-issued'].map((inviteToken, index) =>
+      handleSignup(signupBody(fixture, { handle: `other-handle-${index}`, inviteToken }), fixture.ctx),
+    ),
+  );
+
+  const reasons = outcomes.map((outcome) => (outcome.status === 'forbidden' ? outcome.reason : outcome.status));
+  assert.equal(new Set(reasons).size, 1, `three causes produced ${new Set(reasons).size} distinguishable answers`);
+  assert.ok(outcomes.every((outcome) => outcome.status === 'forbidden'));
+});
+
+test("a token of another service's shape is refused the same way, before any lookup", async () => {
+  // `gi_` is openplate-gateway's prefix, and the two travel side by side in a
+  // join link. The shape gate refuses it with the same answer an unknown
+  // invite gets, so it adds no oracle.
+  const fixture = createAuthFixture();
+  const gateway = await handleSignup(signupBody(fixture, { inviteToken: 'gi_wrong-service' }), fixture.ctx);
+  const unknown = await handleSignup(signupBody(fixture, { inviteToken: 'si_never-issued' }), fixture.ctx);
+  assert.equal(gateway.status, 'forbidden');
+  assert.equal(unknown.status, 'forbidden');
+  if (gateway.status !== 'forbidden' || unknown.status !== 'forbidden') throw new Error('unreachable');
+  assert.equal(gateway.reason, unknown.reason, 'the wrong-service prefix is distinguishable from an unknown token');
+});
+
+test('the invite check runs before the body is parsed, so a malformed body still gets 403', async () => {
+  // Ordering guard, the sibling of the closed-instance one above. If admission
+  // moved below field parsing, a caller holding no invite could use the
+  // 400/403 split to learn which bodies were structurally valid.
+  const fixture = createAuthFixture();
+  const outcome = await handleSignup({ handle: 42 }, fixture.ctx);
+  assert.equal(outcome.status, 'forbidden');
+});
+
+test('a handle collision does NOT consume the invite', async () => {
+  // PROTOCOL.md §5.8.1: a mistyped handle must not cost somebody their
+  // invitation. In the real store the transaction rolls the claim back.
+  const fixture = createAuthFixture();
+  await signUp(fixture);
+
+  const invite = fixture.mintInvite();
+  const collision = await handleSignup(signupBody(fixture, { inviteToken: invite }), fixture.ctx);
+  assert.equal(collision.status, 'conflict');
+  assert.equal(fixture.store.isInviteRedeemed(invite), false, 'a conflict spent the invite');
+
+  const retry = await handleSignup(signupBody(fixture, { handle: 'a-free-handle', inviteToken: invite }), fixture.ctx);
+  assert.equal(retry.status, 'created', 'the invite did not survive the collision');
+});
+
+test('the bootstrap token creates the first account and nothing after it', async () => {
+  const fixture = createAuthFixture({ bootstrapToken: 'operator-bootstrap-token' });
+
+  const first = await handleSignup(
+    signupBody(fixture, { inviteToken: 'operator-bootstrap-token' }),
+    fixture.ctx,
+  );
+  assert.equal(first.status, 'created');
+
+  // SELF-INVALIDATING. One account exists, so the precondition is false for the
+  // rest of the instance's life (ADR-0009). This is the POLICY half; the
+  // concurrency half needs Postgres and lives in
+  // `tests/integration/bootstrap-token-single-first-account.test.ts`.
+  const second = await handleSignup(
+    signupBody(fixture, { handle: 'second-account', inviteToken: 'operator-bootstrap-token' }),
+    fixture.ctx,
+  );
+  assert.equal(second.status, 'forbidden');
+});
+
+test('with no bootstrap token configured, an empty one cannot bootstrap an instance', async () => {
+  // The fail-closed reading of an unset variable. An installation that never
+  // configured a token must not be openable by presenting the empty string.
+  const fixture = createAuthFixture();
+  const outcome = await handleSignup(signupBody(fixture, { inviteToken: '' }), fixture.ctx);
   assert.equal(outcome.status, 'forbidden');
 });
 
 test('a duplicate signup is a conflict', async () => {
   const fixture = createAuthFixture();
   await signUp(fixture);
-  const outcome = await handleSignup(signupBody(), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture), fixture.ctx);
   assert.equal(outcome.status, 'conflict');
 });
 
 test('signup rejects a short auth hash', async () => {
   const fixture = createAuthFixture();
-  const outcome = await handleSignup(signupBody({ authHash: Buffer.alloc(8, 1).toString('base64') }), fixture.ctx);
+  const outcome = await handleSignup(signupBody(fixture, { authHash: Buffer.alloc(8, 1).toString('base64') }), fixture.ctx);
   assert.equal(outcome.status, 'invalid');
 });
 
 test('signup rejects a descriptor with a wrong-length salt', async () => {
   const fixture = createAuthFixture();
   const outcome = await handleSignup(
-    signupBody({
+    signupBody(fixture, {
       kdfDescriptor: {
         salt: Buffer.alloc(4, 1).toString('base64'),
         params: { memorySizeKib: 1, iterations: 1, parallelism: 1 },
@@ -473,7 +576,7 @@ test('an unknown handle, an account with no recovery code and a wrong code are O
   await signUp(fixture);
   // A second account created WITHOUT a recovery code — the third of the three
   // cases that must not be distinguishable.
-  const withoutCode = await handleSignup(signupBody({ handle: 'no-code-here', recoveryAuthHash: null }), fixture.ctx);
+  const withoutCode = await handleSignup(signupBody(fixture, { handle: 'no-code-here', recoveryAuthHash: null }), fixture.ctx);
   assert.equal(withoutCode.status, 'created');
 
   const outcomes = await Promise.all([

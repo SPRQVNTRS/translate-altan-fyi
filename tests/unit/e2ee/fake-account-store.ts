@@ -17,10 +17,16 @@
  * It deliberately does NOT simulate a transaction rollback. Atomicity is a
  * property of Postgres, and the integration suite is where it is exercised.
  *
- * TRIMMED ON COPY, with the handlers: this service has open signup, so the
- * invite seam and its seeded rows are gone rather than left here unused.
+ * THE INVITE SEAM IS BACK (M184). It was trimmed on copy while this service had
+ * open signup; signup is now invite-gated (ADR-0009), so the fake carries an
+ * in-memory invite registry again. It reproduces the RULES the Drizzle store
+ * must obey, single use, admission checked before the handle, and a handle
+ * collision that does NOT consume the invite, but, exactly as with the two
+ * rotations above, not their ATOMICITY. That is a property of Postgres and it
+ * is exercised in `tests/integration/`.
  */
 import type {
+  AccountAdmission,
   AccountRecord,
   AccountStore,
   CreateAccountInput,
@@ -40,7 +46,26 @@ interface StoredTokenRow extends StoredToken {
   tokenHash: string;
 }
 
+/**
+ * The fake's stand-in for `HMAC(inviteTokenPepper, token)`.
+ *
+ * Deliberately NOT the real construction: the handler is written against an
+ * injected `hashInviteToken`, so a fake that hashes differently proves the
+ * handler assumes nothing about the algorithm, and the unit suite needs no
+ * server secret to run.
+ */
+export function fakeInviteTokenHash(token: string): string {
+  return `fake-invite-hash:${token}`;
+}
+
 export interface FakeAccountStore extends AccountStore {
+  /**
+   * Test-only: mints an invite this store will admit exactly once, and returns
+   * the plaintext a signup body carries.
+   */
+  mintInvite(options?: { expiresAt?: Date }): string;
+  /** Test-only: whether the given invite has been spent. */
+  isInviteRedeemed(token: string): boolean;
   /** Test-only: the key records a rotation wrote, by account then kind. */
   keyRecordsFor(accountId: number): Map<SyncKeyRecordKind, KeyRecordSubmission>;
   /** Test-only: every token row, so a test can assert on revocation state. */
@@ -49,8 +74,15 @@ export interface FakeAccountStore extends AccountStore {
   hasAccount(accountId: number): boolean;
 }
 
+interface FakeInvite {
+  redeemedAt: Date | null;
+  expiresAt: Date | null;
+}
+
 export function createFakeAccountStore(): FakeAccountStore {
   const accountsById = new Map<number, AccountRecord>();
+  const invitesByHash = new Map<string, FakeInvite>();
+  let nextInviteCounter = 0;
   const tokens: StoredTokenRow[] = [];
   const keyRecords = new Map<number, Map<SyncKeyRecordKind, KeyRecordSubmission>>();
   let nextAccountId = 1;
@@ -60,6 +92,33 @@ export function createFakeAccountStore(): FakeAccountStore {
     for (const token of tokens) {
       if (token.revokedAt === null && predicate(token)) token.revokedAt = revokedAt;
     }
+  }
+
+  /**
+   * The admission rule, as a lookup that does not yet mutate.
+   *
+   * `null` is every refusal at once: no such invite, one already redeemed, one
+   * past its expiry, and a bootstrap token presented when an account already
+   * exists. The caller turns all of them into the single `not-admitted` reason.
+   *
+   * The `spend` closure is separated from the lookup so a handle collision can
+   * refuse WITHOUT spending, which is the fake's stand-in for the real store's
+   * rollback.
+   */
+  function spendableInvite(admission: AccountAdmission, now: Date): { spend(at: Date): void } | null {
+    if (admission.kind === 'bootstrap') {
+      if (accountsById.size !== 0) return null;
+      return { spend: () => undefined };
+    }
+    const invite = invitesByHash.get(admission.tokenHash);
+    if (!invite) return null;
+    if (invite.redeemedAt !== null) return null;
+    if (invite.expiresAt !== null && invite.expiresAt.getTime() <= now.getTime()) return null;
+    return {
+      spend(at: Date) {
+        invite.redeemedAt = at;
+      },
+    };
   }
 
   function upsertKeyRecords(accountId: number, records: KeyRecordSubmission[]): void {
@@ -84,9 +143,19 @@ export function createFakeAccountStore(): FakeAccountStore {
     },
 
     async createAccount(input: CreateAccountInput): Promise<CreateAccountResult> {
+      // ADMISSION BEFORE THE HANDLE, the same order the real store uses, so an
+      // uninvited caller cannot reach the `409`. A test that asserted the
+      // conflict first would be asserting the oracle back open.
+      const now = new Date();
+      const invite = spendableInvite(input.admission, now);
+      if (invite === null) return { ok: false, reason: 'not-admitted' };
+
       for (const account of accountsById.values()) {
+        // The invite is NOT stamped: the real store rolls its claim back here,
+        // so a handle collision must not cost somebody their invitation.
         if (account.handle === input.handle) return { ok: false, reason: 'handle-taken' };
       }
+      invite.spend(now);
       const account: AccountRecord = {
         id: nextAccountId++,
         handle: input.handle,
@@ -227,6 +296,20 @@ export function createFakeAccountStore(): FakeAccountStore {
 
     hasAccount(accountId: number) {
       return accountsById.has(accountId);
+    },
+
+    mintInvite(options: { expiresAt?: Date } = {}) {
+      nextInviteCounter += 1;
+      const token = `si_fake-invite-${nextInviteCounter}`;
+      invitesByHash.set(fakeInviteTokenHash(token), {
+        redeemedAt: null,
+        expiresAt: options.expiresAt ?? null,
+      });
+      return token;
+    },
+
+    isInviteRedeemed(token: string) {
+      return invitesByHash.get(fakeInviteTokenHash(token))?.redeemedAt !== null;
     },
   };
 }

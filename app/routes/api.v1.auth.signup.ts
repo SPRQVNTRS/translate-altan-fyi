@@ -16,6 +16,24 @@
  * service with no address to write to, and the full argument is in
  * `handleSignup` and PROTOCOL.md §5.8. Nothing here widens it: every other
  * status this route can return is shared with an unrelated cause.
+ *
+ * INVITE-GATED SINCE M184 (ADR-0009), and the gate is entirely inside
+ * `handleSignup` and the store's transaction. This file needed no new branch,
+ * and that absence is the point of two of the rules:
+ *
+ *  - **The refusal charges the SAME throttle bucket.** An unadmitted signup
+ *    comes back as `403`, which is simply not `'created'`, so it falls through
+ *    the one `gate.recordFailure()` below with every other failure. Token
+ *    guessing is therefore bounded by the per-IP signup limit that already
+ *    exists, instead of getting an ungated guessing surface beside it. A
+ *    separate branch for the invite failure is what would have broken that,
+ *    which is why there is not one.
+ *  - **The refusal adds no status.** It reuses the `403` a closed instance
+ *    already returns, and every cause of it (no token, unknown, wrong service,
+ *    already redeemed, expired, bootstrap after the first account) shares one
+ *    message. So the gate did not widen the oracle above; by settling admission
+ *    before the handle is looked at, it made the `409` reachable only to a
+ *    caller holding a spendable invite.
  */
 import type { Route } from './+types/api.v1.auth.signup';
 

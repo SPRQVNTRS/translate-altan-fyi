@@ -1,16 +1,23 @@
 # translate.altan.fyi Design Language
 
-This design language adapts openplate (`openplate/DESIGN.md`), a sibling
-product. Both products share core traits: a teal-tinted neutral scale on every
-surface, a single teal brand accent, and a display serif font for the chrome.
-The chrome means the surrounding browser frame and UI shell. The visual feel is
-a quiet study tool: clean, text-forward, and unhurried. It is neither a playful
-consumer app nor a dense dashboard.
+This product has its own look. A blue-tinted neutral scale on every surface, a
+single open-blue brand accent, a display grotesque for the chrome, and
+monospaced headwords. The chrome means the surrounding browser frame and UI
+shell. The visual feel is a quiet study tool: clean, text-forward, and
+unhurried. It is neither a playful consumer app nor a dense dashboard.
 
-Tokens, shadcn primitives, and the outer shell come directly from openplate.
-This shared base keeps both products related and saves work on the component
-library. This document defines the interface rules for THIS product. Use these
-recipes for all new UI. Do not invent new patterns.
+The colour tokens and the display face were teal and a display serif until
+M186, both copied from openplate (`openplate/DESIGN.md`), a sibling product.
+They are neither of those things now: the palette is the operator's own choice,
+"Open blue", and the display face is Bricolage Grotesque. Do not read a token
+value or a font name back out of openplate.
+
+What DOES still come from openplate is the component library: the shadcn
+primitives under `app/components/ui/` and the shape of the outer shell. That
+shared base saves work and keeps the two products structurally familiar, and it
+carries no colour and no face of its own, so the two can look nothing alike and
+still share it. This document defines the interface rules for THIS product. Use
+these recipes for all new UI. Do not invent new patterns.
 
 ---
 
@@ -30,10 +37,10 @@ build.
 
 ## 1. Principles
 
-1. **Neutrals carry the chrome, teal carries the brand.** Most elements use
-   neutral colors. Reserve teal for elements that need user focus: the primary
-   button, the active nav item, the focus ring, links, and the single hero card
-   on a screen.
+1. **Neutrals carry the chrome, blue carries the brand.** Most elements use
+   neutral colors. Reserve the brand blue for elements that need user focus: the
+   primary button, the active nav item, the focus ring, links, and the single
+   hero card on a screen.
 2. **The word is the subject.** Treat a search result as writing, not as a data
    row. Format text with care: set a readable line width, add generous line
    spacing, and maintain clear contrast between the translation, the
@@ -53,33 +60,38 @@ build.
 ## 2. Color tokens
 
 Semantic tokens live in `app/app.css` as HSL triplets, following shadcn
-convention. Every surface and hairline border uses the brand hue of 192 degrees
-at low saturation. The chrome, the page, and the cards form a single teal-tinted
-system instead of a teal accent placed on cold grey.
+convention. Every surface and hairline border uses the brand hue of 208 degrees
+at low saturation. The chrome, the page, and the cards form a single blue-tinted
+system instead of a blue accent placed on cold grey. The values below are the
+ones in `app/app.css`. Change them in one place and copy them here in the same
+edit: a token table that drifts from the stylesheet is worse than no table.
 
 | Token                  | Light                   | Dark                      | Usage                         |
 | ---------------------- | ----------------------- | ------------------------- | ----------------------------- |
-| `--background`         | `192 34% 96%` pale teal | `192 24% 4.5%` teal-black | page                          |
-| `--foreground`         | `200 18% 8%`            | `180 12% 97%`             | text                          |
-| `--card`               | white                   | `192 20% 8%`              | card surfaces                 |
-| `--muted` / `--accent` | `192 26% 93%`           | `192 16% 15%`             | hover surfaces, subdued fills |
-| `--muted-foreground`   | `197 14% 38%`           | `190 12% 68%`             | secondary text                |
-| `--border` / `--input` | `192 22% 85%`           | `192 16% 17%`             | hairlines                     |
-| `--primary`            | `179 92% 25%`           | `172 70% 52%`             | CTAs, links, active nav       |
-| `--primary-foreground` | white                   | `187 90% 8%`              | text on primary               |
+| `--background`         | `208 46% 95%` pale blue | `208 34% 5%` blue-black   | page                          |
+| `--foreground`         | `209 26% 9%`            | `200 16% 97%`             | text                          |
+| `--card`               | white                   | `208 28% 8.5%`            | card surfaces                 |
+| `--muted`              | `208 38% 91%`           | `208 20% 15%`             | hover surfaces, subdued fills |
+| `--accent`             | `208 42% 88%`           | `208 22% 17%`             | hover surfaces, subdued fills |
+| `--muted-foreground`   | `207 18% 37%`           | `203 14% 69%`             | secondary text                |
+| `--border` / `--input` | `208 30% 82%`           | `208 20% 17%`             | hairlines                     |
+| `--primary`            | `206 86% 34%`           | `199 90% 58%`             | CTAs, links, active nav       |
+| `--primary-foreground` | white                   | `205 82% 8%`              | text on primary               |
 | `--destructive`        | `0 72% 45%`             | `0 70% 45%`               | delete, disconnect            |
 | `--ring`               | same as `--primary`     | same as `--primary`       | focus rings                   |
 
 `--card` stays pure white in light mode so cards stand out from the tinted page.
 `--foreground` maintains a contrast ratio above 15:1 against the card and page.
-`--muted-foreground` maintains about 7.6:1 against white and 7:1 in dark mode.
+`--muted-foreground` maintains about 7.5:1 against white and 7:1 in dark mode.
+The brand is darker in light mode and brighter in dark mode, rather than one
+value in both: a 34% lightness blue on a near-black page reads as a bruise.
 
 The macro, adherence, and carb-status tokens from openplate were omitted. Those
 tokens describe food, which this product does not handle. Do not add them back
 speculatively. Add tokens only when a concrete screen needs them.
 
-**Brand discipline.** Neutrals use a teal tint across the whole app. Limit
-saturated teal surfaces strictly. Only three utilities in `app.css` apply one.
+**Brand discipline.** Neutrals use a blue tint across the whole app. Limit
+saturated blue surfaces strictly. Only three utilities in `app.css` apply one.
 Each uses an `hsl(var(--primary) / ...)` gradient, never a raw literal value:
 
 - `.surface-brand` styles the ONE hero card on a screen. Use it once per screen,
@@ -101,7 +113,7 @@ treatments:
 | Surface                          | Treatment                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Section labels above a block      | `text-[11px] font-semibold uppercase tracking-[0.11em] text-primary`, optional hairline at `bg-primary/20` |
-| Card titles, app-wide             | `font-display` (Fraunces) via the `CardTitle` primitive, never on a live figure       |
+| Card titles, app-wide             | `font-display` (Bricolage Grotesque) via the `CardTitle` primitive, never on a live figure |
 | Interactive row or chip hover     | `hover:border-primary/40 hover:bg-primary/5`                                          |
 | Active bottom-nav tab             | `bg-primary/5` plus an `after:` top rule at `bg-primary`                               |
 | Active sidebar row                | the `SidebarMenuButton` `isActive` state, which already carries the brand              |
@@ -122,8 +134,10 @@ other elements on the screen stay plain.
 **Entry card** (a word or phrase and its translation). Use `rounded-lg border
 bg-card shadow-sm` and `hover:shadow-md hover:border-primary/40 transition-all
 duration-200`. Arrange child elements in this order: the source term in
-`font-display` using `CardTitle`, the translation at `text-base`, the
-explanation at `text-sm text-muted-foreground`, and the examples. Place sense
+`font-mono text-lg font-semibold tracking-tight`, the translation at `text-base`
+and also in `font-mono`, the explanation at `text-sm text-muted-foreground` in
+the sans face, and the examples. The term and its translation are the only
+monospaced text on the card. See section 4. Place sense
 chips directly below the title. Render them as a row of `rounded-full
 bg-primary/10 px-2 py-0.5 text-xs text-primary` pills, one per word meaning. A
 chip acts as both a filter and a label, so always explain the sense elsewhere on
@@ -132,6 +146,8 @@ the card too.
 **List row.** This surface represents a saved word inside a list. Apply `flex
 items-center gap-3 rounded-lg px-3 py-2`. Render the term with `text-sm
 font-medium` and the translation with `text-sm text-muted-foreground truncate`.
+Both stay in `font-sans`: the monospaced treatment in section 4 is for the word
+being looked at, not for every row that names one.
 Apply the row hover tokens from the table above. Separate rows using their hover
 states and hairline borders. Never use a left border accent.
 
@@ -144,19 +160,35 @@ container and shadow, and render simple rows on the page.
 
 ## 4. Typography
 
-- **Body font: Inter Variable (`font-sans`) on `<body>`.** Use Victor Mono
-  Variable (`font-mono`) only for technical strings, phonetic transcriptions,
-  and code blocks. Inter serves as the voice for UI text and prose.
-- **Display serif: Fraunces (`font-display`)**, self-hosted in `public/fonts/`.
-  Use Fraunces for the wordmark, page titles, and card titles. This adds brand
-  character to views past the hero card. **Never on a live figure.** Fraunces
-  does not include tabular figures, so numbers shift width when values change.
+- **Body font: Inter Variable (`font-sans`) on `<body>`.** Inter serves as the
+  voice for UI text and prose.
+- **`font-mono` for technical strings**: handles, device and model ids,
+  workflow ids, phonetic transcriptions, and code blocks. Victor Mono Variable
+  is the face.
+- **`font-mono` for the word under examination, and for its translation.** This
+  is a separate rule from the technical-string one above, and it is scoped
+  narrowly. It applies to the term and its translation in: the Entry card
+  (`search-results.tsx`), `SearchResults`, `PhraseResults`, `DidYouMean`'s
+  suggestion, and the translation chips in the generated-notes panel, which the
+  entry page and the search screen's output pane both render. It does NOT apply
+  to list rows or history rows, which stay in `font-sans`: a saved row is a
+  place in a collection, and the mono face is reserved for the word being looked
+  at right now. It also does not apply to a gloss, an explanation, a usage note
+  or an example sentence, which are prose ABOUT a word rather than the word.
+- **Display face: Bricolage Grotesque (`font-display`)**, self-hosted in
+  `public/fonts/`. Use it for the wordmark, page titles, and card titles. This
+  adds brand character to views past the hero card. It is a grotesque, not a
+  serif: the display serif this product used to carry is the face openplate
+  carries in the same role, and a display sans over monospaced headwords reads
+  as a tool rather than as a storybook. **Never on a live figure.** The shipped
+  subset offers no tabular figures, so numbers shift width when values change.
   Always render dynamic numbers in `font-sans` with `tabular-nums`. Tabular
   figures have equal widths so columns align.
 - Fonts are **self-hosted**: Import Inter and Victor Mono using
-  `@fontsource-variable/*` packages in `root.tsx`. Declare Fraunces using the
-  `@font-face` block in `app/app.css`. Never load fonts from Google Fonts or an
-  external CDN. This protects user privacy.
+  `@fontsource-variable/*` packages in `root.tsx`. Declare Bricolage Grotesque
+  using the `@font-face` block in `app/app.css`, over the single woff2 file in
+  `public/fonts/`. Never load fonts from Google Fonts or an external CDN. This
+  protects user privacy.
 - Scale (standard Tailwind utilities):
   - Page title: `text-2xl font-semibold tracking-tight`
   - Hero: `text-4xl font-bold tracking-tight sm:text-5xl`
@@ -281,9 +313,9 @@ true.** Apply these priority rules:
 - No new accent colors. Use brand washes sparingly via the three `app.css`
   utilities in the locations listed in section 2. Never hardcode color values in
   components.
-- No `text-teal-*`, `bg-emerald-*`, or `bg-zinc-*` utility classes in app code.
-  Reference brand and neutral values through design tokens. Place raw color
-  values in `app/app.css` only.
+- No raw Tailwind palette utilities in app code, such as `text-sky-*`,
+  `bg-blue-*`, or `bg-zinc-*`. Reference brand and neutral values through design
+  tokens. Place raw color values in `app/app.css` only.
 - No `window.confirm` and no `window.alert`.
 - No unlabeled spinners in page content. Attach spinners directly to the
   triggering element.

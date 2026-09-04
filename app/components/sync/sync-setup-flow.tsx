@@ -8,6 +8,7 @@ import { CopyButton } from '#app/components/sync/copy-button';
 import { PassphraseStrengthMeter } from '#app/components/sync/passphrase-strength-meter';
 import { isRecoveryCodeConfirmed } from '#app/components/sync/recovery-confirmation';
 import { createSyncAccount } from '#app/components/sync/sync-client';
+import { classifySignupFailure } from '#app/lib/e2ee/flows/signup-error';
 import { setSyncSession } from '#app/lib/sync/sync-session';
 import { reportError } from '#app/lib/report-error';
 import {
@@ -46,6 +47,12 @@ export function SyncSetupFlow() {
   const [state, dispatch] = useReducer(syncSetupReducer, undefined, () => initialSyncSetupState());
   const [passphrase, setPassphrase] = useState('');
   const [passphraseConfirmation, setPassphraseConfirmation] = useState('');
+  // The invite, or the operator's one-shot bootstrap token. ONE field for both,
+  // because the service accepts them in the same place and a person holding a
+  // string of characters has no way to tell you which kind they were given.
+  // Plain `useState` like the others: it is a field's contents, not a state of
+  // the flow, and it cannot advance a screen.
+  const [inviteToken, setInviteToken] = useState('');
   const [cardStep, setCardStep] = useState<'handle' | 'recovery' | 'confirm'>('handle');
   const [typedCode, setTypedCode] = useState('');
   const [hasMismatch, setHasMismatch] = useState(false);
@@ -68,7 +75,11 @@ export function SyncSetupFlow() {
 
     dispatch({ type: 'detailsSubmitted' });
     try {
-      const account = await createSyncAccount({ passphrase });
+      // TRIMMED HERE, ONCE. A code copied out of a chat message arrives with a
+      // space or a newline around it more often than not, and a service that
+      // hashes what it is given cannot forgive one. This is the only place the
+      // token is touched between the field and the request body.
+      const account = await createSyncAccount({ passphrase, inviteToken: inviteToken.trim() });
       // Before the screen advances, and before anything can navigate away. The
       // DEK exists only in memory, so the sync engine has to be handed it in
       // the same turn that produced it.
@@ -86,11 +97,21 @@ export function SyncSetupFlow() {
       // derived from them are in scope right here, and not one of them may
       // reach a log line. Only the operation's name and the failing step go.
       reportError(cause, { operation: 'sync-setup', step: 'createSyncAccount' });
-      // One sentence for every failure, because the catalog holds one. The
-      // cause is not shown: a service's own prose is untranslated, and the
-      // statuses that would deserve their own sentence (an invite-only
-      // instance, a closed one) have no copy written for them yet.
-      dispatch({ type: 'setupFailed', message: t('sync.genericError') });
+      // TWO SENTENCES NOW, AND THE SECOND ONE IS THE COMMON CASE. A refused
+      // invite is what most failures here will be on an invite-only instance,
+      // and "something went wrong, please try again" would send a person
+      // retrying a code that can never work. The classifier owns the mapping
+      // from status to meaning, and it is given `'invite'` rather than `null`
+      // because this deployment IS invite-only by construction: see the same
+      // argument in `sync-client.ts`'s `signUp`.
+      //
+      // THE SERVICE'S OWN PROSE IS STILL NEVER SHOWN. It is untranslated, and
+      // §5.8.1 makes every bad invite one indistinguishable answer on purpose,
+      // so there is nothing in it worth rendering. The cause goes to the
+      // reporter, the reader gets a catalogue sentence.
+      const failure = classifySignupFailure(cause, 'invite');
+      const message = failure === 'invite-required' ? t('sync.inviteRejected') : t('sync.genericError');
+      dispatch({ type: 'setupFailed', message });
     }
   };
 
@@ -116,6 +137,29 @@ export function SyncSetupFlow() {
         </div>
 
         <div className="flex flex-col gap-4 rounded-xl border bg-card p-6">
+          {/* THE INVITE, ABOVE THE PASSPHRASE. It is the first thing a person
+              was given and the first thing this instance asks for, and a field
+              for it below the passphrase would be read after the reader had
+              already decided the form was about a password. `type="text"`, not
+              `password`: a code that cannot be seen cannot be checked against
+              the message it was copied from, and it is a one-time admission
+              ticket rather than a standing credential. `autoComplete="off"` for
+              the same reason. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="sync-invite">{t('sync.inviteLabel')}</Label>
+            <Input
+              id="sync-invite"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              className="font-mono"
+              value={inviteToken}
+              onChange={(event) => setInviteToken(event.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">{t('sync.inviteHint')}</p>
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="sync-passphrase">{t('sync.passphraseLabel')}</Label>
             <Input

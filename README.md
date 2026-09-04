@@ -2,12 +2,18 @@
 
 A vocabulary and translation web app. You type a word or a phrase. The app
 returns a translation, a plain explanation, and example sentences. You can
-collect terms into learning lists. The app works without an account. Search,
-lists, and history stay on your local device. An account serves one purpose:
-syncing data to a second device. When you create an account, the app encrypts
-your personal data end to end. The hosted instance lives at
-[translate.altan.fyi](https://translate.altan.fyi). This repository contains the
-entire codebase under the MIT licence. You can host it yourself.
+collect terms into learning lists. The front page is public, and it shows a
+real worked example from the dictionary. Everything past it needs an account: a
+typed search, entry pages, lists, history, review, and voice input. Creating an
+account needs an invite, because every explanation the app writes costs the
+operator a language-model call. The hosted instance at
+[translate.altan.fyi](https://translate.altan.fyi) hands out those invites one
+at a time. Your lists and history live on your own device, and what you sync
+between your devices is encrypted end to end, so the server cannot read it.
+This repository contains the entire codebase under the MIT licence. You can
+host it yourself, and your own instance admits its first account with a
+bootstrap token that you set. See [Self-hosting](#self-hosting) below, and
+[ADR-0009](.adr/0009-invite-only-accounts.md) for why the gate exists.
 
 ## Architecture in five lines
 
@@ -61,11 +67,62 @@ cp .env.example .env
 # Edit .env. At minimum set the DB_* variables. SESSION_SECRET and SERVER_SECRET
 # are required in production and have development defaults otherwise.
 
+# Set ACCOUNT_BOOTSTRAP_TOKEN in .env as well. It admits your first account,
+# and the next section explains how you use it.
+openssl rand -hex 32   # paste this value into ACCOUNT_BOOTSTRAP_TOKEN
+
 pnpm drizzle:migrate   # create the schema
 pnpm dev               # dev server and worker together
 ```
 
 The app runs at `http://localhost:${PORT}`, which defaults to `3000`.
+
+### Your first account
+
+Account creation needs an invite, and on a new instance nobody exists yet to
+mint one. `ACCOUNT_BOOTSTRAP_TOKEN` is the way in. Signup accepts it in place of
+an invite, and only while the `accounts` table is still empty. It therefore
+invalidates itself as soon as your first account exists.
+
+The server can never create an account for you. Identity here is a passphrase
+that your browser turns into keys, and the server never learns it, so no
+environment variable and no CLI command can seed an account. A real browser has
+to do the signup. [ADR-0009](.adr/0009-invite-only-accounts.md) explains the
+consequences.
+
+Do these steps in this order. The first three are the block above.
+
+1. Set `ACCOUNT_BOOTSTRAP_TOKEN` in `.env`, before the first boot.
+2. Run `pnpm drizzle:migrate`, which creates the `accounts` and `invites`
+   tables.
+3. Start the app with `pnpm dev`, or with `pnpm start` and `pnpm worker`.
+4. Open `/sync/setup` in a browser. Typing a search on the front page also
+   takes you there, by way of `/sync/login` and its "create an account" card.
+5. Paste the bootstrap token into the invite field, choose a passphrase, and
+   finish the signup. Write down the handle and the recovery code that the app
+   shows you. Nobody can recover them for you.
+6. Grant yourself the admin screens under `/super/`:
+
+   ```bash
+   pnpm cli account grant-superadmin <your-handle>
+   ```
+
+7. Mint invites for everybody else. Each token is printed once, and only the
+   hash of it is stored:
+
+   ```bash
+   pnpm cli account invite --minted-by=<your-handle>
+   pnpm cli account invite --expires-in=never
+   pnpm cli account list-invites
+   ```
+
+Both invite commands read the database directly, so run them where `.env` is
+readable. They do not need a superadmin account, which is why step 7 also works
+if you skip step 6.
+
+Losing the bootstrap token before step 5 is an environment problem, not a
+database problem: set a new value and restart. After step 5 the token is dead,
+and further accounts need invites from step 7.
 
 The `pnpm dev` command starts two processes: `dev:server` (Express running React
 Router SSR) and `dev:worker` (the pg-boss job processor). You can run each
@@ -223,15 +280,19 @@ TypeScript packages.
 
 ## Accounts and the encrypted personal layer
 
-The application is **anonymous by default**. Search, word lists, and history
-save locally on your device without an account. The UI presents no signup
-prompts, and core routes require no login.
+The application is **invite-only**. The front page is public and carries a
+worked example. Everything past it needs an account: a typed search, entry
+pages, lists, history, review, and voice input. A signed-out visitor who
+searches is sent to `/sync/login`, and that page links on to `/sync/setup`.
+Signup refuses any request without a valid invite. It answers every cause of
+refusal with the same message, so it tells a caller nothing about which invites
+exist. [ADR-0009](.adr/0009-invite-only-accounts.md) records the decision, and
+[Your first account](#your-first-account) is the way into your own instance.
 
-Accounts exist only to sync state across multiple devices. Users can create an
-account from a single settings card at `/settings`.
-
-When a user enables sync, the system protects their data with **end-to-end
-encryption**:
+An account is also the sync account, and it is what carries state between a
+person's devices. Word lists and history are still written on the device that
+made them. They reach the server only after the browser has encrypted them with
+**end-to-end encryption**:
 
 - The browser derives an Argon2id key from a passphrase. It splits this key into
   two separate branches using HKDF, a key derivation function. One branch acts

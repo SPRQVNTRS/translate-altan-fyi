@@ -19,6 +19,14 @@
 > stays whole: anything about pointing a client at an arbitrary server with
 > `SYNC_SERVER_URL`, and the handshake or operator-notice endpoints. There is no
 > server to discover here.
+>
+> **One section is an ADDITION rather than a copy**, and it is the only place
+> this file diverges from upstream: §5.8.2, the bootstrap token. It is marked as
+> such where it appears. It exists because this installation runs
+> `signupMode: invite` permanently and had to admit its own first account
+> ([ADR-0009](.adr/0009-invite-only-accounts.md)); upstream has no such rule and
+> no such field. Do not carry it upstream as a protocol change without deciding
+> there that every instance wants it.
 
 # openplate sync protocol
 
@@ -481,6 +489,24 @@ An invite is a single-use, expiring capability. It is **not** bound to a handle 
 A signup that fails for any other reason does **not** consume the invite. In particular a `409` (handle already registered) leaves it spendable, so a typo does not cost somebody their invitation. The service enforces this with a conditional update inside a transaction, so concurrent redemptions of one invite still produce exactly one account.
 
 Instances advertise their mode on the `/health` handshake as `signupMode` (§5.6). Treat it as a hint for rendering the right form; the `403` remains the contract, because an operator can change the mode between the handshake and the submit.
+
+#### 5.8.2 The bootstrap token, THIS INSTALLATION ONLY
+
+> **An addition, not a copy.** This subsection describes a rule of
+> translate.altan.fyi and not of the openplate sync protocol. See the note at
+> the top of this file, and [ADR-0009](.adr/0009-invite-only-accounts.md) for the
+> decision. An alternative client implementing the protocol needs nothing from
+> this subsection; an operator deploying THIS app needs all of it.
+
+This instance runs `invite` mode permanently, as a hard-coded literal in its composition root rather than as a configurable value, so there is no environment variable that can reopen signup. That creates one problem the protocol above does not have: the FIRST account has nobody to have minted its invite, and the server cannot create an account by itself, because it never learns a passphrase (§3.1) and only a browser can derive the material an account is made of.
+
+`ACCOUNT_BOOTSTRAP_TOKEN`, an operator-set random secret in the environment, is accepted **in the `inviteToken` field, in place of an invite**, and only while the `accounts` table is empty. It carries no `si_` prefix and is not looked up in the `invites` table: the service compares a keyed hash of what was presented against a keyed hash of what was configured, in constant time, and an unset or empty variable matches nothing at all.
+
+It is **self-invalidating**. Once one account exists the precondition is false for the rest of the instance's life, so the branch is dead and there is no ongoing secret to rotate. The operator is expected to use it exactly once and then remove it from the environment.
+
+**Exactly one account can be created with it, including under concurrency.** The zero-row check is taken inside the same transaction as the insert, behind a transaction-scoped Postgres advisory lock. The obvious alternative does not work and is recorded here because it looks like it does: `SELECT count(*) FROM accounts FOR UPDATE` locks the rows it returned, and on an empty table it returned none, so two concurrent bootstrap signups would both observe zero and both succeed. The advisory lock is what makes the second one wait, re-count and be refused.
+
+A refused bootstrap signup returns the SAME `403` with the SAME message as every bad invite in §5.8.1. A caller cannot use it to learn whether a bootstrap token was ever configured on this instance, or whether it has already been spent.
 
 ### 5.9 `POST /v1/auth/login`
 

@@ -56,3 +56,4 @@ gets an edit.
 | [0005](0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
 | [0008](0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
+| [0009](0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Accepted |

@@ -47,11 +47,12 @@ import { action } from '../../app/routes/api.v1.transcribe';
 import {
   counterKey,
   windowStart,
-  TRIGGER_LIMIT_PER_IP_PER_HOUR,
+  TRIGGER_LIMIT_PER_SESSION_PER_HOUR,
 } from '../../app/lib/abuse/rate-limit.server';
 import { DAILY_BUDGET_USD, utcDay } from '../../app/lib/abuse/budget.server';
 import { registry, type AudioPort } from '../../app/lib/llm/registry.server';
 import { MAX_AUDIO_BYTES } from '../../app/services/transcribe.server';
+import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -99,10 +100,39 @@ let alertKindsBefore: string[] = [];
 /** What the provider keys held before this file touched them. */
 const keySnapshot = new Map<string, string | undefined>();
 
+/**
+ * The signed-in caller every case here posts as.
+ *
+ * SINCE M184 THIS ROUTE REQUIRES AN ACCOUNT (ADR-0009), and the account gate is
+ * the first guard in the action. Without a session every case below would be
+ * answered 401 and would assert nothing about the guard it is named after.
+ * `anonymous-transcribe-refused.test.ts` owns the anonymous half.
+ */
+let session: TestAccountSession | null = null;
+
+/** Every account this file created, so `after()` removes exactly those. */
+const createdSessions: TestAccountSession[] = [];
+
+/**
+ * A brand new account, and every request after this call is made as that one.
+ *
+ * WHY A CASE EVER NEEDS ONE. The hourly limiter counts per session as well as
+ * per address, so a case that spends its predecessor's allowance would be
+ * refused for a reason that has nothing to do with what it is testing. A fresh
+ * address is not enough any more: since M184 this route requires an account, so
+ * every request now carries a session bucket too.
+ */
+async function freshSession(label: string): Promise<void> {
+  const created = await createTestAccountSession(label);
+  createdSessions.push(created);
+  session = created;
+}
+
 /** One POST to the route, as the router would frame it. */
 async function post(params: { body: Uint8Array<ArrayBuffer>; ip: string; declaredLength?: number }): Promise<Response> {
   const headers = new Headers({ 'content-type': CLIP_TYPE, 'x-forwarded-for': params.ip });
   if (params.declaredLength !== undefined) headers.set('content-length', String(params.declaredLength));
+  if (session !== null) headers.set('cookie', session.cookie);
 
   const request = new Request('https://translate.altan.fyi/api/v1/transcribe?language=de', {
     method: 'POST',
@@ -141,6 +171,8 @@ async function readBody(response: Response): Promise<z.infer<typeof responseSche
 before(async () => {
   if (!DB_HOST) return;
 
+  await freshSession('transcribe-guards');
+
   // No alert may leave this process: a refused reservation raises the cap alert.
   keySnapshot.set('ALERT_WEBHOOK_URL', process.env.ALERT_WEBHOOK_URL);
   delete process.env.ALERT_WEBHOOK_URL;
@@ -168,6 +200,7 @@ before(async () => {
 });
 
 after(async () => {
+  for (const created of createdSessions) await created.dispose();
   if (DB_HOST) {
     const day = utcDay(new Date());
 
@@ -227,16 +260,27 @@ describe('POST /api/v1/transcribe', () => {
     },
   );
 
-  it('refuses a burst past the per-IP hourly limit with 429', { skip: !DB_HOST ? 'DB_HOST is not set, this case needs a database' : false },
+  it('refuses a burst past the hourly limit with 429', { skip: !DB_HOST ? 'DB_HOST is not set, this case needs a database' : false },
     async () => {
       providerCalls.length = 0;
+      // A fresh account, so the burst below starts from an empty session
+      // bucket rather than from whatever the cases above spent.
+      await freshSession('transcribe-burst');
       const ip = freshIp();
 
+      // THE SESSION CEILING IS THE ONE THAT BINDS HERE, AND IT DID NOT USED TO.
+      // This case counted to `TRIGGER_LIMIT_PER_IP_PER_HOUR` while the route
+      // was open to anonymous callers with no session cookie at all. Since M184
+      // it requires an account, so every request now also lands in a session
+      // bucket, and that ceiling is the LOWER of the two: the address limit is
+      // now unreachable on this route. Counting to the address limit here would
+      // be counting to a number no authenticated caller can ever reach.
+      //
       // The whole allowance, one request at a time. Each of these is allowed by
       // the limiter and then stops at the configuration check, because the
       // provider keys are cleared for this file: no money is reserved and no
       // call is made.
-      for (let attempt = 0; attempt < TRIGGER_LIMIT_PER_IP_PER_HOUR; attempt += 1) {
+      for (let attempt = 0; attempt < TRIGGER_LIMIT_PER_SESSION_PER_HOUR; attempt += 1) {
         const allowed = await post({ body: SMALL_CLIP, ip });
         assert.notEqual(allowed.status, 429, `request ${attempt + 1} was refused before the limit was reached`);
       }
@@ -253,6 +297,10 @@ describe('POST /api/v1/transcribe', () => {
   it('declines with a message rather than a 500 at the daily budget cap', { skip: !DB_HOST ? 'DB_HOST is not set, this case needs a database' : false },
     async () => {
       providerCalls.length = 0;
+      // A fresh account again: the burst above left its session bucket over the
+      // ceiling, and a rate-limit refusal here would answer 429 for the wrong
+      // reason and read exactly like the budget refusal this case is about.
+      await freshSession('transcribe-budget');
       // A key must be present, otherwise the request would stop at the
       // configuration check and never reach the cap this case is about. It is
       // not a credential: the provider is the injected fake.

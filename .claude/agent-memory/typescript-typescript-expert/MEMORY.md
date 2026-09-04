@@ -25,3 +25,21 @@
 - [A public /api/v1 route needs a bearer-guard exemption](project_api_v1_bearer_guard_exemptions.md) — an Express 401 lands before the router; route-level tests never see it
 - [The LLM registry owns the audio call too](project_llm_registry_owns_the_audio_call.md) — @sprqvntrs/llm has no audio input; use registry.transcribeAudio, fake it with withAudioPort
 - [Sync triggers, and the locked-but-signed-in state](project_sync_triggers_and_locked_state.md) — an empty outbox never pulls, and a reload leaves a device signed in with no data key
+- [cli/index.ts is a dynamic-import launcher](project_cli_json_output_polluted_by_pool_log.md) — a static import there is hoisted above the LOG_LEVEL assignment and puts a pool log on JSON stdout
+- [The CLI has no global --format](project_cli_format_option_is_per_subcommand.md) — it is per subcommand, so `pnpm cli --format=json <group> <cmd>` errors
+- [The invite pepper is a third SERVER_SECRET subkey](project_invite_token_pepper_is_a_third_subkey.md) — derived in app/lib/invites/, never by extending the copied server-secrets.ts
+- [The GET ?q= ceiling is 16 KiB of headers](project_get_q_url_ceiling.md), 16000 ASCII chars pass, 17000 gives 431; ~2700 non-ASCII; do not switch to POST
+- [VoiceInput takes a sink, not an input element](project_voice_input_takes_a_sink.md), `{ value: string }`, because the search box is a textarea; one query path for speech
+- [Signup admission lives in the store](project_signup_admission_lives_in_the_store.md), a required field on CreateAccountInput enforced inside the insert's transaction; 'open' mode is refused
+- [The zero-account bootstrap check needs an advisory lock](project_bootstrap_zero_account_check_needs_an_advisory_lock.md), FOR UPDATE cannot lock an empty table; a test that needs one clones the tables into its own schema
+- [node --test's pass line is never in tail -5](project_node_test_summary_never_in_tail_5.md), a checklist piping through tail -5 is unsatisfiable, not failing
+- [searchPhrase caps the word list at six and calls no LLM](project_translate_phrase_token_limit.md), the loader reports the shortfall as `phraseWordsOmitted`
+- [A tracker grep check is case sensitive](project_tracker_grep_is_case_sensitive.md), an ALL-CAPS comment heading defeats one; the Expected clause tests the matched LINE
+- [The enrichment trigger is the shared seam](project_enrichment_trigger_is_the_shared_seam.md), one machine for the entry route and the search pane; a grep demands identical enrichment imports
+- [search.tsx has source-grep unit tests](project_search_tsx_has_source_grep_tests.md), moving a call out of that loader fails a check about intent; repair the literal, not the code
+- [The two idle reasons already read differently](project_enrichment_idle_reasons_already_differ.md), EnrichmentSection splits not-configured from not-requested; never write a second idle line
+- [The post-M184 public surface](project_public_surface_contract_m184.md), the gate is request-keyed in search.tsx's loader; `_app.gated.tsx` carries accountMiddleware, never authMiddleware
+- [A public-surface test needs a liveness case](feedback_public_surface_test_needs_liveness_case.md), asserting a route is open passes on an instance with no gate at all; run the real gate for contrast
+- [Tailwind 4 resolves --color-* at :root](project_tailwind4_theme_vars_resolve_at_root.md), a scoped palette override needs the raw token AND the --color-* line
+- [typegen runs in production mode](project_typegen_runs_in_production_mode.md), a dev-only route gets no ./+types, so it reads useLoaderData
+- [SearchPanes is the shared surface](project_search_panes_is_the_shared_surface.md), the two-pane markup left search.tsx and two source-grep tests followed it

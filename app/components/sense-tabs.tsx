@@ -86,7 +86,11 @@ function SensePanel({ sense, to }: { sense: EntrySense; to: LanguageCode }) {
                 <Link
                   to={`/entry/${translation.headwordId}?to=${to}`}
                   lang={translation.languageCode}
-                  className="hover:text-primary"
+                  // The TRANSLATION is a word, so it takes the mono face the
+                  // headword takes (M186/03). The glosses above deliberately do
+                  // not: a gloss is a sentence describing a sense, not a term
+                  // the reader is meant to read back, type or recognise.
+                  className="font-mono hover:text-primary"
                 >
                   {translation.lemma}
                 </Link>{' '}

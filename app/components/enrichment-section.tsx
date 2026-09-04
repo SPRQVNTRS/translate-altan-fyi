@@ -146,10 +146,18 @@ function SenseNotes({ sense, from, to }: { sense: EnrichmentPanelSense; from: La
 
   return (
     <div className="flex flex-col gap-4">
+      {/* THE TRANSLATION CHIPS ARE MONOSPACED, AND NOTHING ELSE IN THIS PANEL
+          IS. They are the answer to "what is this word", so they get the same
+          treatment the result rows give a headword and a translation. The
+          explanation, the register note and the usage notes under them are
+          prose about the word rather than the word, and they stay in the sans
+          face. This panel renders in two places, the entry page and the search
+          screen's output pane, so the rule holds on both without being written
+          twice. */}
       <Labelled label={t('enrichment.translationLabel')}>
         <ul className="mt-1 flex flex-wrap gap-2">
           {output.translation.map((word) => (
-            <li key={word} lang={to} className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+            <li key={word} lang={to} className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-xs text-primary">
               {word}
             </li>
           ))}

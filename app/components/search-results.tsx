@@ -65,7 +65,19 @@ function ResultExample({ example, to }: { example: SearchHitExample; to: Languag
   );
 }
 
-/** The target-language translations of one hit, comma separated. */
+/**
+ * The target-language translations of one hit, comma separated.
+ *
+ * THE TRANSLATIONS ARE MONOSPACED, THE PROSE AROUND THEM IS NOT. Each one is a
+ * word being quoted rather than a sentence being read, and the mono face is
+ * what says so, exactly as it says so for the headword above. The separating
+ * commas stay outside the span deliberately: they are punctuation belonging to
+ * this list, not to any word in it.
+ *
+ * A GLOSS IS NOT A TRANSLATION AND IS NOT MONOSPACED. It is an explanatory
+ * sentence, so it stays in the sans face with the rest of the prose. Setting it
+ * in mono would claim it is a word you could write down as the answer.
+ */
 function ResultTranslations({ hit }: { hit: SearchHit }) {
   const { t } = useTranslation();
 
@@ -75,7 +87,9 @@ function ResultTranslations({ hit }: { hit: SearchHit }) {
         {hit.translations.map((translation, index) => (
           <Fragment key={`${translation.sourceSlug}:${translation.headwordId}`}>
             {index > 0 && ', '}
-            <span lang={translation.languageCode}>{translation.lemma}</span>
+            <span lang={translation.languageCode} className="font-mono">
+              {translation.lemma}
+            </span>
           </Fragment>
         ))}
       </p>
@@ -100,11 +114,18 @@ function ResultRow({ hit, to }: { hit: SearchHit; to: LanguageCode }) {
     <li className="rounded-lg border bg-card p-4 shadow-sm transition-all duration-200 hover:border-primary/40 hover:shadow-md">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         {/* The lemma is the link, not the whole card: the row also carries
-            source links, and an anchor inside an anchor is invalid HTML. */}
+            source links, and an anchor inside an anchor is invalid HTML.
+
+            IT IS MONOSPACED, AND IT USED TO BE IN THE DISPLAY FACE. The word
+            under examination is the subject of this whole screen, and the mono
+            face sets it apart from every sentence around it the way quotation
+            marks would, without the punctuation. The display face still owns
+            the chrome (the wordmark, the page titles, the section headings);
+            it no longer owns the word. */}
         <Link
           to={`/entry/${hit.headwordId}?to=${to}`}
           lang={hit.languageCode}
-          className="font-display text-lg font-semibold hover:text-primary"
+          className="font-mono text-lg font-semibold tracking-tight hover:text-primary"
         >
           {hit.lemma}
         </Link>
@@ -179,10 +200,14 @@ export function DidYouMean({ suggestion, from, to }: DidYouMeanProps) {
   return (
     <p className="text-sm text-muted-foreground">
       {t('search.didYouMeanLabel')}{' '}
+      {/* The suggestion is a WORD inside a sentence, so it carries the same
+          mono treatment the result rows give a headword. That is also what
+          makes it visibly a different kind of thing from the label in front of
+          it, which is ordinary prose. */}
       <Link
         to={href}
         lang={from}
-        className="font-medium text-primary underline underline-offset-4 hover:no-underline"
+        className="font-mono font-medium text-primary underline underline-offset-4 hover:no-underline"
         aria-label={t('search.didYouMeanAction', { suggestion })}
       >
         {suggestion}
@@ -217,7 +242,12 @@ export function PhraseResults({ phrase, from, to }: PhraseResultsProps) {
 
       {phrase.tokens.map((match) => (
         <div key={match.token} className="flex flex-col gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-primary" lang={from}>
+          {/* The token is one of the reader's own words, so it is monospaced
+              like every other headword on the screen. It keeps the section
+              label's size and colour, because that is the job it does here: it
+              names the block of results underneath it. It does NOT keep the
+              recipe's `uppercase`, which would rewrite the reader's word. */}
+          <p className="font-mono text-[11px] font-semibold tracking-[0.11em] text-primary" lang={from}>
             {match.token}
           </p>
           {match.hits.length > 0 && <SearchResults hits={match.hits} to={to} />}

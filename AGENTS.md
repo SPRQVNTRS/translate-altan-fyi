@@ -130,12 +130,43 @@ The boundary helpers that exist so you rarely need an assertion:
 Two things about this app surprise people, so read them before touching anything
 under `app/lib/e2ee/`, `app/routes/sync.*` or `app/routes/api.v1.auth.*`.
 
-**1. The app is anonymous by default, and an account is an opt-in.** Search,
-lists and history all work with no account, stored on the device. There is no
-signup prompt anywhere a first-time visitor lands, and there must not be one.
-The single entry point to an account is a card on `/settings` offering to sync
-to another device. Nothing on the search, lists, history or entry path may
-require an account.
+**1. The app is invite-only, and the account gate is keyed on the request, not
+on the path.** Read [ADR-0009](.adr/0009-invite-only-accounts.md) before you
+move a route or a gate. The contract, in full:
+
+- `/` is public and must stay a `200` for a signed-out stranger, carrying a
+  real worked example. It is the one screen that shows the product without
+  costing a language-model call. Do not gate it.
+- Everything past it needs an account: a typed search, entry pages, lists,
+  history, review, attribution, settings, and `POST /api/v1/transcribe`. That
+  last one was ungated on purpose before M184, and the reversal is deliberate.
+- `/` and `/search` are two route ids over ONE file, and the product's real URL
+  is `/?q=<word>`. So the rule for that file lives at the top of its loader and
+  reads the REQUEST: an empty `q` is the landing page, any other `q` needs an
+  account. A path-keyed rule gated `/search` and left `/?q=` wide open once
+  already. Do not write another one.
+- The screens with no public half are gated by nesting under
+  `app/routes/_app.gated.tsx`, which carries `accountMiddleware`. Not
+  `authMiddleware`, which also demands a linked `users` row: almost no account
+  has one, so it would bounce nearly every invited reader.
+- The front door stays open. `/account`, `/sync/login`, `/sync/setup` and
+  `/offline` are never gated, because a gate in front of the sign-in page is a
+  gate nobody can ever pass. `/healthcheck` and `/legal/*` stay public too, and
+  `tests/integration/public-surface-*.test.ts` says so in executable form.
+- `/` and `/account` still ask nobody to sign up. The invite arrives out of
+  band, and the one signup link in the app sits on `/sync/login`, whose reader
+  is already dealing with an account.
+- Creating an account needs an invite. `ACCOUNT_BOOTSTRAP_TOKEN` stands in for
+  one while `accounts` is empty, and it dies with the first account. Every
+  cause of refusal answers with one `403` and one message, so signup is not an
+  enumeration oracle. `pnpm cli account invite` mints an invite and prints the
+  token once; `pnpm cli account list-invites` never prints one.
+- The gate blocks the SCREEN, never the device's own store. Lists and history
+  are still written locally and were never uploaded, and a redirect must not be
+  the thing that deletes them.
+- `app/lib/route-classification.ts` records how every file under `app/routes/`
+  decides who may reach it. A new route file that nobody classified fails a
+  unit test.
 
 **2. There is no email, no password and no reset link.** Accounts are identified
 by a `handle`, a short opaque name the CLIENT generates. Authentication is a
@@ -196,6 +227,7 @@ Significant decisions — anything that constrains future work, locks in a trade
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
 | [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
+| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Accepted |
 
 ## Coding Style Summary
 

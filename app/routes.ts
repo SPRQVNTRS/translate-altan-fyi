@@ -61,11 +61,15 @@ export default [
   route('/api/v1/sync/blob', 'routes/api.v1.sync.blob.ts'),
   route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
 
-  // Voice input's server half: a recorded clip in, a line of text out. Public
-  // and free like the search it feeds, and guarded by the same per-IP and
-  // per-session hourly limits and the same daily budget cap as enrichment. It
-  // sits under `/api/v1/` for the flat naming, NOT for the bearer token: the
-  // caller is a browser with no Web Speech API, not an API client.
+  // Voice input's server half: a recorded clip in, a line of text out. It sits
+  // under `/api/v1/` for the flat naming, NOT for the bearer token: the caller
+  // is a browser with no Web Speech API, not an API client.
+  //
+  // GATED INLINE since M184, by its own account check rather than by a layout:
+  // it is a resource route with no chrome and it must answer a refusal in JSON,
+  // because a `fetch` cannot make sense of a redirect to a sign-in page. The
+  // per-IP and per-session hourly limits and the daily budget cap all stay
+  // behind that check, as defence in depth.
   route('/api/v1/transcribe', 'routes/api.v1.transcribe.ts'),
 
   // Public and read only, unlike the bearer-token `/api/v1/*` routes above.
@@ -82,42 +86,67 @@ export default [
   // App Shell (sidebar, mobile drawer, bottom tab bar)
   // =============================================================================
   layout('routes/_app.tsx', { id: '_app' }, [
+    // ── The public half of the shell ────────────────────────────────────
+    // Everything directly under `_app` renders for a signed-out visitor. The
+    // gated half is the `_app.gated.tsx` block below, and the nesting is what
+    // classifies a route: `app/lib/route-classification.ts` records the same
+    // fact in one readable place, and a unit test fails when a route file
+    // exists in neither.
     index('routes/search.tsx'),
     // `/search` renders the SAME module as the index route, under a second id.
     // The stage verification hits `/search`, and a redirect to `/` would be a
     // second round trip on every linkable results URL. Two ids over one file is
     // the shape `_auth.tsx` already uses twice further down, and React Router's
     // typegen emits ONE `+types/search` whose `Matches` is a union of both.
+    //
+    // BOTH IDS ARE PUBLIC HERE, AND NEITHER IS OPEN. The account rule for this
+    // screen is keyed on the REQUEST, not on the path: an empty `q` is the
+    // landing page and a non-empty `q` needs a session, decided at the top of
+    // the one loader both ids share. Gating the alias from here instead would
+    // gate `/search?q=` and leave `/?q=`, the primary URL, wide open, which is
+    // the exact hole M184 exists to close.
     route('/search', 'routes/search.tsx', { id: 'search-alias' }),
-    route('/entry/:headwordId', 'routes/entry.$headwordId.tsx'),
-    route('/attribution', 'routes/attribution.tsx'),
-    route('/lists', 'routes/lists.tsx'),
-    // Client only, like `/lists` itself: it reads the device's own store and
-    // has no server loader, so it works with the network off. The service
-    // worker does not precache it, so a HARD reload here while offline lands
-    // on `/offline`; an in-app navigation from `/lists` does not.
-    route('/lists/:listId', 'routes/lists.$listId.tsx'),
-    // The flashcard loop over one list. Client only for the same reasons, and
-    // for one more: a review session must not stall on a fetch between cards.
-    route('/lists/:listId/review', 'routes/lists.$listId.review.tsx'),
-    // The daily nudge's session. The three words it picks come from ANY list,
-    // so there is no list id to hang them off: the entry ids travel in
-    // `?entries=`, and the screen resolves them against the device's own store.
-    route('/review', 'routes/review.tsx'),
-    route('/history', 'routes/history.tsx'),
-    route('/settings', 'routes/settings.tsx'),
     // Sync lives inside the app shell, not in `_public`, because it is a
     // setting of an app the visitor is already using and not a gateway into
-    // it. There is no account in this product until somebody asks for a
-    // second device, so `/settings` is the only entry point either of these
-    // screens has.
+    // it. Both stay PUBLIC: they are the front door an invited person walks
+    // through, and a gate in front of the sign-in page is a gate nobody can
+    // ever pass.
     route('/sync/setup', 'routes/sync.setup.tsx'),
     route('/sync/login', 'routes/sync.login.tsx'),
+    // Public, and it reports the signed-out state rather than ending it. Its
+    // loader already answers `null` for an anonymous visitor and never
+    // redirects, which is the contract a public account screen needs.
     route('/account', 'routes/account.tsx'),
     // Inside `_app` so the offline fallback carries the same chrome as the
     // other shell routes the service worker precaches. It has no loader and no
-    // action, so it renders with no network at all.
+    // action, so it renders with no network at all, which is also why it can
+    // never be gated: a session cannot be resolved with the network off.
     route('/offline', 'routes/offline.tsx'),
+
+    // ── The gated half (M184, ADR-0009) ─────────────────────────────────
+    // A pathless layout carrying `accountMiddleware`. Every route in here has
+    // NO public surface to preserve, so a layout-level redirect is the right
+    // shape for it. See `routes/_app.gated.tsx` for why the middleware cannot
+    // sit on `_app.tsx` itself.
+    layout('routes/_app.gated.tsx', { id: '_app_gated' }, [
+      route('/entry/:headwordId', 'routes/entry.$headwordId.tsx'),
+      route('/attribution', 'routes/attribution.tsx'),
+      route('/lists', 'routes/lists.tsx'),
+      // Client only, like `/lists` itself: it reads the device's own store and
+      // has no server loader, so it works with the network off. The service
+      // worker does not precache it, so a HARD reload here while offline lands
+      // on `/offline`; an in-app navigation from `/lists` does not.
+      route('/lists/:listId', 'routes/lists.$listId.tsx'),
+      // The flashcard loop over one list. Client only for the same reasons, and
+      // for one more: a review session must not stall on a fetch between cards.
+      route('/lists/:listId/review', 'routes/lists.$listId.review.tsx'),
+      // The daily nudge's session. The three words it picks come from ANY list,
+      // so there is no list id to hang them off: the entry ids travel in
+      // `?entries=`, and the screen resolves them against the device's own store.
+      route('/review', 'routes/review.tsx'),
+      route('/history', 'routes/history.tsx'),
+      route('/settings', 'routes/settings.tsx'),
+    ]),
   ]),
 
   layout('routes/_public.tsx', { id: '_public' }, [

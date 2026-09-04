@@ -12,7 +12,7 @@
 import { hashToken, type GeneratedToken } from '#app/lib/e2ee/tokens';
 import type { AuthContext, AuthLogger } from '#app/lib/e2ee/auth-handlers';
 import type { SignupMode } from '#app/lib/e2ee/protocol';
-import { createFakeAccountStore, type FakeAccountStore } from './fake-account-store';
+import { createFakeAccountStore, fakeInviteTokenHash, type FakeAccountStore } from './fake-account-store';
 
 /**
  * A logger that discards everything.
@@ -28,6 +28,8 @@ function createSilentLogger(): AuthLogger {
 export interface AuthFixture {
   ctx: AuthContext;
   store: FakeAccountStore;
+  /** Mints an invite the fixture's store will admit once, for a signup body. */
+  mintInvite(options?: { expiresAt?: Date }): string;
   /** Moves the fixture clock forward. */
   advance(ms: number): void;
   /** Current fixture time. */
@@ -37,6 +39,12 @@ export interface AuthFixture {
 export interface AuthFixtureOptions {
   signupMode?: SignupMode;
   startAt?: Date;
+  /**
+   * The operator's `ACCOUNT_BOOTSTRAP_TOKEN`, or absent for an installation
+   * that configured none, which is the DEFAULT, so a test has to opt in to
+   * the bootstrap path rather than inherit it.
+   */
+  bootstrapToken?: string;
 }
 
 export function createAuthFixture(options: AuthFixtureOptions = {}): AuthFixture {
@@ -55,7 +63,17 @@ export function createAuthFixture(options: AuthFixtureOptions = {}): AuthFixture
     store,
     pepper: 'unit-test-pepper',
     enumerationSecret: 'unit-test-enumeration-secret',
-    signupMode: options.signupMode ?? 'open',
+    // INVITE, because that is what the app runs (`e2ee-context.server.ts`) and
+    // a fixture defaulting to a mode production does not use would test a code
+    // path no request can reach.
+    signupMode: options.signupMode ?? 'invite',
+    admission: {
+      // The fake hash, not the real HMAC: see `fakeInviteTokenHash`. A test
+      // needs no server secret to exercise the admission policy.
+      hashInviteToken: fakeInviteTokenHash,
+      isBootstrapToken: (token: string) =>
+        options.bootstrapToken !== undefined && token === options.bootstrapToken,
+    },
     now: () => new Date(clock.getTime()),
     mintToken,
     mintFamilyId: () => {
@@ -68,6 +86,7 @@ export function createAuthFixture(options: AuthFixtureOptions = {}): AuthFixture
   return {
     ctx,
     store,
+    mintInvite: (inviteOptions = {}) => store.mintInvite(inviteOptions),
     advance(ms: number) {
       clock = new Date(clock.getTime() + ms);
     },

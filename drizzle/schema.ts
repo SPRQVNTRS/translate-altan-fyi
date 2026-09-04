@@ -57,6 +57,12 @@ export * from './schema/accounts';
 // `export *` re-exports a name without binding it locally.
 import { accounts } from './schema/accounts';
 
+// Signup invites, the gate in front of account creation (.adr/0009).
+// Global as well, and NOT tenant-scoped, for the same reason `accounts` is: an
+// invite admits a person to this installation, not to somebody's organization.
+// Absent from TENANT_TABLES, reached through `getRawDb()`.
+export * from './schema/invites';
+
 // Rate-limit counters, the daily spend cap and its operator alerts.
 // Global as well, and deliberately anonymous: they protect the installation, not
 // a tenant, so they are absent from TENANT_TABLES and read via `getRawDb()`.

@@ -31,8 +31,9 @@
  * `app/lib/e2ee/` is pure policy over injected interfaces and must stay
  * reachable from the client bundle; this file must never be.
  */
-import { and, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, count, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type {
+  AccountAdmission,
   AccountRecord,
   AccountStore,
   CreateAccountInput,
@@ -47,7 +48,7 @@ import type {
 import type { AccountTokenKind } from './tokens';
 import { SESSION_TOKEN_KINDS } from './tokens';
 import { isUniqueViolation } from './storage-conflict';
-import { accountTokens, accounts, syncKeyRecords } from '#drizzle/schema';
+import { accountTokens, accounts, invites, syncKeyRecords } from '#drizzle/schema';
 import { getRawDb } from '#drizzle/tenant-db';
 
 /** The Drizzle handle this store writes through, always the raw one (see the header). */
@@ -68,6 +69,55 @@ class RecoveryRotationRefused extends Error {
     this.result = result;
   }
 }
+
+/**
+ * Refusal signal for `createAccount`, never thrown out of this module.
+ *
+ * Same shape and same reason as `RecoveryRotationRefused` above: a `return`
+ * from a transaction callback COMMITS what has already been written, and what
+ * has already been written on this path is an invite marked spent. A refusal
+ * therefore has to travel as a throw, so Postgres rolls the claim back and the
+ * invite stays spendable. PROTOCOL.md §5.8.1 requires exactly that of the
+ * `409` case.
+ */
+class AccountCreationRefused extends Error {
+  readonly result: CreateAccountResult;
+
+  constructor(result: CreateAccountResult) {
+    super('account creation refused');
+    this.name = 'AccountCreationRefused';
+    this.result = result;
+  }
+}
+
+/**
+ * The advisory-lock key that serialises bootstrap-token signups.
+ *
+ * WHY AN ADVISORY LOCK AND NOT A ROW LOCK. The bootstrap branch is admitted
+ * only while `accounts` is EMPTY, and an empty table offers nothing to lock.
+ * `SELECT count(*) ... FOR UPDATE` is not the answer and would look like one:
+ * it locks the rows it returned, and it returned none, so two concurrent
+ * bootstrap signups would both see zero and both insert. Postgres has no
+ * predicate lock outside SERIALIZABLE, and raising the isolation level of this
+ * one transaction would buy the same guarantee at the price of serialisation
+ * failures the caller would then have to retry.
+ *
+ * A transaction-scoped advisory lock is the smallest thing that works: the
+ * second bootstrap signup blocks on this key until the first commits, then
+ * takes its count in a NEW statement snapshot, sees one account and is refused.
+ * It is released by the commit or the rollback, so a crashed transaction cannot
+ * strand it.
+ *
+ * `hashtext` is used deliberately even though it is an internal function whose
+ * output is not guaranteed stable across major versions. Nothing here persists
+ * the key or compares it with another release: it only has to agree among
+ * sessions talking to the SAME server at the SAME moment, which it does by
+ * construction.
+ *
+ * The invite branch takes no advisory lock and must not: it is serialised by
+ * the row lock its conditional UPDATE already holds.
+ */
+const BOOTSTRAP_ADVISORY_LOCK_LABEL = 'translate-altan-fyi:account-bootstrap';
 
 /**
  * A transaction handle, as drizzle hands one to a `db.transaction` callback.
@@ -164,6 +214,89 @@ async function revokeSessionsIn(tx: Transaction, input: { accountId: number; rev
 }
 
 /**
+ * Inserts the account row, translating the unique-handle violation into the
+ * refusal signal.
+ *
+ * IT HAS TO THROW rather than return, because it runs inside the transaction
+ * that has already claimed an invite. Returning would commit that claim and
+ * charge somebody their invitation for a handle collision; throwing rolls it
+ * back and leaves the invite spendable, which is what PROTOCOL.md §5.8.1
+ * promises.
+ */
+async function insertAccountRow(tx: Transaction, input: CreateAccountInput): Promise<AccountRow[]> {
+  try {
+    return await tx
+      .insert(accounts)
+      .values({
+        handle: input.handle,
+        displayName: input.displayName,
+        verifier: input.verifier,
+        recoveryVerifier: input.recoveryVerifier,
+        kdfDescriptor: input.kdfDescriptor,
+      })
+      .returning();
+  } catch (error) {
+    // The unique index on `handle` is what makes concurrent signups for
+    // the same handle safe, never a read-then-insert check.
+    if (!isUniqueViolation(error)) throw error;
+    throw new AccountCreationRefused({ ok: false, reason: 'handle-taken' });
+  }
+}
+
+/**
+ * Spends the presented admission, inside the caller's transaction.
+ *
+ * @returns the id of the invite that was claimed, or `null` for the bootstrap
+ *   branch, which has no row to stamp afterwards.
+ * @throws AccountCreationRefused when the admission is not spendable. Every
+ *   cause produces the ONE `not-admitted` reason: which of them it was is
+ *   information the caller must not be able to publish.
+ */
+async function claimAdmission(
+  tx: Transaction,
+  input: { admission: AccountAdmission; now: Date },
+): Promise<number | null> {
+  if (input.admission.kind === 'bootstrap') {
+    // Serialised against every other bootstrap signup. See
+    // {@link BOOTSTRAP_ADVISORY_LOCK_LABEL} for why a row lock cannot do this.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${BOOTSTRAP_ADVISORY_LOCK_LABEL}))`);
+    const [existing] = await tx.select({ value: count() }).from(accounts);
+    if (Number(existing?.value ?? 0) !== 0) {
+      // The token is self-invalidating: one account exists, so this branch is
+      // dead for the rest of the instance's life (ADR-0009).
+      throw new AccountCreationRefused({ ok: false, reason: 'not-admitted' });
+    }
+    return null;
+  }
+
+  // ONE conditional UPDATE, not a SELECT then an UPDATE. It takes the row lock
+  // and re-evaluates its own WHERE clause after waiting for whoever held it, so
+  // two concurrent redemptions of one token produce one winner and one empty
+  // result set. A read-then-write would let both read `redeemed_at IS NULL`.
+  //
+  // A NULL `expires_at` means "never expires", not "expired", and the two readings
+  // are one comparison apart and the wrong one opens or closes the gate for
+  // every invite ever minted without a lifetime (see the column doc).
+  const claimed = await tx
+    .update(invites)
+    .set({ redeemedAt: input.now })
+    .where(
+      and(
+        eq(invites.tokenHash, input.admission.tokenHash),
+        isNull(invites.redeemedAt),
+        or(isNull(invites.expiresAt), gt(invites.expiresAt, input.now)),
+      ),
+    )
+    .returning({ id: invites.id });
+
+  const claimedId = claimed[0]?.id;
+  // Unknown, already redeemed and expired are indistinguishable from here on,
+  // and that is the point: this branch cannot tell them apart either.
+  if (claimedId === undefined) throw new AccountCreationRefused({ ok: false, reason: 'not-admitted' });
+  return claimedId;
+}
+
+/**
  * @param db The Drizzle handle. Defaults to the raw one, which is what the
  *   application always wants; the parameter exists so an integration test can
  *   hand in a handle bound to its own database.
@@ -182,24 +315,31 @@ export function createDrizzleAccountStore(db: Database = getRawDb()): AccountSto
     },
 
     async createAccount(input: CreateAccountInput): Promise<CreateAccountResult> {
+      const now = new Date();
       try {
-        const [row] = await db
-          .insert(accounts)
-          .values({
-            handle: input.handle,
-            displayName: input.displayName,
-            verifier: input.verifier,
-            recoveryVerifier: input.recoveryVerifier,
-            kdfDescriptor: input.kdfDescriptor,
-          })
-          .returning();
-        if (!row) throw new Error('Failed to insert account');
-        return { ok: true, account: mapAccountRow(row) };
+        return await db.transaction(async (tx) => {
+          // ADMISSION FIRST, and the whole transaction exists for this ordering
+          // (see `AccountStore.createAccount`). An uninvited caller never
+          // reaches the insert, so it never reaches the `409` either.
+          const claimedInviteId = await claimAdmission(tx, { admission: input.admission, now });
+
+          const [row] = await insertAccountRow(tx, input);
+          if (!row) throw new Error('Failed to insert account');
+
+          // The audit half of the redemption. `redeemedAt` was already stamped
+          // by the claim above, because THAT is the authoritative spent marker
+          // (see the column doc): this reference is `ON DELETE SET NULL`, and a
+          // spent marker that can return to NULL when an account is deleted
+          // would hand a used token a second life.
+          if (claimedInviteId !== null) {
+            await tx.update(invites).set({ redeemedByAccountId: row.id }).where(eq(invites.id, claimedInviteId));
+          }
+
+          return { ok: true, account: mapAccountRow(row) };
+        });
       } catch (error) {
-        // The unique index on `handle` is what makes concurrent signups for
-        // the same handle safe — never a read-then-insert check.
-        if (!isUniqueViolation(error)) throw error;
-        return { ok: false, reason: 'handle-taken' };
+        if (error instanceof AccountCreationRefused) return error.result;
+        throw error;
       }
     },
 
