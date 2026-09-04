@@ -3,6 +3,7 @@
 ## Project
 
 - [e2ee is copied, not extracted](project_e2ee_copied_not_extracted.md) — protocol.ts is the SERVICE half and stays the only transcription; client code needing the client half is trimmed, not accommodated
+- [translate: drizzle/seed.ts creates one dev account](project_translate_dev_seed_m192.md) — dynamic import to guard before the pool opens, BCRYPT_COST duplicated not imported
 - [drizzle-kit cannot change a column type](project_drizzle_kit_cannot_change_a_column_type.md) — no USING clause, and ADD CONSTRAINT before ADD COLUMN; split the schema edit across generate runs
 - [oxlint anti-slop fix patterns](project_oxlint_anti_slop_patterns.md) — clean fixes for each anti-slop rule; no suppressions needed
 - [oxlint promise(always-return) kills .then(setState)](project_oxlint_promise_always_return.md) — in a useEffect use an inner async function plus `void`, never a then-chain
@@ -42,4 +43,30 @@
 - [A public-surface test needs a liveness case](feedback_public_surface_test_needs_liveness_case.md), asserting a route is open passes on an instance with no gate at all; run the real gate for contrast
 - [Tailwind 4 resolves --color-* at :root](project_tailwind4_theme_vars_resolve_at_root.md), a scoped palette override needs the raw token AND the --color-* line
 - [typegen runs in production mode](project_typegen_runs_in_production_mode.md), a dev-only route gets no ./+types, so it reads useLoaderData
+- [account.* owns the UI vocabulary](project_account_namespace_owns_the_ui_vocabulary.md), sync.* keeps only pending/offline/genericError; a handle is a "sign-in name"
+- [The account doors are /sign-in and /sign-up](project_sign_in_up_routes_m187.md), the old sync paths are 301 hops that keep the query string; the no-signup-prompt rule is dead
 - [SearchPanes is the shared surface](project_search_panes_is_the_shared_surface.md), the two-pane markup left search.tsx and two source-grep tests followed it
+- [account components live in one directory](project_account_components_directory.md), `app/components/sync/` is gone; UI names say account/password, wire names keep sync/passphrase
+- [The recovery-code gate is a checkbox](project_recovery_code_gate_is_a_checkbox.md), the reducer re-checks it; the retype module and its tests were deleted
+- [The doors are a hero above the pane](project_landing_doors_above_the_pane.md), `LandingDoors` has no card; the example goes in `SearchPanes`' `emptyPane`
+- [The voice hint waits for a transcription](project_voice_hint_waits_for_a_transcription.md), `VoiceControl` takes `hasTranscript`; a fresh page shows no best-effort note
+- [The doors redirect a signed-in reader](project_doors_redirect_a_signed_in_reader.md), both loaders use `getAccountSession`, never the cookie-only display read
+- [Render a route component with createRoutesStub](project_render_a_route_component_in_a_test.md), `MemoryRouter` throws on `useNavigation`
+- [The tenancy is gone, ADR-0010](project_the_tenancy_is_gone_adr_0010.md), no tenantDb and no `users`; root.tsx returns no `user` and `actorEmail` now holds a handle
+- [`_super` is a top-level layout](project_super_is_a_top_level_layout.md), it stacks accountMiddleware then superadminMiddleware, and `/super` hops to `/super/llm`
+- [getRawDb is the only handle](project_getrawdb_is_the_only_handle.md), tenant-db.ts is gone with the eight inherited tables; apiKeys carries its own isSuperadmin
+- [drizzle:generate needs a pty](project_drizzle_generate_needs_a_pty.md), and a DROP TABLE CASCADE beside a DROP CONSTRAINT fails at apply; split the runs
+- [Plain accounts (M191)](project_plain_accounts_m191.md) — where non-disclosure, single-statement token consumption, the session epoch and the limiter address live, plus the three-run migration
+- [strip-types tests need a .ts extension](project_strip_types_test_imports.md) — no `#app/*` aliases under bare node, and the tap reporter for `# pass`
+- [Node 24's test runner prints spec, not tap](project_node24_test_reporter_is_spec.md) — a check grepping `# pass` from `pnpm run test:unit` is unsatisfiable; pass `--test-reporter=tap`
+- [An integration skip guard must be inline](project_integration_skip_guard_must_be_inline.md) — the enforcing test reads source TEXT, so a shared `SKIP` constant fails it
+- [jsonb reorders object keys](project_jsonb_reorders_object_keys.md) — a blob round-trip cannot assert literal bytes; compare a key-sorted encoding
+- [Sign-out wipes the device in a clientAction](project_sign_out_wipes_via_clientaction.md) — sync, clear, wipe, CLEAR_CACHE, then `serverAction()` LAST, because it throws the redirect
+- [The sync session comes from root's `userId`](project_sync_session_is_installed_from_root_data.md) — nothing called `setSyncSession` after M191/01, so sync ran for nobody while every gate stayed green
+- [A TinyBase poll re-creates a deleted database](project_tinybase_poll_recreates_a_deleted_db.md) — `deleteDatabase` alone wipes nothing; destroy the persisters first, and assert the ORDER
+- [The account doors left the app shell](project_auth_doors_left_the_app_shell.md) — the sidebar pushed the card 128px off centre; `_auth-shell.tsx`, and the undecorated typography variants
+- [`unconfirmed` needs the right password](project_unverified_signin_is_not_an_oracle.md) — a three-member `signIn` result; check the password BEFORE the confirmed state
+- [The language pair is stated, never pinned](project_language_pair_is_stated_not_pinned.md) — language-pair.ts must stay free of VALUE imports from detect-language, or drizzle lands in the client bundle
+- [A store VALUE needs no SCHEMA_VERSION bump](project_store_values_do_not_bump_schema_version.md) — only entity shapes are versioned; values reach neither the backup envelope nor the blob
+- [translate.tsx's pair must be reconciled with direction](project_translate_pair_direction_reconcile_m187.md) — `from=detect` hides the collision from `resolveLanguagePair`; only a loader-level test catches the two disagreeing
+- [The translator surface is one column](project_translator_surface_is_one_column.md), the bar is a three-cell grid and neither card carries `.surface-brand`; the class-attribute tests are what keep the misalignment out
