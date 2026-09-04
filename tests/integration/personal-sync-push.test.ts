@@ -411,7 +411,7 @@ after(async () => {
   await pool.end();
 
   // AND THE APP'S OWN POOL, which this file never asked for.
-  // `e2ee-storage-adapter.server.ts` imports `#drizzle/tenant-db`, which opens
+  // `e2ee-storage-adapter.server.ts` imports `#drizzle/db`, which opens
   // a connection pool AT MODULE LOAD. The adapter under test is constructed
   // with the local `db` above, so that pool is never queried — but it is open,
   // and `node --test` sets no timeout, so leaving it behind does not fail the

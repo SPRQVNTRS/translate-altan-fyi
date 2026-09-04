@@ -57,6 +57,23 @@ pool.on('remove', () => {
 
 export const db = drizzle(pool, { schema });
 
+/**
+ * The Drizzle instance, under the name every server module reads it by.
+ *
+ * IT IS THE ONLY HANDLE NOW. Until M189 this function lived in
+ * `drizzle/tenant-db.ts` beside a `tenantDb(ctx)` wrapper that stamped an
+ * `organization_id` onto every read and write, and the loud name was the
+ * reminder that reaching past the wrapper was a decision. That wrapper is gone
+ * with the organizations it scoped to: this installation had no tenants, and
+ * every surviving table, the dictionary, the accounts, the enrichments and the
+ * api keys, is global. The name survives the wrapper so that ~30 call sites did
+ * not have to be rewritten to say `db` instead, and so that a reader who meets
+ * it in `git log` finds it here rather than nowhere.
+ */
+export function getRawDb() {
+  return db;
+}
+
 // Keep client export for backward compatibility (uses pool internally)
 export const client = pool;
 

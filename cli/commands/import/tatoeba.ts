@@ -44,7 +44,7 @@
 
 import { sql } from 'drizzle-orm';
 import { examples } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import {
   createDropCounter,
   type DropCounter,

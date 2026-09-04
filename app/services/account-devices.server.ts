@@ -23,17 +23,16 @@
  * and it holds no key for anything. The account's data stays sealed; this is a
  * view of sessions, not of content.
  *
- * `accounts` and `account_tokens` are GLOBAL tables. Neither carries an
- * `organizationId` and neither is in `TENANT_TABLES`, so `getRawDb()` is the
- * sanctioned reach rather than a bypass of `tenantDb(ctx)` (ADR-0003), exactly
- * as in `app/services/e2ee-blob-usage.server.ts`.
+ * `accounts` and `account_tokens` belong to the person who authenticates as
+ * them, and `getRawDb()` is the one handle this application has, exactly as in
+ * `app/services/e2ee-blob-usage.server.ts`.
  *
  * `.server.ts` because it touches the connection pool and the session cookie.
  */
 import { and, desc, eq, gt, isNotNull, isNull, max, min } from 'drizzle-orm';
 
 import { accountTokens } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { hashToken } from '#app/lib/e2ee/tokens';
 import { createComponentLogger } from '#app/lib/logger';
 import { sessionStorage } from '#app/services/session.server';

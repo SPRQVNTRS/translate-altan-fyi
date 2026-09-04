@@ -7,11 +7,8 @@
  * The end-to-end-encrypted personal layer's four tables: `accounts`,
  * `account_tokens`, `sync_blobs` and `sync_key_records`.
  *
- * ALL FOUR ARE GLOBAL, NOT TENANT-SCOPED. None of them carries an
- * `organizationId`, none of them belongs in `TENANT_TABLES` in
- * `drizzle/tenant-db.ts`, and every read or write goes through `getRawDb()`.
- * An account is a person's own identity on this installation; it is not a row
- * inside somebody's organization.
+ * EVERY READ OR WRITE GOES THROUGH `getRawDb()`. An account is a person's own
+ * identity on this installation, and it belongs to nobody else.
  *
  * There is NO EMAIL COLUMN here, and adding one would undo the decision this
  * file was copied under. Accounts are identified by an opaque `handle`, an

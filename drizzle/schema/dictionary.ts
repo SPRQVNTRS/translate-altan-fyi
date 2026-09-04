@@ -13,11 +13,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 // =============================================================================
-// Shared Dictionary (Global — NOT tenant-scoped)
+// Shared Dictionary
 // =============================================================================
-// These tables hold the shared, cross-organization dictionary. They carry no
-// `organizationId` column and are deliberately NOT listed in TENANT_TABLES in
-// `drizzle/tenant-db.ts`. Access them via `getRawDb()`.
+// These tables hold the dictionary every reader shares. Access them via
+// `getRawDb()`.
 //
 // THE DATA MODEL
 //   headword  — a lemma in one language ("run", "laufen"). The word as written.

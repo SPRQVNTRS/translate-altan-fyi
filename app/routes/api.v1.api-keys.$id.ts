@@ -1,13 +1,14 @@
 /**
  * DELETE /api/v1/api-keys/:id — Revoke an API key (superadmin only)
  *
- * Cross-tenant revoke: the caller does not need to belong to the key's org.
- * Requires the Bearer token's creator to have isSuperadmin=true on users table.
+ * The calling key must carry `is_superadmin`. A key can revoke itself, which is
+ * deliberate: it is the one revocation an operator can perform holding nothing
+ * but the key they want to burn.
  */
 
 import type { Route } from './+types/api.v1.api-keys.$id';
 import { requireSuperadminApiKey, jsonError } from '#app/lib/api-auth.server';
-import { adminRevokeApiKey } from '#app/models/api-keys.server';
+import { revokeApiKey } from '#app/models/api-keys.server';
 
 export async function action({ request, params }: Route.ActionArgs): Promise<Response> {
   if (request.method !== 'DELETE') {
@@ -21,7 +22,7 @@ export async function action({ request, params }: Route.ActionArgs): Promise<Res
     throw jsonError(400, 'missing id param');
   }
 
-  const record = await adminRevokeApiKey(id);
+  const record = await revokeApiKey(id);
   if (!record) {
     throw jsonError(404, `api key not found: ${id}`);
   }

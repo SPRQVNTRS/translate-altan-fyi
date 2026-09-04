@@ -34,7 +34,7 @@ import type {
   InsertSenseVersion,
   InsertTranslation,
 } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { createDropCounter } from '../../lib/importers/contract';
 import type {
   DropCounter,
@@ -756,9 +756,8 @@ export const wikidataLexemesImporter: Importer<ImportOptions> = {
 
   async run(options: ImportOptions): Promise<ImportSummary> {
     const startedAt = Date.now();
-    // The dictionary tables are global and carry no organization id, so the raw
-    // handle is the correct one. `tenantDb` would be wrong here, not merely
-    // unnecessary: none of these tables is tenant-scoped.
+    // The dictionary is shared by every reader, so `getRawDb()` is the one
+    // handle this application has.
     const db = getRawDb();
     const counter = createDropCounter();
     const languages = new Set(options.languages);

@@ -1,11 +1,12 @@
 /**
  * API Key Commands
+ *
+ * `create` is the bootstrap exception (ADR-0001): it writes to the database
+ * directly, because it is what mints the credential every other remote command
+ * needs. `list` and `revoke` go through the transport like everything else.
  */
 
 import { Command } from 'commander';
-import { organizations } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
-import { eq } from 'drizzle-orm';
 import { createApiKey } from '#app/models/api-keys.server';
 import { output, printError, printSuccess, printWarning } from '../lib/output';
 import { apiKeyColumns } from '../lib/formatters/api-key';
@@ -18,46 +19,32 @@ export function registerApiKeyCommands(program: Command): void {
 
   apiKey
     .command('list')
-    .description('List API keys for an organization')
-    .requiredOption('--org <slug>', 'Organization slug')
+    .description('List the API keys on this installation')
     .option('-f, --format <format>', 'Output format: table, json', 'table')
     .option('-l, --limit <n>', 'Limit results', '20')
     .option('--offset <n>', 'Offset for pagination', '0')
-    .action(async (options: { org: string; format: OutputFormat; limit: string; offset: string }) => {
+    .action(async (options: { format: OutputFormat; limit: string; offset: string }) => {
       await listKeys(options);
     });
 
   apiKey
     .command('create')
     .description('Create a new API key')
-    .requiredOption('--org <slug>', 'Organization slug')
     .requiredOption('--name <name>', 'Key name/label')
-    .action(async (options: { org: string; name: string }) => {
+    .option('--superadmin', 'Let the key reach the superadmin endpoints', false)
+    .action(async (options: { name: string; superadmin: boolean }) => {
       await createKey(options);
     });
 
   apiKey
     .command('revoke <id>')
-    .description('Revoke an API key (cross-tenant; admin)')
+    .description('Revoke an API key')
     .action(async (id: string) => {
       await revokeKey(id);
     });
 }
 
-async function resolveOrg(slug: string) {
-  const org = await getRawDb().query.organizations.findFirst({
-    where: eq(organizations.slug, slug),
-  });
-  if (!org) {
-    printError(`Organization "${slug}" not found`);
-    process.exitCode = 1;
-    return null;
-  }
-  return org;
-}
-
 async function listKeys(options: {
-  org: string;
   format: OutputFormat;
   limit: string;
   offset: string;
@@ -65,11 +52,7 @@ async function listKeys(options: {
   const limit = parseInt(options.limit, 10);
   const offset = parseInt(options.offset, 10);
 
-  const envelope = await transport.get('/api/v1/api-keys', apiKeyListSchema, {
-    org: options.org,
-    limit,
-    offset,
-  });
+  const envelope = await transport.get('/api/v1/api-keys', apiKeyListSchema, { limit, offset });
 
   if (options.format === 'json') {
     console.log(JSON.stringify(envelope, null, 2));
@@ -83,18 +66,15 @@ async function listKeys(options: {
   });
 }
 
-async function createKey(options: { org: string; name: string }): Promise<void> {
+async function createKey(options: { name: string; superadmin: boolean }): Promise<void> {
   // Bootstrap: api-key create always uses the database directly.
   // --remote is intentionally ignored here. See ADR-0001.
-  const org = await resolveOrg(options.org);
-  if (!org) return;
+  const { key, record } = await createApiKey({
+    name: options.name,
+    isSuperadmin: options.superadmin,
+  });
 
-  const { key, record } = await createApiKey(
-    { orgId: org.id },
-    { name: options.name, createdBy: null },
-  );
-
-  printSuccess(`API key created: ${record.name}`);
+  printSuccess(`API key created: ${record.name}${record.isSuperadmin ? ' (superadmin)' : ''}`);
   printWarning('Store this key securely, it will not be shown again:');
   console.log(`\n  ${key}\n`);
 }

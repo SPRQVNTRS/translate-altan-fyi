@@ -1,33 +1,28 @@
 /**
  * Shared API authentication helpers for REST API routes.
  *
- * All API routes use Bearer token auth. The token is an API key issued
- * by the system (created via `api-key create` CLI or POST /api/v1/api-keys).
+ * All API routes use Bearer token auth. The token is an API key issued by the
+ * system (`pnpm cli api-key create`, or POST /api/v1/api-keys).
+ *
+ * A KEY BELONGS TO NOBODY. It used to carry an organization and a creating
+ * user, and superadmin was a join through that user; the organizations and the
+ * users went with the ts-factory-stack scaffolding in M189. What is left is one
+ * flat credential and one question about it, `isSuperadmin`, answered by a
+ * column on the key itself.
  *
  * verifyApiKey does NOT filter revoked keys — this module checks revocation.
  */
 
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { users } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
-import type { TenantCtx } from '#drizzle/tenant-db';
+
 import {
   verifyApiKey,
   updateLastUsedAt,
   type SelectApiKeyPublic,
 } from '#app/models/api-keys.server';
-import { getOrganizationBySlug } from '#app/models/organizations.server';
 
 export interface ApiKeyAuth {
   apiKey: SelectApiKeyPublic;
-  ctx: TenantCtx;
-  /**
-   * True when the key was verified via requireSuperadminApiKey — the
-   * creating user has isSuperadmin=true. Used by assertOrgAccess to
-   * bypass the org-membership check for cross-org operations.
-   */
-  isSuperadmin: boolean;
 }
 
 /**
@@ -47,7 +42,7 @@ function extractBearerToken(request: Request): string | null {
   return token.length > 0 ? token : null;
 }
 
-async function authenticate(request: Request): Promise<Omit<ApiKeyAuth, 'isSuperadmin'>> {
+async function authenticate(request: Request): Promise<ApiKeyAuth> {
   const token = extractBearerToken(request);
   if (!token) {
     throw jsonError(401, 'unauthorized');
@@ -64,69 +59,33 @@ async function authenticate(request: Request): Promise<Omit<ApiKeyAuth, 'isSuper
 
   await updateLastUsedAt(apiKey.id);
 
-  return { apiKey, ctx: { orgId: apiKey.organizationId } };
+  return { apiKey };
 }
 
 /**
  * Verify Bearer token, check revocation, update lastUsedAt.
- * Returns the full key record, a TenantCtx derived from it, and isSuperadmin=false.
+ * Returns the key record.
  */
 export async function requireApiKey(request: Request): Promise<ApiKeyAuth> {
-  const base = await authenticate(request);
-  return { ...base, isSuperadmin: false };
+  return authenticate(request);
 }
 
 /**
- * Verifies the Bearer token and additionally checks the key's creator has
- * isSuperadmin=true. Requires a join from api_keys → users.
- * Throws 403 if the key is valid but not superadmin.
- * Returns isSuperadmin=true on success.
+ * The same, plus the key's own `isSuperadmin` flag.
+ *
+ * NO JOIN. The flag is a column on the key, so this costs the one lookup
+ * `requireApiKey` already did. It used to follow `api_keys.created_by` into
+ * `users` for a second query, which is one reason that table outlived its
+ * purpose. Throws 403 if the key is valid but not a superadmin key.
  */
 export async function requireSuperadminApiKey(request: Request): Promise<ApiKeyAuth> {
-  const base = await authenticate(request);
+  const auth = await authenticate(request);
 
-  if (base.apiKey.createdBy === null) {
+  if (!auth.apiKey.isSuperadmin) {
     throw jsonError(403, 'this endpoint requires a superadmin API key');
   }
 
-  const [user] = await getRawDb()
-    .select({ isSuperadmin: users.isSuperadmin })
-    .from(users)
-    .where(eq(users.id, base.apiKey.createdBy))
-    .limit(1);
-
-  if (!user?.isSuperadmin) {
-    throw jsonError(403, 'this endpoint requires a superadmin API key');
-  }
-
-  return { ...base, isSuperadmin: true };
-}
-
-/**
- * Verify the authenticated key may access the given org.
- * Superadmin keys bypass the org-membership check.
- * Throws 403 if the key's organizationId does not match and key is not superadmin.
- */
-export function assertOrgAccess(auth: ApiKeyAuth, orgId: string): void {
-  if (auth.isSuperadmin || auth.apiKey.organizationId === orgId) return;
-  throw jsonError(403, 'forbidden: key does not belong to this organization');
-}
-
-/**
- * Resolve an org slug from a query param to an org id.
- * Throws 400 if the param is missing, 404 if the org is not found.
- */
-export async function resolveOrgSlug(slug: string | undefined): Promise<string> {
-  if (!slug) {
-    throw jsonError(400, 'missing required query param: org');
-  }
-
-  const org = await getOrganizationBySlug(slug);
-  if (!org) {
-    throw jsonError(404, `organization not found: ${slug}`);
-  }
-
-  return org.id;
+  return auth;
 }
 
 /**

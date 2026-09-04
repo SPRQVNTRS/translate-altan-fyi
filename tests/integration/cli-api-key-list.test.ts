@@ -1,5 +1,8 @@
 /**
- * Integration test: `cli api-key list --org=default`
+ * Integration test: `cli api-key list`
+ *
+ * There is no `--org` any more: a key belongs to nobody since M189, so a
+ * listing is the whole set and the endpoint asks for a superadmin key.
  *
  * Skips if TEST_API_KEY env var is not set.
  * Requires a running server at http://localhost:3456.
@@ -17,7 +20,7 @@ describe('cli api-key list', () => {
   it('lists api keys and returns JSON array', { skip: !TEST_API_KEY ? 'TEST_API_KEY not set' : false }, () => {
     const result = spawnSync(
       'node_modules/.bin/tsx',
-      ['cli/index.ts', '--remote', REMOTE_URL, 'api-key', 'list', '--org=default', '--format=json'],
+      ['cli/index.ts', '--remote', REMOTE_URL, 'api-key', 'list', '--format=json'],
       {
         encoding: 'utf8',
         env: { ...process.env, TRANSLATE_API_KEY: TEST_API_KEY },

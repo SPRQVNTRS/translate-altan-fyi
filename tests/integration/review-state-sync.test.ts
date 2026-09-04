@@ -273,7 +273,7 @@ after(async () => {
   } finally {
     await pool.end();
     // AND THE APP'S OWN POOL, which this file never asked for.
-    // `e2ee-storage-adapter.server.ts` imports `#drizzle/tenant-db`, which
+    // `e2ee-storage-adapter.server.ts` imports `#drizzle/db`, which
     // opens a pool AT MODULE LOAD. It is never queried here, but `node --test`
     // sets no timeout, so leaving it open makes the run never end.
     await closePool();

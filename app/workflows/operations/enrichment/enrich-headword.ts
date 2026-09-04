@@ -41,7 +41,7 @@ import {
 } from '#app/models/enrichments.server';
 import { renderEnrichmentPrompt } from '#app/prompts/enrichment';
 import type { DictionaryDb } from '#app/lib/dictionary/queries.server';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { enrichHeadwordContextSchema } from '#app/workflows/types';
 
 const log = createComponentLogger('EnrichHeadword');

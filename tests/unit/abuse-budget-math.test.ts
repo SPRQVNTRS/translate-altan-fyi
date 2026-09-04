@@ -23,7 +23,7 @@
  *   strictly below the cap: a warning that fires at the cap arrives at the same
  *   moment as the refusal it was meant to precede.
  *
- * NO DATABASE. `budget.server.ts` imports `#drizzle/tenant-db`, which imports
+ * NO DATABASE. `budget.server.ts` imports `#drizzle/db`, which imports
  * `drizzle/db.ts`, which CONNECTS at module load and retries for about a minute.
  * That import is mocked out before the module under test is loaded, so nothing
  * here opens a pool. Everything that writes a row belongs to the integration
@@ -44,7 +44,7 @@ process.env.TZ = 'Pacific/Kiritimati';
 // The mock must be installed BEFORE the module under test is imported, so the
 // import below is dynamic and this call is at the top level. `getRawDb` throws:
 // nothing in this file may reach it.
-mock.module('#drizzle/tenant-db', {
+mock.module('#drizzle/db', {
   namedExports: {
     getRawDb: () => {
       throw new Error('the unit tier must not reach a database');

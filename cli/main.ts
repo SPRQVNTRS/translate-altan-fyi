@@ -15,15 +15,9 @@ import { CliApiError, CliAuthError, DirectTransport, createTransport, setTranspo
 import { registerDirectTransportHandlers } from './lib/direct-transport-handlers';
 
 // Import command registrations
-import { registerUserCommands } from './commands/user';
 import { registerAccountCommands } from './commands/account';
-import { registerOrganizationCommands } from './commands/organization';
-import { registerWorkflowCommands } from './commands/workflow';
-import { registerOperationCommands } from './commands/operation';
 import { registerDbCommands } from './commands/db';
-import { registerMetricEventCommands } from './commands/metric-event';
 import { registerApiKeyCommands } from './commands/api-key';
-import { registerDataSourceCommands } from './commands/data-source';
 import { registerDataMigrationCommands } from './commands/data-migration/run';
 import { registerImportCommands } from './commands/import/index';
 import { registerDictionaryCommands } from './commands/dictionary';
@@ -56,7 +50,7 @@ async function main(): Promise<void> {
 
   program
     .name('translate-cli')
-    .description('translate-altan-fyi CLI, manage users, organizations, workflows, and database')
+    .description('translate-altan-fyi CLI, manage accounts, the dictionary, API keys and the database')
     .version('1.0.0')
     .enablePositionalOptions()
     .option('--no-color', 'Disable colored output')
@@ -86,15 +80,9 @@ async function main(): Promise<void> {
     });
 
   // Register all command groups
-  registerUserCommands(program);
   registerAccountCommands(program);
-  registerOrganizationCommands(program);
-  registerWorkflowCommands(program);
-  registerOperationCommands(program);
   registerDbCommands(program);
-  registerMetricEventCommands(program);
   registerApiKeyCommands(program);
-  registerDataSourceCommands(program);
   registerDataMigrationCommands(program);
   registerImportCommands(program);
   registerDictionaryCommands(program);

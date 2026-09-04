@@ -1,41 +1,10 @@
-import type { OrgRole, OrgPermissionType } from './permissions';
+/**
+ * The shapes the session cookie carries.
+ */
 
 /**
- * Cached organization membership stored in session
- */
-export interface OrgMembership {
-  orgId: string;
-  orgSlug: string;
-  orgName: string;
-  role: OrgRole;
-  permissions: OrgPermissionType[];
-}
-
-/**
- * Enhanced user type stored in session with multi-tenancy support
- */
-export interface SessionUser {
-  id: number;
-  email: string;
-  name: string;
-  isSuperadmin: boolean;
-  /** Cached organization memberships for quick access */
-  memberships: OrgMembership[];
-  /** Currently selected organization ID */
-  currentOrgId: string | null;
-  /** Currently selected organization slug */
-  currentOrgSlug: string | null;
-}
-
-/**
- * Session data structure
- */
-/**
- * The signed-in account, as the cookie carries it.
- *
- * Separate from {@link SessionUser} on purpose: `users` survives only for the
- * org/api-key surface, and authentication now lives on `accounts`. The two
- * keys coexist while the sign-in bridge lands.
+ * The signed-in account, as the cookie carries it. The only identity there is:
+ * the starter base's `user` key went with the `users` table in M189.
  */
 export interface SessionAccount {
   id: number;
@@ -56,25 +25,6 @@ export interface SessionAccount {
 }
 
 export interface SessionData {
-  /**
-   * The stack's original session user. Authentication no longer writes it —
-   * that moved to `account` — and `users` survives only for the org and
-   * api-key surface, which `app/middleware/auth.ts` resolves from
-   * `users.accountId` instead.
-   */
-  user: SessionUser;
   /** The signed-in account. A session without it is signed out. */
   account: SessionAccount;
-}
-
-/**
- * Tenant context available in org-scoped routes
- */
-export interface TenantContextValue {
-  userId: number;
-  orgId: string;
-  orgSlug: string;
-  orgRole: OrgRole;
-  permissions: OrgPermissionType[];
-  isSuperadmin: boolean;
 }

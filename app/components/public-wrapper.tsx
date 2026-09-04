@@ -1,21 +1,10 @@
 import { ThemeToggle } from './theme-toggle';
-import { Layers, User, LogOut, Settings } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import * as React from 'react';
-import { Link, Form, useNavigation } from 'react-router';
+import { useNavigation } from 'react-router';
 import { cn } from '#app/lib/utils';
 import { APP_NAME } from '#app/lib/app-name';
 import { useLoading } from '#app/context/loading';
-import { useOptionalUser } from '#app/hooks/use-user';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { Button } from './ui/button';
-import { Avatar, AvatarFallback } from './ui/avatar';
 
 export default function PublicWrapper({
   children,
@@ -24,7 +13,6 @@ export default function PublicWrapper({
   children: React.ReactNode;
   showLogo?: boolean;
 }) {
-  const user = useOptionalUser();
   const navigation = useNavigation();
   const { isLoading } = useLoading();
   const showLoadingBar = navigation.state === 'loading' || isLoading;
@@ -61,51 +49,12 @@ export default function PublicWrapper({
           )}
         </div>
         <div className="flex items-center gap-3">
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-sm">
-                      {user.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden sm:inline text-sm">{user.name}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="flex items-center cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/dashboard" className="flex items-center cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Dashboard
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="p-0">
-                  <Form action="/logout" method="post" className="w-full">
-                    <button className="flex items-center w-full px-2 py-1.5 text-sm cursor-pointer">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Logout
-                    </button>
-                  </Form>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-          {/* NO SIGN-IN LINK, AND NOTHING BELONGS IN ITS PLACE. This wrapper is
-              the chrome for the `/legal/*` pages and the 404 page, and this
-              product has no general "log in" concept for a visitor: an account
-              is an opt-in for syncing to a second device, offered once, on
-              `/settings`. The link that used to sit here pointed at the deleted
-              bcrypt form, and there is nothing correct to repoint it at. */}
+          {/* NO ACCOUNT MENU, AND NO SIGN-IN LINK. This wrapper is the chrome
+              for the `/legal/*` pages and the 404 page. It carried a profile
+              and dashboard dropdown until M189 (ADR-0010). Both pointed at
+              org screens that no longer exist, and the menu itself read a
+              `users` row this product never provisioned. The account surface
+              lives inside the app shell, on `/account`. */}
           <ThemeToggle />
         </div>
       </header>

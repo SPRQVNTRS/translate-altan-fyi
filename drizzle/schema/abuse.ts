@@ -19,10 +19,8 @@ import { pgTable, text, integer, numeric, date, timestamp, check, primaryKey } f
 // know "has this bucket already had its share", which is answerable without
 // knowing whose bucket it is.
 //
-// None of these tables carries an `organizationId`, and none belongs in
-// TENANT_TABLES in `drizzle/tenant-db.ts`. The budget is the installation's, the
-// rate limit protects the installation, and both are reached through
-// `getRawDb()`.
+// The budget is the installation's, the rate limit protects the installation,
+// and both are reached through `getRawDb()`.
 // =============================================================================
 
 // A FIXED WINDOW, NOT A SLIDING ONE.

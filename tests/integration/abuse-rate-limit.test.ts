@@ -56,7 +56,7 @@ import { fileURLToPath } from 'node:url';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { pool } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { abuseCounters, abuseRejections } from '../../drizzle/schema';
 import {
   checkTriggerRateLimit,

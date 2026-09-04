@@ -27,7 +27,7 @@
 import type { JsonObject } from '#app/lib/json';
 import { createComponentLogger } from '#app/lib/logger';
 import { alertLog } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 const log = createComponentLogger('Alerts');
 

@@ -8,10 +8,10 @@
  *   an admin page holding its own handle. Only the TYPE is imported, so
  *   importing this file opens nothing.
  *
- * EVERY TABLE HERE IS GLOBAL.
- *   None of `enrichment_votes`, `reenrichment_log` or `enrichments` carries an
- *   `organizationId`, and none is in TENANT_TABLES, so `getRawDb()` is the
- *   correct handle and no `tdb.scope(...)` filter belongs on these statements.
+ * EVERY TABLE HERE IS SHARED.
+ *   `enrichment_votes`, `reenrichment_log` and `enrichments` all describe the
+ *   one dictionary this installation serves, so `getRawDb()` is the correct
+ *   handle and no filter narrows these statements to a reader.
  *
  * THE PRIVACY RULE THAT SHAPES THE READS.
  *   A vote row holds an enrichment id and an account id and nothing else, and

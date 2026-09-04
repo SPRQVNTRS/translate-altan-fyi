@@ -171,7 +171,7 @@ after(async () => {
   }
   await pool.end();
   // AND THE APP'S OWN POOL, which this file never asked for.
-  // `drizzle-account-store.server.ts` imports `#drizzle/tenant-db`, which opens
+  // `drizzle-account-store.server.ts` imports `#drizzle/db`, which opens
   // a pool AT MODULE LOAD. It is never queried, because the store under test is
   // built with the local `db` above, but an open pool is a live handle and
   // `node --test` sets no timeout: leaving it behind does not fail the run, it

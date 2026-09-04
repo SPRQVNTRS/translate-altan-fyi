@@ -11,27 +11,10 @@ export default [
   // =============================================================================
   route('/api/v1/api-keys', 'routes/api.v1.api-keys.ts'),
   route('/api/v1/api-keys/:id', 'routes/api.v1.api-keys.$id.ts'),
-  route('/api/v1/data-sources', 'routes/api.v1.data-sources.ts'),
-  route('/api/v1/metric-events', 'routes/api.v1.metric-events.ts'),
-
-  // Workflow endpoints, static routes MUST precede dynamic :id routes
-  route('/api/v1/workflows', 'routes/api.v1.workflows.ts'),
-  route('/api/v1/workflows/stats', 'routes/api.v1.workflows.stats.ts'),
-  route('/api/v1/workflows/audit-tenancy', 'routes/api.v1.workflows.audit-tenancy.ts'),
-  route('/api/v1/workflows/:id', 'routes/api.v1.workflows.$id.ts'),
-  route('/api/v1/workflows/:id/operations', 'routes/api.v1.workflows.$id.operations.ts'),
-  route('/api/v1/workflows/:id/context', 'routes/api.v1.workflows.$id.context.ts'),
-  route('/api/v1/workflows/:id/cancel', 'routes/api.v1.workflows.$id.cancel.ts'),
-
-  // User endpoints (superadmin only), static before dynamic
-  route('/api/v1/users', 'routes/api.v1.users.ts'),
-  route('/api/v1/users/by-email/:email', 'routes/api.v1.users.by-email.$email.ts'),
-  route('/api/v1/users/:id', 'routes/api.v1.users.$id.ts'),
-
-  // Org endpoints (superadmin only), static before dynamic
-  route('/api/v1/orgs', 'routes/api.v1.orgs.ts'),
-  route('/api/v1/orgs/:idOrSlug', 'routes/api.v1.orgs.$idOrSlug.ts'),
-  route('/api/v1/orgs/:idOrSlug/members', 'routes/api.v1.orgs.$idOrSlug.members.ts'),
+  // The `workflows`, `users`, `orgs`, `data-sources` and `metric-events`
+  // endpoints stood here until M189 (ADR-0010). The workflow TABLES live on,
+  // because enrichment writes them and the CLI reads them; the REST surface
+  // over them had no caller at all.
 
   // DB admin endpoints (superadmin only)
   route('/api/v1/admin/db/check', 'routes/api.v1.admin.db.check.ts'),
@@ -95,9 +78,8 @@ export default [
     index('routes/search.tsx'),
     // `/search` renders the SAME module as the index route, under a second id.
     // The stage verification hits `/search`, and a redirect to `/` would be a
-    // second round trip on every linkable results URL. Two ids over one file is
-    // the shape `_auth.tsx` already uses twice further down, and React Router's
-    // typegen emits ONE `+types/search` whose `Matches` is a union of both.
+    // second round trip on every linkable results URL. React Router's typegen
+    // emits ONE `+types/search` whose `Matches` is a union of both ids.
     //
     // BOTH IDS ARE PUBLIC HERE, AND NEITHER IS OPEN. The account rule for this
     // screen is keyed on the REQUEST, not on the path: an empty `q` is the
@@ -177,46 +159,21 @@ export default [
   ]),
 
   // =============================================================================
-  // Authenticated Routes (Auth Required, No Org Context)
+  // Superadmin Routes (operator screens, no organization anywhere)
   // =============================================================================
-  layout('routes/_auth.tsx', { id: '_auth' }, [
-    // User dashboard (no org context)
-    route('/dashboard', 'routes/dashboard.tsx'),
-
-    // Organization selection & creation
-    route('/select-org', 'routes/select-org.tsx'),
-    route('/create-org', 'routes/create-org.tsx'),
-
-    // Superadmin-only routes (global admin across all orgs)
-    layout('routes/_super.tsx', { id: '_super' }, [
-      route('/super/orgs', 'routes/super/orgs.tsx'),
-      route('/super/users', 'routes/super/users.tsx'),
-      route('/super/llm', 'routes/super/llm.tsx'),
-      route('/super/whoami-ip', 'routes/super/whoami-ip.tsx'),
-    ]),
-  ]),
-
-  // =============================================================================
-  // Organization-Scoped Routes (Auth + Org Context Required)
-  // =============================================================================
-  layout('routes/_auth.tsx', { id: '_auth_org' }, [
-    layout('routes/org/_tenant.tsx', { id: '_tenant' }, [
-      layout('routes/org/_layout.tsx', { id: '_org_layout' }, [
-        // Dashboard & Profile
-        route('/org/:orgSlug/dashboard', 'routes/org/dashboard.tsx'),
-        route('/org/:orgSlug/profile', 'routes/org/profile.tsx'),
-        route('/org/:orgSlug/settings', 'routes/org/settings.tsx'),
-
-        // Workflows (org-scoped)
-        route('/org/:orgSlug/workflows', 'routes/org/workflows.tsx'),
-
-        // Admin routes (org-level admin, not superadmin)
-        layout('routes/org/_admin.tsx', { id: '_org_admin' }, [
-          // User management (admin only)
-          route('/org/:orgSlug/users', 'routes/org/users/index.tsx'),
-          route('/org/:orgSlug/users/invite', 'routes/org/users/invite.tsx'),
-        ]),
-      ]),
-    ]),
+  // A TOP-LEVEL LAYOUT SINCE M189. It used to nest under `_auth.tsx`, which
+  // demanded a linked `users` row on top of the account session; that file and
+  // the whole org surface below it are gone, so `_super.tsx` now carries the
+  // account resolution and the superadmin check itself.
+  layout('routes/_super.tsx', { id: '_super' }, [
+    // `/super` is a hop, not a screen. Two screens are left here and one of
+    // them is the reason an operator ever visits, so a bare `/super` lands on
+    // it rather than on a 404.
+    route('/super', 'routes/super/index-redirect.ts'),
+    // The model configuration enrichment reads out of `app_settings`.
+    route('/super/llm', 'routes/super/llm.tsx'),
+    // What the server believes the caller's IP is, for checking the
+    // `TRUST_PROXY` hop count against a live reverse proxy.
+    route('/super/whoami-ip', 'routes/super/whoami-ip.tsx'),
   ]),
 ] satisfies RouteConfig;

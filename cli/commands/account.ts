@@ -21,7 +21,7 @@
 import { Command } from 'commander';
 import { desc, eq } from 'drizzle-orm';
 import { accounts, invites } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { CONFIG } from '#config';
 import { normalizeHandle } from '#app/lib/e2ee/verifier';
 import {

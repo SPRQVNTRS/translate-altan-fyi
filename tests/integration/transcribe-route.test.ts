@@ -41,7 +41,7 @@ import { RouterContextProvider } from 'react-router';
 import { z } from 'zod';
 
 import { pool } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { abuseCounters, abuseRejections, alertLog, dailyBudget } from '../../drizzle/schema';
 import { action } from '../../app/routes/api.v1.transcribe';
 import {

@@ -54,7 +54,7 @@ import { z } from 'zod';
 import { RouterContextProvider } from 'react-router';
 
 import { pool } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import {
   accounts,
   enrichmentVotes,

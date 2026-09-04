@@ -15,7 +15,7 @@ import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
 import { readAccountHandleForDisplay, requireAccountSession } from '#app/services/account-session.server';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 // `meta()` runs outside the React tree, so it has no `t`. It goes through the
 // pure `meta-title` seam instead, which reads the language off the ROOT loader
@@ -47,8 +47,8 @@ export const handle = { titleKey: 'nav.search' } satisfies TitleHandle;
  * state here at all.
  *
  * The dictionary tables are GLOBAL, shared by every reader, so this reads
- * through `getRawDb()`. `tenantDb` would scope a public dictionary to an
- * organisation, which it does not belong to.
+ * through `getRawDb()`. There is one shared corpus and no organisation to
+ * scope it to (ADR-0010).
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);

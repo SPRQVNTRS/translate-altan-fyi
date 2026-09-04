@@ -1,7 +1,7 @@
 import { createCookieSessionStorage } from 'react-router';
 import type { SessionData } from '#app/types/session';
 
-// Typed with SessionData so `session.get('user')` returns a SessionUser
+// Typed with SessionData so `session.get('account')` returns a SessionAccount
 // instead of an unparsed value every caller has to assert.
 export const sessionStorage = createCookieSessionStorage<SessionData>({
   cookie: {

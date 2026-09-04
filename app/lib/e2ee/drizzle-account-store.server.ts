@@ -21,11 +21,8 @@
  *    Postgres, with no application-level cleanup that could be skipped or
  *    half-run. That is the self-serve erasure path.
  *
- * THE RAW HANDLE IS CORRECT HERE. Accounts, their tokens and their key records
- * are GLOBAL tables: none carries an `organizationId` and none is in
- * `TENANT_TABLES`, so `getRawDb()` is the sanctioned reach rather than a
- * bypass of `tenantDb(ctx)` (.adr/0003-app-enforced-multi-tenancy.md). There is
- * no org an account belongs to.
+ * `getRawDb()` is the one handle this application has. Accounts, their tokens
+ * and their key records belong to the person who authenticates as them.
  *
  * `.server.ts` because this module imports `#drizzle/db`. The rest of
  * `app/lib/e2ee/` is pure policy over injected interfaces and must stay
@@ -49,7 +46,7 @@ import type { AccountTokenKind } from './tokens';
 import { SESSION_TOKEN_KINDS } from './tokens';
 import { isUniqueViolation } from './storage-conflict';
 import { accountTokens, accounts, invites, syncKeyRecords } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 /** The Drizzle handle this store writes through, always the raw one (see the header). */
 type Database = ReturnType<typeof getRawDb>;

@@ -11,7 +11,7 @@
 # cannot read another repo's packages. Locally the scope resolves from the
 # developer's ~/.npmrc, so the gate below has no such problem.
 #
-# Runs: lint -> typecheck -> unit tests -> content validation -> production build.
+# Runs: lint -> typecheck -> unit tests -> production build.
 #
 # Lint runs first because oxlint is the fast tier: a finding fails the gate in
 # under a second rather than after a full build. The pre-commit hook lints only
@@ -80,9 +80,6 @@ run pnpm typecheck
 
 echo "▶ pre-push: unit tests"
 run pnpm test:unit
-
-echo "▶ pre-push: content validation"
-run pnpm content:validate
 
 echo "▶ pre-push: production build"
 run pnpm build

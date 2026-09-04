@@ -34,7 +34,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { createComponentLogger } from '#app/lib/logger';
 import { abuseCounters, abuseRejections } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 const log = createComponentLogger('AbuseRateLimit');
 

@@ -151,8 +151,8 @@ describe('the entry page is gated', () => {
     assert.equal(
       outcome,
       'admitted',
-      'the gate refused a real, invited, signed-in account. Note that `authMiddleware` would do exactly this: ' +
-        'it also requires a linked `users` row, which almost no account on this service has.',
+      'the gate refused a real, invited, signed-in account. The gate that used to do exactly this was ' +
+        '`authMiddleware`, which also demanded a linked `users` row; it went with that table in M189.',
     );
   });
 });

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { listSources } from '#app/lib/dictionary/sources.server';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 export const meta: MetaFunction = ({ matches }) => {
   const language = metaLanguage(matches);

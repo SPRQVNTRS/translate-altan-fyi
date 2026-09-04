@@ -3,7 +3,7 @@ import type { JsonObject } from '#app/lib/json';
 /**
  * Application-wide error reporting seam. This module is CLIENT-SAFE and must stay
  * that way: it is imported by the error boundaries (`app/root.tsx`,
- * `app/components/route-error-boundary.tsx`, `app/routes/org/_layout.tsx`), so it is
+ * `app/components/route-error-boundary.tsx`), so it is
  * reachable from the browser bundle.
  *
  * It used to reach the structured logger through a dynamic

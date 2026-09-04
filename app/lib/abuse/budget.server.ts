@@ -30,7 +30,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { raiseAlert } from '#app/lib/alerts.server';
 import { createComponentLogger } from '#app/lib/logger';
 import { dailyBudget } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 const log = createComponentLogger('AbuseBudget');
 

@@ -102,7 +102,8 @@ Do these steps in this order. The first three are the block above.
 5. Paste the bootstrap token into the invite field, choose a password, and
    finish creating the account. Write down the sign-in name and the recovery
    code that the app shows you. Nobody can recover them for you.
-6. Grant yourself the admin screens under `/super/`:
+6. Grant yourself the two operator screens under `/super/`, which are the
+   language-model configuration and an IP echo for checking `TRUST_PROXY`:
 
    ```bash
    pnpm cli account grant-superadmin <your-handle>
@@ -326,35 +327,16 @@ imports this implementation directly from `openplate-sync`, as documented in
 
 The CLI communicates with the same HTTP REST API that powers the web interface.
 Provide a `TRANSLATE_API_KEY` to run commands through standard HTTP
-authentication, tenant checks, and audit logging.
+authentication and audit logging.
 
 ```bash
-pnpm cli api-key list --org=default
-pnpm cli --remote=http://localhost:3000 workflow list --format=json
-TRANSLATE_PROD_URL=https://app.example.com pnpm cli --prod org list
+pnpm cli api-key list
+pnpm cli --remote=http://localhost:3000 db check
+TRANSLATE_PROD_URL=https://app.example.com pnpm cli --prod db tables
 ```
 
 See [`.claude/cli.md`](.claude/cli.md) for full command documentation, and see
 [`AGENTS.md`](AGENTS.md) for API conventions.
-
-## Multi-tenancy
-
-The application supports multi-tenant deployments. It isolates organization data
-in **application code** using a typed query wrapper named `tenantDb(ctx)` from
-`#drizzle/tenant-db`. It does **not** use Postgres Row-Level Security (RLS).
-Read [ADR-0003](.adr/0003-app-enforced-multi-tenancy.md) for background on this
-decision, and see
-[`.claude/skills/tenant-safe-db/SKILL.md`](.claude/skills/tenant-safe-db/SKILL.md)
-for implementation patterns.
-
-Single-tenant setups initialize one default organization on startup and assign
-all new users to it. Both modes use an identical database schema.
-
-The query wrapper assumes that only this application server writes to Postgres.
-If external tools query your database directly, such as BI tools, PostgREST, or
-custom SQL agents, you must enable Postgres RLS on sensitive tables. The
-application wrapper cannot protect database tables from external queries that
-bypass it.
 
 ## Tests
 
@@ -369,7 +351,7 @@ pnpm test:integration     # node --test against a live server
 
 The repository does not use a cloud CI pipeline. The `.githooks/pre-push` script
 provides the only testing gate. It executes linting, type checks, unit tests,
-content validation, and production build checks before pushing commits. You must
+and production build checks before pushing commits. You must
 run `make hooks` or `pnpm install` in your local clone to install this hook.
 
 The integration test suite executes CLI commands against an active application
@@ -386,11 +368,13 @@ architectural subsystem. Add a new ADR when making major architectural changes.
 |---|-------|
 | [0001](.adr/0001-cli-wraps-the-api.md) | CLI wraps the API |
 | [0002](.adr/0002-data-migrations.md) | Data migrations alongside schema migrations |
-| [0003](.adr/0003-app-enforced-multi-tenancy.md) | App-enforced multi-tenancy (no RLS) |
+| [0003](.adr/0003-app-enforced-multi-tenancy.md) | App-enforced multi-tenancy (no RLS), superseded by 0010 |
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint plus anti-slop is the lint gate |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 |
 | [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared |
+| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token |
+| [0010](.adr/0010-drop-the-inherited-tenancy.md) | Drop the inherited tenancy, org and CMS surfaces |
 
 ## Contributing
 

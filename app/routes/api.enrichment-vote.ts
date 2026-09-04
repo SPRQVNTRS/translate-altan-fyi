@@ -20,7 +20,7 @@ import {
 } from '#app/models/votes.server';
 import { getActiveModel } from '#app/models/app-settings.server';
 import { PROMPT_VERSION } from '#app/prompts/enrichment/version';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 /**
  * `POST /api/enrichment-vote`, the one place a reader's judgement is recorded.

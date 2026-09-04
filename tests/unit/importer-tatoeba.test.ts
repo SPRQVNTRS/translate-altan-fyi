@@ -2,7 +2,7 @@
  * The Tatoeba importer's line reader and language filter, and the fixture fact
  * that its licence rule depends on.
  *
- * WHY THIS FILE MOCKS `#drizzle/tenant-db`
+ * WHY THIS FILE MOCKS `#drizzle/db`
  *   `cli/commands/import/tatoeba.ts` imports `getRawDb`, which reaches
  *   `drizzle/db.ts`, which constructs a `pg.Pool` and starts a retrying connect
  *   at module load. Importing the module for real in a unit test opens a
@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-mock.module('#drizzle/tenant-db', {
+mock.module('#drizzle/db', {
   namedExports: {
     getRawDb: (): never => {
       throw new Error('a unit test must not reach the database');

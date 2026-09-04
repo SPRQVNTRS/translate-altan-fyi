@@ -17,17 +17,15 @@
  * differences from upstream are known and few, and a drift check would then
  * have to argue about a difference that is not drift.
  *
- * `sync_blobs` is a GLOBAL table: it carries no `organizationId` and is not in
- * `TENANT_TABLES`, exactly like `sync_key_records`, so `getRawDb()` is the
- * sanctioned reach rather than a bypass of `tenantDb(ctx)` (ADR-0003). A blob
- * belongs to an account, and an account belongs to no organization.
+ * A blob belongs to an account, and `getRawDb()` is the one handle this
+ * application has.
  *
  * `.server.ts` because it touches the connection pool.
  */
 import { desc, eq } from 'drizzle-orm';
 
 import { syncBlobs } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 /**
  * The size of the account's newest stored blob.

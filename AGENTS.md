@@ -3,7 +3,7 @@
 ## Project Structure
 
 - `app/` — routes, components, models, utilities, workflows
-- `drizzle/` — database schema, migrations, tenant query wrapper
+- `drizzle/` — database schema, migrations, data migrations
 - `cli/` — Laravel-style management commands
 - `server.ts` — Express + React Router v8 SSR entry (dev **and** production; see [ADR-0004](.adr/0004-custom-server-is-the-production-entry.md))
 - `.claude/` — AI assistant rules, skills, and commands
@@ -68,7 +68,7 @@ shapes they do: [ADR-0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md).
 | Editor | oxlint on type, `source.fixAll.oxc` on save | `.vscode/settings.json` + the `oxc.oxc-vscode` recommendation |
 | Claude Code | oxlint on each written/edited file; a finding blocks with the diagnostic | `.claude/hooks/lint-edited-file.sh` (PostToolUse) |
 | Commit | oxlint on staged files | `.githooks/pre-commit`, installed by the `prepare` script — no husky, no setup step |
-| Push | full-tree oxlint → typecheck → unit tests → content validate → build | `.githooks/pre-push`, the repo's only test gate — there is no cloud CI |
+| Push | full-tree oxlint → typecheck → unit tests → build | `.githooks/pre-push`, the repo's only test gate — there is no cloud CI |
 
 `git commit --no-verify` skips the commit hook; pre-push lints the whole tree
 anyway. `SKIP_TESTS=1 git push` skips the push gate and pushes unverified code —
@@ -109,8 +109,6 @@ The boundary helpers that exist so you rarely need an assertion:
 - `parseJsonBody(request, schema)` — `#app/lib/api-auth.server`, for request bodies
 - `transport.get(path, schema, params)` — `cli/lib/transport`, for every CLI call
 - `cli/lib/schemas.ts` — response schemas derived from the Drizzle tables via `drizzle-zod`
-- `asTenantRows(table, rows)` / `asTenantRow(table, row)` — `#drizzle/tenant-db`
-- `workflowOrgId(context)` — `#app/models/workflows.server`, the one decode of workflow tenancy
 
 ## Key Documentation
 
@@ -122,7 +120,6 @@ The boundary helpers that exist so you rarely need an assertion:
 | Forms (Conform + Zod v4) | [.claude/conform-to-react.md](.claude/conform-to-react.md) |
 | Workflows | [.claude/workflows.md](.claude/workflows.md) |
 | CLI | [.claude/cli.md](.claude/cli.md) |
-| Tenant-safe DB | [.claude/skills/tenant-safe-db/SKILL.md](.claude/skills/tenant-safe-db/SKILL.md) |
 | Architecture Decisions | [.adr/README.md](.adr/README.md) |
 
 ## Accounts and the encrypted personal layer
@@ -146,9 +143,9 @@ move a route or a gate. The contract, in full:
   account. A path-keyed rule gated `/search` and left `/?q=` wide open once
   already. Do not write another one.
 - The screens with no public half are gated by nesting under
-  `app/routes/_app.gated.tsx`, which carries `accountMiddleware`. Not
-  `authMiddleware`, which also demands a linked `users` row: almost no account
-  has one, so it would bounce nearly every invited reader.
+  `app/routes/_app.gated.tsx`, which carries `accountMiddleware`. That is the
+  only app-screen gate. `authMiddleware` also demanded a linked `users` row,
+  which almost no account had, and it is gone with that table (ADR-0010).
 - The front door stays open. `/account`, `/sign-in`, `/sign-up` and `/offline`
   are never gated, because a gate in front of the sign-in page is a gate nobody
   can ever pass. `/healthcheck` and `/legal/*` stay public too, and
@@ -211,9 +208,16 @@ first, then here. See [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md)
 for why, and what that costs. `PROTOCOL.md` at the repo root is the normative
 specification; the TypeScript is its transcription, not the other way round.
 
-`users` and the organization tables survive for the API-key and org surface
-only. Authentication lives on `accounts`, and superadmin is
-`accounts.is_superadmin`.
+`accounts` is the only identity in this app. The `users` and organization
+tables are gone (M189, [ADR-0010](.adr/0010-drop-the-inherited-tenancy.md)):
+they held zero rows and nothing read them. `apiKeys` stands alone, carrying its
+own `isSuperadmin` flag rather than joining through a user row to an
+organization, and screen-level superadmin is `accounts.is_superadmin`.
+
+`/super/*` holds two screens and nothing else: `llm`, which edits the model
+selection enrichment reads out of `app_settings`, and `whoami-ip`, which echoes
+the IP the server resolved so a `TRUST_PROXY` hop count can be checked against a
+live proxy. A bare `/super` redirects to `/super/llm`.
 
 ## Architecture Decision Records (ADRs)
 
@@ -233,12 +237,13 @@ Significant decisions — anything that constrains future work, locks in a trade
 |---|-------|--------|
 | [0001](.adr/0001-cli-wraps-the-api.md) | CLI wraps the API | Accepted |
 | [0002](.adr/0002-data-migrations.md) | Data migrations alongside schema migrations | Accepted |
-| [0003](.adr/0003-app-enforced-multi-tenancy.md) | App-enforced multi-tenancy (no RLS) | Accepted |
+| [0003](.adr/0003-app-enforced-multi-tenancy.md) | App-enforced multi-tenancy (no RLS) | Superseded by 0010 |
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint | Accepted |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
 | [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
 | [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Accepted |
+| [0010](.adr/0010-drop-the-inherited-tenancy.md) | Drop the inherited tenancy, org and CMS surfaces | Accepted |
 
 ## Coding Style Summary
 
@@ -253,13 +258,12 @@ Significant decisions — anything that constrains future work, locks in a trade
 
 **Why:**
 - Single code path for web UI, CLI, third-party clients, and LLM agents — no drift
-- HTTP layer carries auth, multi-tenancy enforcement, and audit on every operation
+- HTTP layer carries auth and audit on every operation
 - Prod CLI calls don't require DB credentials on the operator's machine
 - Remote agents can act on prod via `--remote=<url>` + scoped API keys
 
 **Bootstrap-only exceptions** (direct-DB allowed because they precede the auth surface itself):
 - `api-key create` — bootstrap the first key for a fresh environment
-- `user create`, `org create` — bootstrap the first superadmin / org
 - `db check`, `db migrate`, `db reset` — DB-level health and lifecycle, run before the API is up
 
 These are enumerated in [ADR-0001](.adr/0001-cli-wraps-the-api.md). Don't add to the list without an ADR amendment.
@@ -272,19 +276,19 @@ Every non-bootstrap feature touches four files. Doing all four keeps `--remote` 
 
 **Layer 1 — Model** (`app/models/<resource>.server.ts`)
 
-The business-logic primitive. Tenant-scoped tables go through `tenantDb({orgId})`; cross-tenant queries use `getRawDb()` with an explicit `tdb.scope(table)` filter. List functions return `{ rows, total }` with a real `COUNT(*)` run in parallel (use the pattern in `app/models/api-keys.server.ts:listApiKeys`).
+The business-logic primitive. There is no tenancy and no query wrapper: this app
+has one instance and one dictionary cache, so a model reads and writes its table
+through `db` directly (ADR-0010). List functions return `{ rows, total }` with a
+real `COUNT(*)` run in parallel.
 
 ```typescript
 export async function listFoos(
-  ctx: TenantCtx,
   pagination: PaginationParams = { limit: 20, offset: 0 },
 ): Promise<{ rows: SelectFoo[]; total: number }> {
-  const tdb = tenantDb(ctx);
   const [rows, totalRow] = await Promise.all([
-    tdb.select(foos).orderBy(desc(foos.createdAt))
-       .limit(pagination.limit).offset(pagination.offset),
-    getRawDb().select({ value: count() }).from(foos)
-       .where(tdb.scope(foos)).then((r) => r[0]),
+    db.select().from(foos).orderBy(desc(foos.createdAt))
+      .limit(pagination.limit).offset(pagination.offset),
+    db.select({ value: count() }).from(foos).then((r) => r[0]),
   ]);
   return { rows, total: Number(totalRow?.value ?? 0) };
 }
@@ -293,28 +297,22 @@ export async function listFoos(
 **Layer 2 — HTTP route** (`app/routes/api.v1.<resource>.ts`, registered in `app/routes.ts`)
 
 Use the shared auth helpers from `app/lib/api-auth.server.ts`:
-- `requireApiKey(request)` — returns `{ apiKey, ctx, isSuperadmin: false }` after revoked-key check.
-- `requireSuperadminApiKey(request)` — same but enforces the creating user is a superadmin (`isSuperadmin: true`). Use for cross-tenant / global views.
-- `assertOrgAccess(auth, orgId)` — throws 403 unless the key belongs to the org or is superadmin (superadmin keys always bypass).
+- `requireApiKey(request)` — returns the key after the revoked-key check.
+- `requireSuperadminApiKey(request)` — same, but refuses a key whose `isSuperadmin` is false. Use it for anything operational.
 - `jsonError(status, message)` — always `throw jsonError(...)`. Returns the standard `{ error, code }` JSON envelope.
-- `resolveOrgSlug(slug)` — slug → orgId, or 404.
 
 List endpoints use `parsePaginationParams(url.searchParams)` + `paginatedJson({data, total, limit, offset})` from `app/lib/pagination.server.ts` for a uniform envelope and clamped limits (default 20, max 100).
 
 ```typescript
 export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
   const url = new URL(request.url);
-  const auth = await requireApiKey(request);
-  const orgId = await resolveOrgSlug(url.searchParams.get('org') ?? '');
-  assertOrgAccess(auth, orgId);
+  await requireApiKey(request);
 
   const pagination = parsePaginationParams(url.searchParams);
-  const { rows, total } = await listFoos({ orgId }, pagination);
+  const { rows, total } = await listFoos(pagination);
   return paginatedJson({ data: rows, total, ...pagination });
 }
 ```
-
-**Cross-tenant (no `?org=` filter, global view):** call `requireSuperadminApiKey(request)` first, then issue the query via `getRawDb()` — that's the only place the wrapper is bypassed legitimately. Pattern lives in `app/routes/api.v1.metric-events.ts`.
 
 **Layer 3 — DirectTransport handler** (`cli/lib/direct-transport-handlers.ts`)
 
@@ -323,8 +321,7 @@ Register a handler with the same path/method/shape as the HTTP route. This is wh
 ```typescript
 direct.register('GET', '/api/v1/foos', async ({ query }) => {
   const pagination = parsePaginationParams(query);
-  const orgId = await resolveOrgSlug(typeof query.org === 'string' ? query.org : '');
-  const { rows, total } = await listFoos({ orgId }, pagination);
+  const { rows, total } = await listFoos(pagination);
   return { data: rows, total, ...pagination };
 });
 ```
@@ -336,9 +333,8 @@ Flat file under `cli/commands/`. Only `data-migration/` is nested today; everyth
 ```typescript
 import { transport } from '../lib/transport';
 
-async function listFoosCmd(options: { format: OutputFormat; org: string; limit: string; offset: string }) {
+async function listFoosCmd(options: { format: OutputFormat; limit: string; offset: string }) {
   const response = await transport.get('/api/v1/foos', {
-    org: options.org,
     limit: parseInt(options.limit, 10),
     offset: parseInt(options.offset, 10),
   });
@@ -353,11 +349,11 @@ Document the new command in [.claude/cli.md](.claude/cli.md).
 
 ### Hiding secret columns from API responses
 
-If a tenant-scoped table holds a credential artifact (hash, token, encrypted blob), never let it cross the route boundary. Pattern from `app/models/api-keys.server.ts`:
+If a table holds a credential artifact (hash, token, encrypted blob), never let it cross the route boundary. Pattern from `app/models/api-keys.server.ts`:
 
 1. Export a `SelectFooPublic = Omit<SelectFoo, 'secretField'>` type from the model.
 2. Define a `fooPublicColumns` Drizzle projection that lists every column except the secret.
-3. Use `getRawDb().select(fooPublicColumns).from(foos).where(tdb.scope(foos))…` for reads.
+3. Use `db.select(fooPublicColumns).from(foos)…` for reads.
 4. For `UPDATE … RETURNING`, follow the update with a `SELECT fooPublicColumns` to fetch the post-update row without the secret.
 5. Every public-facing function returns `SelectFooPublic` (or `{ rows: SelectFooPublic[], total }` for lists). The secret column is read only inside the model, only for WHERE-clause matching during auth.
 
@@ -373,9 +369,11 @@ With all commands migrated to HTTP, an LLM agent or human operator can act on pr
 The first key must be created via direct-DB access (bootstrap exception per ADR-0001):
 
 ```bash
-pnpm cli api-key create --org=<slug> --name="agent-key"
+pnpm cli api-key create --name="agent-key"
 # Outputs: sk_...  (copy this value)
 ```
+
+Add `--superadmin` for a key that may reach the DB admin endpoints.
 
 ### Using the key
 
@@ -383,8 +381,7 @@ pnpm cli api-key create --org=<slug> --name="agent-key"
 export TRANSLATE_API_KEY=sk_<your-key>
 
 # Against a specific server
-pnpm cli --remote=http://localhost:3456 workflow list
-pnpm cli --remote=https://app.example.com org list
+pnpm cli --remote=http://localhost:3456 api-key list
 pnpm cli --remote=https://app.example.com db check
 ```
 
@@ -394,25 +391,23 @@ Set `TRANSLATE_PROD_URL` in your environment and use `--prod` instead of `--remo
 
 ```bash
 export TRANSLATE_PROD_URL=https://app.example.com
-pnpm cli --prod workflow list
+pnpm cli --prod api-key list
 ```
 
 ### Key scopes
 
+There are two, and no organization behind either (ADR-0010):
+
 | Key type | What it can access |
 |----------|-------------------|
-| **Org-scoped** (created for a specific org) | api-key, data-source, metric-event, workflow, org operations scoped to that org |
-| **Superadmin** (created by/for a superadmin user) | user management, db admin, cross-org revoke, all org operations |
+| **Ordinary** | The api-key endpoints. |
+| **Superadmin** (`isSuperadmin` on the key itself) | The above, plus `admin/db/*`, and revoking any key. |
 
 ### Example commands
 
 ```bash
-# Workflows
-pnpm cli --prod workflow list --format=json
-pnpm cli --prod workflow stats
-
 # API keys
-pnpm cli --prod api-key list --org=default
+pnpm cli --prod api-key list
 
 # Database (superadmin key required)
 pnpm cli --prod db check
@@ -421,7 +416,7 @@ pnpm cli --prod db tables
 
 ### Safety note
 
-CLI commands sent via `--remote` go through the app's HTTP auth layer — auth is enforced, tenant isolation is enforced, and all operations are auditable. No raw database access is required on the operator's machine.
+CLI commands sent via `--remote` go through the app's HTTP auth layer — auth is enforced and all operations are auditable. No raw database access is required on the operator's machine.
 
 ## Data Migrations
 
@@ -444,41 +439,6 @@ Runner: `drizzle/data-migrations/runner.ts`
 CLI: `cli/commands/data-migration/run.ts`
 Migrations: `drizzle/data-migrations/migrations/<YYYY-MM-DD>-<slug>.ts`
 
-## Multi-Tenancy (CRITICAL)
-
-Tenant isolation is enforced in **application code** via `tenantDb(ctx)` from `#drizzle/tenant-db`. Postgres RLS is **not** used. See [tenant-safe-db skill](.claude/skills/tenant-safe-db/SKILL.md) for the full rationale and patterns.
-
-The two-rule version:
-
-1. **Tenant-scoped tables** (`articles`, `pages`, `categories`, `metricEvents`, `apiKeys`, `dataSources`) — only access via `tenantDb({ orgId })`. The wrapper auto-injects the `organization_id` filter on every read/write.
-
-2. **Global tables** (`users`, `organizations`, `organizationMembers`) and **cross-tenant lookups** — use `getRawDb()` from `#drizzle/tenant-db`. Loud name on purpose; grep-able in code review.
-
-```typescript
-import { tenantDb, getRawDb } from '#drizzle/tenant-db';
-
-// Routes — tenant comes from tenantMiddleware via getTenant(context)
-const tenant = getTenant(context);
-const tdb = tenantDb({ orgId: tenant.orgId });
-
-await tdb.insert(articles, { title, slug, content, authorId: user.id });
-// organizationId is auto-stamped — caller MUST NOT pass it
-
-const rows = await tdb.select(articles).orderBy(desc(articles.createdAt));
-
-// Complex joins use getRawDb() + tdb.scope(table) for the org filter:
-await getRawDb()
-  .select({ id: articles.id, authorName: users.name })
-  .from(articles)
-  .leftJoin(users, eq(articles.authorId, users.id))
-  .where(tdb.scope(articles))
-  .orderBy(desc(articles.createdAt));
-```
-
-**NEVER** call `getRawDb()` against a tenant-scoped table without `.where(tdb.scope(table))`. There is no DB-level safety net — code review and the wrapper API surface are the entire defense.
-
-**When to put RLS back**: if anything other than this app's server code can issue SQL against the DB — BI tools with shared credentials, PostgREST/Hasura exposing Postgres directly, customer-facing SQL analytics, LLM agents writing queries — re-introduce RLS for those tables. The current model assumes the application is the only writer.
-
 ## Commits
 
 Use Conventional Commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`
@@ -490,7 +450,7 @@ See: [.claude/commands/commit.md](.claude/commands/commit.md)
 ```
 .claude/
 ├── commands/       # /commit, /sync-cli
-├── skills/         # cli-sync, form-persistence, tenant-safe-db, react-router-framework-mode
+├── skills/         # cli-sync, form-persistence, react-router-framework-mode
 ├── hooks/          # Post-edit validations (see below)
 └── *.md            # Coding standards
 ```
@@ -501,7 +461,6 @@ See: [.claude/commands/commit.md](.claude/commands/commit.md)
 |------|--------------|
 | `lint-edited-file.sh` | Runs oxlint on the edited file. A finding **blocks** with the diagnostic, so slop is corrected in the same turn rather than at commit time. |
 | `on-schema-change.sh` | Reminds you to generate a migration after a `drizzle/schema.ts` edit. |
-| `validate-tenant-context.sh` | Flags `getRawDb()` against a tenant-scoped table without `tdb.scope(table)`. |
 
 If a lint hook blocks you: fix the code. Do not downgrade the rule, and do not
 add a suppression comment — see [ADR-0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md).

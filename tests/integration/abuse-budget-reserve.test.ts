@@ -50,7 +50,7 @@ import assert from 'node:assert/strict';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { pool } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { alertLog, dailyBudget } from '../../drizzle/schema';
 import {
   isBudgetExhausted,

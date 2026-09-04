@@ -26,48 +26,30 @@ pnpm cli db describe <tbl> # Describe schema
 pnpm cli db query <sql>    # Execute SQL
 ```
 
-### Users
+### Accounts
 
 ```bash
-pnpm cli user list
-pnpm cli user get <id>
-pnpm cli user find <email>
-pnpm cli user activate <id>
-pnpm cli user deactivate <id>
-pnpm cli user grant-superadmin <id>
-pnpm cli user revoke-superadmin <id>
+pnpm cli account grant-superadmin <handle>
+pnpm cli account invite [--minted-by <handle>] [--expires-in <days>|never]
+pnpm cli account list-invites [--pending]
 ```
 
-### Organizations
+`invite` and `list-invites` are bootstrap exceptions alongside `grant-superadmin`
+(ADR-0001, ADR-0009): an operator with no account yet still needs a way to mint
+one. `list-invites` never prints a token, only invite status. See
+[AGENTS.md > Accounts and the encrypted personal layer].
+
+### API Keys
 
 ```bash
-pnpm cli org list
-pnpm cli org get <id>
-pnpm cli org members <id>
-pnpm cli org delete <id>
+pnpm cli api-key list
+pnpm cli api-key create --name <name> [--superadmin]
+pnpm cli api-key revoke <id>
 ```
 
-### Workflows
-
-```bash
-pnpm cli workflow list
-pnpm cli workflow get <id>
-pnpm cli workflow operations <id>
-pnpm cli workflow context <id>
-pnpm cli workflow cancel <id>
-pnpm cli workflow stats
-```
-
-### Operations
-
-```bash
-pnpm cli operation list
-pnpm cli operation get <id>
-pnpm cli operation data <id>
-pnpm cli operation logs <id>
-pnpm cli operation find <workflowId>
-pnpm cli operation stats
-```
+`create` is the bootstrap exception (ADR-0001): it writes to the database
+directly, because it is what mints the credential every other remote command
+needs. `list` and `revoke` go through the transport like everything else.
 
 ### Dictionary imports
 
@@ -137,6 +119,16 @@ capture of the listing is 2025-11-13, showing snapshots up to
 the decision is revisited. The `headword_links` table and its `panlex-fallback`
 kind stay in the schema.
 
+### Dictionary stats
+
+```bash
+pnpm cli dictionary stats [--json]
+```
+
+Counts the rows in the shared dictionary tables, per table and per source. This
+is the import's verification counterpart, and reads Postgres directly for the
+same ADR-0001 amendment as the importers above.
+
 ## CLI Maintenance
 
 When modifying `drizzle/schema.ts`:
@@ -151,13 +143,14 @@ Run `/sync-cli` to check for gaps.
 
 ```
 cli/
-├── index.ts           # Entry point, command registration
+├── index.ts           # Entry point, module preload
+├── main.ts             # Command registration
 ├── commands/          # Command implementations
+│   ├── account.ts
+│   ├── api-key.ts
 │   ├── db.ts
-│   ├── user.ts
-│   ├── organization.ts
-│   ├── workflow.ts
-│   ├── operation.ts
+│   ├── dictionary.ts
+│   ├── data-migration/
 │   └── import/        # Open-data dictionary importers
 │       ├── index.ts
 │       ├── wikidata-lexemes.ts

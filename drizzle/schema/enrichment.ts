@@ -23,10 +23,8 @@ import { headwords, languages, senses } from './dictionary';
 // page reads it instead of calling a model again, and the workflow skips a
 // sense that already has one.
 //
-// This table carries no `organizationId` and is deliberately absent from
-// TENANT_TABLES in `drizzle/tenant-db.ts`. An enrichment is a property of the
-// shared dictionary, exactly like the sense it describes, so it is reached
-// through `getRawDb()`.
+// An enrichment is a property of the shared dictionary, exactly like the sense
+// it describes, so it is reached through `getRawDb()`.
 //
 // THE CACHE KEY IS AT SENSE LEVEL, NOT HEADWORD LEVEL
 //   One spelling carries several meanings. English "bank" is a river edge and a

@@ -14,7 +14,6 @@ import {
 } from 'react-router';
 import type { Route } from './+types/root';
 import { getToast } from '#app/utils/toast.server';
-import { sessionStorage } from '#app/services/session.server';
 import { readAccountHandleForDisplay } from '#app/services/account-session.server';
 import stylesheet from './app.css?url';
 import { combineHeaders } from '#app/utils/misc';
@@ -56,12 +55,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const { toast, headers: toastHeaders } = await getToast(request);
 
-  // Check for user session (optional - don't redirect)
-  const session = await sessionStorage.getSession(request.headers.get('cookie'));
-  // The session stores a SessionUser; deactivation is re-checked against the
-  // database by `authMiddleware` on every authenticated route.
-  const user = session.get('user') ?? null;
-
   // The UI locale is a device preference, so it is read straight off the
   // cookie, never the database: `<html lang>` is then correct in the very first
   // byte of HTML without costing this hot path a round trip. See
@@ -86,7 +79,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   return {
     toast,
-    user,
     accountHandle,
     language,
     isAnalyticsEnabled,
@@ -157,13 +149,12 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
     if (!shouldFallbackOffline(cause)) throw cause;
     if (lastServedRootData) return lastServedRootData;
     // First run offline: the shell came from the service worker cache and this
-    // loader has never seen a server answer. `user` and `toast` are unknowable
-    // without the server, so they are null rather than invented. The language
+    // loader has never seen a server answer. `toast` is unknowable without the
+    // server, so it is null rather than invented. The language
     // is a device preference, so the client already holds it, in the cookie
     // with a localStorage mirror.
     return {
       toast: null,
-      user: null,
       // The cookie is httpOnly, so client code cannot read the name out of it.
       // The header falls back to offering a way in, which is the harmless
       // direction to be wrong in: nothing gates on this value.

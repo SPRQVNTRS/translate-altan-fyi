@@ -7,7 +7,7 @@
  */
 
 import { Command } from 'commander';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { runPendingDataMigrations } from '#drizzle/data-migrations/runner';
 import { dataMigrations } from '#drizzle/schema';
 import { printSuccess, printError, c } from '../../lib/output';

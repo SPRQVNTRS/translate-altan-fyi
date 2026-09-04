@@ -5,11 +5,8 @@
  * columns are this app's decision (ADR-0009), so there is no provenance header
  * and no upstream file to keep it in step with.
  *
- * GLOBAL, NOT TENANT-SCOPED, for the same reason `accounts` is: an invite
- * admits a person to this installation, it is not a row inside somebody's
- * organization. It carries no `organizationId`, it does not belong in
- * `TENANT_TABLES` in `drizzle/tenant-db.ts`, and every read or write goes
- * through `getRawDb()`.
+ * An invite admits a person to this installation, and every read or write
+ * goes through `getRawDb()`.
  *
  * THERE IS NO PLAINTEXT TOKEN COLUMN, and adding one would undo the point of
  * the table. What is stored is `HMAC-SHA-256(inviteTokenPepper, token)`, hex,

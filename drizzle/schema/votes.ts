@@ -5,14 +5,12 @@ import { headwords, languages } from './dictionary';
 import { enrichments } from './enrichment';
 
 // =============================================================================
-// Enrichment votes and the re-enrichment cooldown (Global, NOT tenant-scoped)
+// Enrichment votes and the re-enrichment cooldown
 // =============================================================================
 // A reader tells us whether the study notes on one enrichment helped, and a
-// down-vote is what can put a headword back in the queue. Neither table carries
-// an `organizationId`, and neither belongs in TENANT_TABLES in
-// `drizzle/tenant-db.ts`. A vote is a judgement about the shared dictionary,
-// exactly like the enrichment it points at, so both are reached through
-// `getRawDb()`.
+// down-vote is what can put a headword back in the queue. A vote is a judgement
+// about the shared dictionary, exactly like the enrichment it points at, so
+// both are reached through `getRawDb()`.
 //
 // WHAT THIS FILE MUST NEVER CARRY
 //   No headword, no sense, no query text, no language pair on `enrichment_votes`.

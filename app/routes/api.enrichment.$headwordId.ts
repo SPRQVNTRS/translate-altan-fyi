@@ -3,7 +3,7 @@ import { isServedLanguage, type LanguageCode } from '#app/lib/dictionary/detect-
 import { entryHeadwordQuery, entrySensesQuery } from '#app/lib/dictionary/entry.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
 import { resolveEnrichmentPanel, type EnrichmentPanel } from '#app/lib/enrichment/state.server';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 /**
  * `GET /api/enrichment/:headwordId?to=<code>`, the enrichment panel, as JSON.

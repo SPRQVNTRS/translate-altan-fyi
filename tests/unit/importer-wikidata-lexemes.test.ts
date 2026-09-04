@@ -4,9 +4,9 @@
  * the schema keeps of a sense, and which `P5972` statements become translation
  * edges.
  *
- * WHY THIS FILE MOCKS `#drizzle/tenant-db`
+ * WHY THIS FILE MOCKS `#drizzle/db`
  *   `cli/commands/import/wikidata-lexemes.ts` imports `getRawDb` from
- *   `#drizzle/tenant-db`, which reaches `drizzle/db.ts`, which constructs a
+ *   `#drizzle/db`, which reaches `drizzle/db.ts`, which constructs a
  *   `pg.Pool` AND starts a retrying connect at module load. Importing the
  *   module in a unit test therefore opens a database connection and leaves a
  *   handle the runner never gets to close: the process hangs after the last
@@ -26,7 +26,7 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { DumpLine, Lexeme } from '../../cli/commands/import/wikidata-lexemes';
 
-mock.module('#drizzle/tenant-db', {
+mock.module('#drizzle/db', {
   namedExports: {
     getRawDb: (): never => {
       throw new Error('a unit test must not reach the database');

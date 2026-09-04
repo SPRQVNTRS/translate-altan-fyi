@@ -1,6 +1,12 @@
 # 0003 — App-enforced multi-tenancy (no RLS)
 
-- **Status:** Accepted
+> **Superseded by [0010](0010-drop-the-inherited-tenancy.md), 2026-09-04.** The
+> tenancy this record describes was inherited from `ts-factory-stack` and never
+> had a tenant: `organizations`, `organizationMembers` and `users` all held zero
+> rows in production. `tenantDb` and every table it scoped are deleted. Read
+> this record for the history of the choice, not for how the code works today.
+
+- **Status:** Superseded
 - **Date:** 2026-05-13
 - **Deciders:** Altan
 

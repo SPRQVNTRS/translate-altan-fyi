@@ -51,7 +51,7 @@ import { z } from 'zod';
 
 import { abuseCounters, enrichments, headwords, senseVersions, senses, sources } from '../../drizzle/schema';
 import { pool } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import type { EnrichmentPanel } from '../../app/lib/enrichment/trigger.server';
 import type { JsonValue } from '../../app/lib/json';

@@ -1,16 +1,16 @@
 /**
- * GET  /api/v1/api-keys?org=<slug>  — List API keys for an org
- * POST /api/v1/api-keys             — Create a new API key
+ * GET  /api/v1/api-keys  — List the API keys on this installation
+ * POST /api/v1/api-keys  — Mint a new API key
  *
- * Auth: Bearer token (the calling key must belong to the org, or be superadmin).
+ * Auth: a superadmin Bearer token. There is no org to scope a listing to any
+ * more, so a listing is the whole set, and handing that to an ordinary key
+ * would tell every caller which other keys exist.
  */
 
 import { z } from 'zod';
 import type { Route } from './+types/api.v1.api-keys';
 import {
-  requireApiKey,
-  assertOrgAccess,
-  resolveOrgSlug,
+  requireSuperadminApiKey,
   jsonError,
   parseJsonBody,
 } from '#app/lib/api-auth.server';
@@ -19,20 +19,17 @@ import { parsePaginationParams, paginatedJson } from '#app/lib/pagination.server
 
 /** Body accepted by `POST /api/v1/api-keys`. */
 const createApiKeyBodySchema = z.object({
-  org: z.string(),
   name: z.string(),
+  /** Absent means an ordinary key. Granting authority has to be said. */
+  isSuperadmin: z.boolean().default(false),
 });
 
 export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
-  const auth = await requireApiKey(request);
+  await requireSuperadminApiKey(request);
 
   const url = new URL(request.url);
-  const orgId = await resolveOrgSlug(url.searchParams.get('org') ?? undefined);
-
-  assertOrgAccess(auth, orgId);
-
   const pagination = parsePaginationParams(url.searchParams);
-  const { rows, total } = await listApiKeys(auth.ctx, pagination);
+  const { rows, total } = await listApiKeys(pagination);
   return paginatedJson({ data: rows, total, limit: pagination.limit, offset: pagination.offset });
 }
 
@@ -41,17 +38,10 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
     throw jsonError(405, 'method not allowed');
   }
 
-  const auth = await requireApiKey(request);
+  await requireSuperadminApiKey(request);
 
-  const { org, name } = await parseJsonBody(request, createApiKeyBodySchema);
-  const orgId = await resolveOrgSlug(org);
-
-  assertOrgAccess(auth, orgId);
-
-  const { key, record } = await createApiKey(auth.ctx, {
-    name,
-    createdBy: auth.apiKey.createdBy ?? null,
-  });
+  const { name, isSuperadmin } = await parseJsonBody(request, createApiKeyBodySchema);
+  const { key, record } = await createApiKey({ name, isSuperadmin });
 
   return new Response(JSON.stringify({ key, record }), {
     status: 201,

@@ -9,10 +9,9 @@
  *   workflow handler holding its own transaction handle. Only the TYPE is
  *   imported, so importing this file opens nothing.
  *
- * `enrichments` IS A GLOBAL TABLE.
- *   It carries no `organizationId` and is not in TENANT_TABLES, so `getRawDb()`
- *   is the correct handle and no `tdb.scope(...)` filter belongs on these
- *   statements. See the file comment in `drizzle/schema/enrichment.ts`.
+ * `enrichments` DESCRIBES THE SHARED DICTIONARY.
+ *   `getRawDb()` is the correct handle, and no filter narrows these statements
+ *   to a reader. See the file comment in `drizzle/schema/enrichment.ts`.
  *
  * A ROW THAT CANNOT BE READ IS DROPPED, NEVER THROWN.
  *   `output` is JSONB, so the database cannot police its shape. A row written by

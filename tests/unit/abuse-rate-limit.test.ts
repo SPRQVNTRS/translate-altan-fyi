@@ -31,7 +31,7 @@
  *   rule in prose, so a whole-file grep would fail on the very sentence that
  *   states it.
  *
- * NO DATABASE. `rate-limit.server.ts` imports `#drizzle/tenant-db`, which
+ * NO DATABASE. `rate-limit.server.ts` imports `#drizzle/db`, which
  * imports `drizzle/db.ts`, which CONNECTS at module load and retries for about a
  * minute before giving up. The unit tier runs with no database, so that import
  * is mocked out before the module under test is loaded. Only the pure functions
@@ -47,7 +47,7 @@ import { fileURLToPath } from 'node:url';
 // import below is dynamic and this call is at the top level. `getRawDb` throws
 // rather than returning a stub: nothing in this file may reach it, and a case
 // that did should fail loudly instead of exercising a fake.
-mock.module('#drizzle/tenant-db', {
+mock.module('#drizzle/db', {
   namedExports: {
     getRawDb: () => {
       throw new Error('the unit tier must not reach a database');

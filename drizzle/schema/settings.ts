@@ -9,14 +9,10 @@ import { pgTable, text, timestamp, uuid, jsonb, index } from 'drizzle-orm/pg-cor
 // without a deploy. The first inhabitant is `llm.active`, the model the
 // enrichment workflow runs on.
 //
-// WHY THESE TABLES CARRY NO `organizationId`
-//   The active model is a property of the INSTALLATION, not of a tenant. One
-//   worker process serves every organization from one pool of API keys, so
-//   there is no coherent meaning for "org A runs Gemini while org B runs
-//   Claude" until the keys are per-org too. They are therefore deliberately
-//   absent from TENANT_TABLES in `drizzle/tenant-db.ts` and are read through
-//   `db` directly. Adding a tenant column later is an additive migration; the
-//   opposite direction, discovering the setting was global all along, is not.
+// WHY THE ACTIVE MODEL IS ONE SETTING FOR THE WHOLE INSTALLATION
+//   One worker process serves every reader from one pool of API keys, so there
+//   is no second party the setting could belong to. It is read through `db`
+//   directly.
 //
 // WHY THE VALUE IS JSONB AND NOT A COLUMN PER SETTING
 //   Each setting has its own shape, and the shape is owned by the module that

@@ -20,7 +20,7 @@ import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.se
 import { MISSING_ENTRY_PANEL, resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import { requireVoterAccount } from '#app/lib/votes/account-gate.server';
 import type { TitleHandle } from '#app/lib/route-title';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 export const meta: MetaFunction = ({ matches }) => {
   const language = metaLanguage(matches);

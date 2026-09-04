@@ -58,14 +58,11 @@ import type { SyncKeyRecordKind } from '#app/lib/e2ee/protocol';
 import { BLOB_VERSION_RETENTION } from '#app/lib/e2ee/protocol';
 import { isUniqueViolation } from '#app/lib/e2ee/storage-conflict';
 import { syncBlobs, syncKeyRecords } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 
 /**
- * `sync_blobs` and `sync_key_records` are GLOBAL tables: neither carries an
- * `organizationId` and neither is in `TENANT_TABLES`, so the raw handle is the
- * sanctioned reach rather than a bypass of `tenantDb(ctx)` (ADR-0003). A blob
- * and a key record belong to an account, and an account belongs to no
- * organization.
+ * A blob and a key record belong to an account, and `getRawDb()` is the one
+ * handle this application has.
  */
 type Database = ReturnType<typeof getRawDb>;
 

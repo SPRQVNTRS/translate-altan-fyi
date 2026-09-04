@@ -56,7 +56,14 @@ export type RouteAccess =
   | 'bearer-token'
   /** A helper module that happens to live under `app/routes/`. It is imported, never routed. */
   | 'module'
-  /** A route-shaped file that `app/routes.ts` does not register. Unreachable, and left in place rather than deleted by this milestone. */
+  /**
+   * A route-shaped file that `app/routes.ts` does not register. Unreachable.
+   * NO FILE IS THIS TODAY: the one that was, `_admin.tsx`, was deleted with the
+   * rest of the org surface by M189 (ADR-0010). The category stays because the
+   * next inherited leftover has to be classified as something, and calling one
+   * `gated-layout` because it looks like one is how a dead file gets read as a
+   * live gate.
+   */
   | 'unrouted'
   /**
    * Registered by `app/routes.ts` only when `NODE_ENV` is not `production`, so
@@ -145,7 +152,6 @@ export const ROUTE_CLASSIFICATION = {
   'legal/last-updated.ts': { access: 'module', reason: 'A date helper imported by the legal pages. Not a route.' },
   'legal/operator.ts': { access: 'module', reason: 'The operator details the legal pages render. Not a route.' },
   'legal/page-links.tsx': { access: 'module', reason: 'The shared cross-links between the legal pages. Not a route.' },
-  '_admin.tsx': { access: 'unrouted', reason: 'ts-factory-stack leftover. `app/routes.ts` registers `org/_admin.tsx`, never this one, so nothing can reach it.' },
 
   // ── The enrichment endpoints a rendered page talks to ──────────────────
   'api.enrichment.$headwordId.ts': {
@@ -181,48 +187,25 @@ export const ROUTE_CLASSIFICATION = {
   'api.v1.sync.key-records.ts': { access: 'gated-inline', reason: 'Reads the session. The wrapped data keys belong to one account.' },
 
   // ── The bearer-token REST surface, inherited from ts-factory-stack ─────
-  'api.v1.api-keys.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.api-keys.$id.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.data-sources.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.metric-events.ts': { access: 'bearer-token', reason: 'requireApiKey, superadmin for the cross-tenant view.' },
-  'api.v1.workflows.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.workflows.stats.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.workflows.audit-tenancy.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.workflows.$id.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.workflows.$id.operations.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.workflows.$id.context.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.workflows.$id.cancel.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
-  'api.v1.users.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.users.$id.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.users.by-email.$email.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.orgs.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.orgs.$idOrSlug.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
-  'api.v1.orgs.$idOrSlug.members.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
+  'api.v1.api-keys.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
+  'api.v1.api-keys.$id.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.check.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.pool.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.tables.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.describe.$table.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.query.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
 
-  // ── The org and admin surface, gated by `authMiddleware` on `_auth` ────
-  '_auth.tsx': { access: 'gated-layout', reason: 'Carries `authMiddleware`, which needs an account AND a linked `users` row.' },
-  '_super.tsx': { access: 'gated-layout', reason: 'Carries `superadminMiddleware`, over `_auth`.' },
-  'dashboard.tsx': { access: 'gated-layout', reason: 'Under `_auth`.' },
-  'select-org.tsx': { access: 'gated-layout', reason: 'Under `_auth`.' },
-  'create-org.tsx': { access: 'gated-layout', reason: 'Under `_auth`.' },
-  'super/orgs.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
-  'super/users.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
+  // ── The operator screens under `/super/` ───────────────────────────────
+  // What is left of the inherited admin surface. The org tree, `/dashboard`,
+  // `/select-org`, `/create-org`, `/super/orgs` and `/super/users` were deleted
+  // by M189 with their tables (ADR-0010), and `_auth.tsx` went with them.
+  '_super.tsx': {
+    access: 'gated-layout',
+    reason: 'Carries `accountMiddleware` then `superadminMiddleware`. A top-level layout since M189: it no longer nests under `_auth`.',
+  },
+  'super/index-redirect.ts': { access: 'gated-layout', reason: 'Under `_super`. A hop from `/super` to `/super/llm`, refused before it runs for anyone who is not a superadmin.' },
   'super/llm.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
   'super/whoami-ip.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
-  'org/_tenant.tsx': { access: 'gated-layout', reason: 'Under `_auth`, and it resolves the tenant.' },
-  'org/_layout.tsx': { access: 'gated-layout', reason: 'Under `_tenant`.' },
-  'org/_admin.tsx': { access: 'gated-layout', reason: 'Under `_org_layout`, and it requires an org admin.' },
-  'org/dashboard.tsx': { access: 'gated-layout', reason: 'Under `_org_layout`.' },
-  'org/profile.tsx': { access: 'gated-layout', reason: 'Under `_org_layout`.' },
-  'org/settings.tsx': { access: 'gated-layout', reason: 'Under `_org_layout`.' },
-  'org/workflows.tsx': { access: 'gated-layout', reason: 'Under `_org_layout`.' },
-  'org/users/index.tsx': { access: 'gated-layout', reason: 'Under `_org_admin`.' },
-  'org/users/invite.tsx': { access: 'gated-layout', reason: 'Under `_org_admin`. It invites a `users` row into an ORGANIZATION, and has nothing to do with the account invites of ADR-0009.' },
 } as const satisfies Record<string, RouteClassification>;
 
 /** Every classified path, for the completeness test and for a reader counting them. */

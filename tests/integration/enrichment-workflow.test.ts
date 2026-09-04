@@ -41,7 +41,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { enrichments, headwords, senseVersions, senses, sources } from '../../drizzle/schema';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { pool } from '../../drizzle/db';
 import type { JsonValue } from '../../app/lib/json';
 import type { EnrichmentJobPayload } from '../../app/lib/enrichment/job-payload';

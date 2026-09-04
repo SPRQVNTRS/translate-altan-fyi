@@ -50,7 +50,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { abuseCounters, enrichments, headwords, senses, senseVersions, sources, workflows } from '../../drizzle/schema';
 import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import { enrichmentSingletonKey } from '../../app/lib/enrichment/enqueue.server';

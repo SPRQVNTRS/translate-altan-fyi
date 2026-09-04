@@ -12,10 +12,9 @@
  *   thing that just happened, because the thing that just happened was done
  *   with the web application stopped.
  *
- *   It reads GLOBAL tables. Every table counted below carries no
- *   `organizationId` and is deliberately absent from `TENANT_TABLES`. The
- *   tenancy enforcement that ADR-0001 centralises in the API therefore has
- *   nothing to enforce here: there is no tenant column to scope by.
+ *   It reads the SHARED dictionary. Every table counted below describes the
+ *   one dictionary this installation serves, so there is nothing here that one
+ *   reader may see and another may not.
  *
  *   It is read-only and aggregate. It emits row counts and the provenance rows
  *   themselves, which are licence metadata. It exposes no per-user and no
@@ -43,7 +42,7 @@ import {
   sources,
   translations,
 } from '#drizzle/schema';
-import { getRawDb } from '#drizzle/tenant-db';
+import { getRawDb } from '#drizzle/db';
 import { createTable, formatDate, outputJson, printSection } from '../lib/output';
 import type { TableColumn } from '../lib/types';
 

@@ -229,8 +229,8 @@ describe('the api/v1 bearer guard and the voice fallback', () => {
   });
 
   it('still demands a token everywhere else under /api/v1/', () => {
-    assert.equal(requiresBearerToken('/api/v1/users'), true, 'the guard must still hold for API clients');
-    assert.equal(requiresBearerToken('/api/v1/workflows'), true);
+    assert.equal(requiresBearerToken('/api/v1/api-keys'), true, 'the guard must still hold for API clients');
+    assert.equal(requiresBearerToken('/api/v1/admin/db/tables'), true);
   });
 
   it('leaves the session-authenticated routes alone, as it did before', () => {

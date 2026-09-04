@@ -42,7 +42,7 @@ import { RouterContextProvider } from 'react-router';
 import { z } from 'zod';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
-import { getRawDb } from '../../drizzle/tenant-db';
+import { getRawDb } from '../../drizzle/db';
 import { abuseCounters } from '../../drizzle/schema';
 import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import { action as transcribe } from '../../app/routes/api.v1.transcribe';
