@@ -402,3 +402,25 @@
     animation-delay: 0.32s;
   }
 }
+
+/*
+ * Tailwind v4 dropped the Preflight rule that gave buttons `cursor: pointer`,
+ * so buttons now fall back to the browser default arrow. Restore it here.
+ * This sits in `@layer base`, so any `cursor-*` utility still overrides it:
+ * utilities are a later cascade layer than base.
+ */
+@layer base {
+  button,
+  [role='button'],
+  label[for],
+  summary,
+  select {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'],
+  select:disabled {
+    cursor: default;
+  }
+}
