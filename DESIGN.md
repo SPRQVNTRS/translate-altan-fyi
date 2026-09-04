@@ -162,9 +162,8 @@ container and shadow, and render simple rows on the page.
 
 - **Body font: Inter Variable (`font-sans`) on `<body>`.** Inter serves as the
   voice for UI text and prose.
-- **`font-mono` for technical strings**: handles, device and model ids,
-  workflow ids, phonetic transcriptions, and code blocks. Victor Mono Variable
-  is the face.
+- **`font-mono` for technical strings**: device and model ids, workflow ids,
+  phonetic transcriptions, and code blocks. Victor Mono Variable is the face.
 - **`font-mono` for the word under examination, and for its translation.** This
   is a separate rule from the technical-string one above, and it is scoped
   narrowly. It applies to the term and its translation in: the Entry card
@@ -225,11 +224,17 @@ container and shadow, and render simple rows on the page.
 
 The wrapper in `app/components/app-wrapper.tsx` renders both responsive layouts.
 Its header carries one account slot on every screen: a "Sign in" link to
-`/sign-in` for an anonymous visitor, and the reader's sign-in name, linking to
+`/sign-in` for an anonymous visitor, and the reader's email address, linking to
 `/account`, for a signed-in one. An account is required for every search since
 M184, so the shell shows the door rather than hiding it. The two doors are
 `/sign-up` and `/sign-in`; sync is a consequence of holding an account and is
 never presented as something a reader sets up.
+
+Since M191 an account is created with an email address and a password rather
+than a passphrase-derived identity. `/sign-up` and `/sign-in` are plain forms:
+address and password, nothing revealed and nothing to write down. A reader who
+forgets their password uses `/forgot-password` to request a mailed reset link;
+no screen in this flow shows a secret the app cannot show again.
 
 - **Mobile:** A fixed bottom tab bar (`app/components/bottom-nav.tsx`) links to
   Search, Lists, and History. A left-side slide-out drawer holds the full site

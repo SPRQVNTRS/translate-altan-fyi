@@ -101,10 +101,10 @@ const reviewStateSchema = z.object({
  * A `SyncedSnapshot` arriving from a peer, for `parseRemoteSnapshot` to
  * validate against.
  *
- * A decrypted blob is still UNTRUSTED INPUT. The ciphertext was authenticated,
- * so it is what some device of this account wrote — but that device may have
- * run an older or a newer build, and a shape mismatch must fail here rather
- * than surface as an undefined field on a screen. Each collection defaults to
+ * A PULLED BLOB IS STILL UNTRUSTED INPUT. The session proves it is what some
+ * device of this account wrote — but that device may have run an older or a
+ * newer build, and a shape mismatch must fail here rather than surface as an
+ * undefined field on a screen. Each collection defaults to
  * empty, so a blob written before a collection existed is read as "that device
  * had none", which is true, rather than rejected outright.
  */

@@ -83,20 +83,34 @@ export async function resolveUser(request: Request): Promise<AuthenticatedUser |
   return { id: user.id, email: user.email, isSuperadmin: user.isSuperadmin };
 }
 
+/** The two facts the client is given about the signed-in reader. Neither is a credential. */
+export interface DisplayUser {
+  /** Keys the device's own sync state and decides whether a cycle is worth starting. The cookie is what authorises one. */
+  id: number;
+  /** What the header renders. */
+  email: string;
+}
+
 /**
- * The signed-in address, for the chrome to render, or `null`.
+ * The signed-in reader, for the chrome to render, or `null`.
  *
  * IT MUST NEVER GATE ANYTHING. It is the same read {@link resolveUser}
  * performs, exposed for the root loader, which has no middleware above it. A
  * screen that decides something from this value has turned a display read into
  * a credential.
  *
+ * IT CARRIES THE ID AS WELL AS THE ADDRESS, and the id is not a leak: it is
+ * what `app/lib/sync/sync-session.ts` keys this device's own bookkeeping on, so
+ * without it the shell could not tell the sync engine that a session exists at
+ * all. Every request the engine then makes is authorised by the httpOnly
+ * cookie, never by this number.
+ *
  * @param request the incoming request.
- * @returns the signed-in address, or `null`.
+ * @returns the signed-in reader, or `null`.
  */
-export async function readUserForDisplay(request: Request): Promise<string | null> {
+export async function readUserForDisplay(request: Request): Promise<DisplayUser | null> {
   const user = await resolveUser(request);
-  return user?.email ?? null;
+  return user === null ? null : { id: user.id, email: user.email };
 }
 
 /** The refusal this request should get: JSON for `/api/`, a redirect for everything else. */

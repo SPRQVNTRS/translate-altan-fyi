@@ -1,3 +1,8 @@
+-- Emptied first: the ADD COLUMN below is NOT NULL with no default, which PostgreSQL
+-- refuses on a table that already holds rows. Stage carries one throwaway ciphertext
+-- blob from the encrypted layer, and that blob cannot be read by anything after this
+-- migration anyway: the key that opened it was deleted with `accounts`.
+DELETE FROM "sync_blobs";--> statement-breakpoint
 ALTER TABLE "enrichment_votes" DROP CONSTRAINT "enrichment_votes_account_id_accounts_id_fk";
 --> statement-breakpoint
 ALTER TABLE "sync_blobs" DROP CONSTRAINT "sync_blobs_account_id_accounts_id_fk";

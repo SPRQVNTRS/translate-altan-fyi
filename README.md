@@ -4,16 +4,16 @@ A vocabulary and translation web app. You type a word or a phrase. The app
 returns a translation, a plain explanation, and example sentences. You can
 collect terms into learning lists. The front page is public, and it shows a
 real worked example from the dictionary. Everything past it needs an account: a
-typed search, entry pages, lists, history, review, and voice input. Creating an
-account needs an invite, because every explanation the app writes costs the
-operator a language-model call. The hosted instance at
-[translate.altan.fyi](https://translate.altan.fyi) hands out those invites one
-at a time. Your lists and history live on your own device, and what you sync
-between your devices is encrypted end to end, so the server cannot read it.
-This repository contains the entire codebase under the MIT licence. You can
-host it yourself, and your own instance admits its first account with a
-bootstrap token that you set. See [Self-hosting](#self-hosting) below, and
-[ADR-0009](.adr/0009-invite-only-accounts.md) for why the gate exists.
+typed search, entry pages, lists, history, review, and voice input. Signup is
+open: create an account with an email address and a password, because every
+explanation the app writes costs the operator a language-model call, and the
+account is what the spending caps are measured against. Your lists and history
+live on your own device, and what you sync between your devices is stored on
+the server as plain JSON, which the operator can read. This repository
+contains the entire codebase under the MIT licence. You can host it yourself.
+See [Self-hosting](#self-hosting) below, and
+[ADR-0011](.adr/0011-plain-accounts-replace-the-encrypted-layer.md) for why the
+account model looks the way it does.
 
 ## Architecture in five lines
 
@@ -21,9 +21,11 @@ bootstrap token that you set. See [Self-hosting](#self-hosting) below, and
    process, with a second process for background tasks.
 2. Postgres is the only datastore. Drizzle manages the schema and migrations.
 3. pg-boss manages background jobs, and `worker.ts` runs them.
-4. The encrypted personal zone code comes directly from `openplate-sync` instead
-   of an external package, as explained in
-   [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
+4. The sync engine that merges a device's changes still comes from
+   `openplate-sync`, as explained in
+   [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md); the account model
+   above it is plain, as explained in
+   [ADR-0011](.adr/0011-plain-accounts-replace-the-encrypted-layer.md).
 5. The dictionary uses open data: Wikidata lexicographical entries (CC0) and
    Tatoeba sentences (CC0 and CC BY 2.0 FR). The `sources` table stores
    attribution data.
@@ -76,27 +78,35 @@ pnpm dev               # dev server and worker together
 
 The app runs at `http://localhost:${PORT}`, which defaults to `3000`.
 
-### Your first account
+### Create an account
 
-Signup is open. Create an account at `/sign-up`, or from the "Create account"
-button on the front page, then click the link in the confirmation mail. In
-development with no mail configured, that link is printed to the console the
-dev server is running in.
+Sign up at `/sign-up` with an email address and a password, or from the
+"Create account" button on the front page. The app mails a confirmation link
+to that address, and you must click it before your first sign-in. Sign in at
+`/sign-in` on any device with the same address and password, and your lists
+stay in sync between them.
 
-Then grant yourself the two operator screens under `/super/`, which are the
+### Password reset
+
+`/forgot-password` mails a link that lets you set a new password, and setting
+one signs every other device out.
+
+### Superadmin
+
+Grant yourself the two operator screens under `/super/`, which are the
 language-model configuration and an IP echo for checking `TRUST_PROXY`:
 
 ```bash
 pnpm cli account grant-superadmin <your-email>
-pnpm cli account list
 ```
 
-Both commands read the database directly, so run them where `.env` is readable.
-They do not need a superadmin account, which is what makes the first grant
-possible at all.
+The command reads the database directly, so run it where `.env` is readable.
+It does not need a superadmin account, which is what makes the first grant
+possible at all. On the hosted instance, `/super` is also fenced to the
+operator's VPN, so the grant alone is not enough to reach it there.
 
-A forgotten password is recoverable: `/forgot-password` mails a link that sets a
-new one, and doing so signs every other device out.
+For developers: without `PIGEON_API_KEY` set, the verification and reset links
+are printed to the server console instead of being mailed.
 
 The `pnpm dev` command starts two processes: `dev:server` (Express running React
 Router SSR) and `dev:worker` (the pg-boss job processor). You can run each
@@ -279,9 +289,10 @@ leaves the device
 says what travels and what does not).
 
 Until M191 the document was encrypted with a key the server could not derive,
-and accounts were opaque handles with a recovery code instead of an address.
-That bar cost the only thing it was protecting: a reader had no way to be told
-who they were signed in as and no way to reset a password. The claim in this
+and an account was identified by a random opaque name plus a one-time recovery
+code, with no address on file at all. That bar cost the only thing it was
+protecting: a reader had no way to be told who they were signed in as and no
+way to reset a password. The claim in this
 README and on the privacy page is what is true now, not what used to be.
 
 ## CLI
@@ -333,9 +344,10 @@ architectural subsystem. Add a new ADR when making major architectural changes.
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint plus anti-slop is the lint gate |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 |
-| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared |
-| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token |
+| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared, superseded by 0011 |
+| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token, superseded by 0011 |
 | [0010](.adr/0010-drop-the-inherited-tenancy.md) | Drop the inherited tenancy, org and CMS surfaces |
+| [0011](.adr/0011-plain-accounts-replace-the-encrypted-layer.md) | Plain accounts replace the encrypted layer |
 
 ## Contributing
 

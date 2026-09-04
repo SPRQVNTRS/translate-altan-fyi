@@ -1,5 +1,6 @@
 # 0008 — The E2EE sync code is copied from openplate-sync, not shared
 
+- **Status: Superseded by ADR-0011 (2026-09-04)**
 - **Status:** Accepted
 - **Date:** 2026-09-02
 - **Deciders:** operator (altan), M172 spec 01

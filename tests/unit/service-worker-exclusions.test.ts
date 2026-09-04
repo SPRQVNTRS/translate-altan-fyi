@@ -60,9 +60,23 @@ const NO_CACHE_RULES: readonly Rule[] = [
     needle: "url.search !== ''",
   },
   {
+    rule: 'the account screens must never be cached, each one renders a different page for a different reader',
+    needle: 'AUTH_PATHS.has(url.pathname)',
+  },
+  {
     rule: 'the exclusions must be applied in the fetch handler, a classifier nobody calls protects nothing',
     needle: 'isUncacheable(url)',
   },
+];
+
+/** Every account path the worker must refuse to cache. A path missing from the list is a page that would be cached. */
+const REQUIRED_AUTH_PATHS = [
+  '/sign-in',
+  '/sign-up',
+  '/sign-out',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
 ];
 
 /** The no-cache rules a given worker source no longer implements. */
@@ -70,12 +84,19 @@ function findBrokenRules(worker: string): Rule[] {
   return NO_CACHE_RULES.filter((entry) => !worker.includes(entry.needle));
 }
 
-/** The string literals inside the worker's `APP_SHELL` array literal. */
-function parseAppShell(worker: string): string[] {
-  const declaration = /APP_SHELL\s*=\s*\[([\s\S]*?)\]/.exec(worker);
+/** The string literals inside a named array literal in the worker source. */
+function parseArrayLiteral(worker: string, name: string): string[] {
+  // `new Set([...])` and a bare `[...]` both count: the worker uses whichever
+  // shape reads best, and this test is about the CONTENTS.
+  const declaration = new RegExp(`${name}\\s*=\\s*(?:new Set\\()?\\[([\\s\\S]*?)\\]`).exec(worker);
   if (!declaration) return [];
   const body = declaration[1] ?? '';
   return [...body.matchAll(/['"`]([^'"`]*)['"`]/g)].map((match) => match[1] ?? '');
+}
+
+/** The string literals inside the worker's `APP_SHELL` array literal. */
+function parseAppShell(worker: string): string[] {
+  return parseArrayLiteral(worker, 'APP_SHELL');
 }
 
 function lineOf(worker: string, needle: string): number {
@@ -108,6 +129,25 @@ describe('service worker exclusions', () => {
       [],
       `${WORKER_FILE} APP_SHELL is missing ${missing.join(', ')}, those routes will not open offline. Found: ${shell.join(', ')}`,
     );
+  });
+
+  it('names every account screen in the no-cache list', () => {
+    const listed = parseArrayLiteral(source, 'AUTH_PATHS');
+    assert.ok(listed.length > 0, `could not parse the AUTH_PATHS array out of ${WORKER_FILE}`);
+    const missing = REQUIRED_AUTH_PATHS.filter((path) => !listed.includes(path));
+    assert.deepEqual(
+      missing,
+      [],
+      `${WORKER_FILE} AUTH_PATHS is missing ${missing.join(', ')}, those pages would be served from cache to the next reader. Found: ${listed.join(', ')}`,
+    );
+  });
+
+  it('keeps the account screens out of the precached shell', () => {
+    // Precaching one would defeat the exclusion above from the other side: the
+    // install step writes it into the cache before any fetch is classified.
+    const shell = parseAppShell(source);
+    const overlap = shell.filter((path) => REQUIRED_AUTH_PATHS.includes(path));
+    assert.deepEqual(overlap, [], `${WORKER_FILE} precaches account screens: ${overlap.join(', ')}`);
   });
 
   it('uses no em dash', () => {

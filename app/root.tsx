@@ -74,11 +74,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   // screen. It costs the signed cookie plus one indexed row read, which is the
   // same read every gated route performs. Nothing gates on it: see
   // `readUserForDisplay`.
-  const userEmail = await readUserForDisplay(request);
+  const displayUser = await readUserForDisplay(request);
 
   return {
     toast,
-    userEmail,
+    userEmail: displayUser?.email ?? null,
+    // The id the sync engine keys this device's bookkeeping on. `_app.tsx`
+    // installs it; nothing authorises anything with it.
+    userId: displayUser?.id ?? null,
     language,
     isAnalyticsEnabled,
     headers: combineHeaders(toastHeaders),
@@ -158,6 +161,9 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
       // it. The header falls back to offering a way in, which is the harmless
       // direction to be wrong in: nothing gates on this value.
       userEmail: null,
+      // Same reasoning, and one more: with no id the sync engine is told there
+      // is no session, so it starts no cycle it could not authorise anyway.
+      userId: null,
       language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
       // Offline there is nothing to report and no tracker to report it to.
       isAnalyticsEnabled: false,

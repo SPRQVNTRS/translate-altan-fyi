@@ -76,6 +76,9 @@ export { createPrimaryStore, createOutboxStore, PRIMARY_DB_NAME, OUTBOX_DB_NAME 
 // The browser singleton handle, for SUBSCRIBING only — see the module doc.
 export { getPrimaryStore } from './persist';
 
+// Removing this device's copy, which sign-out and nothing else does.
+export { wipeDeviceStore } from './wipe';
+
 // Primary store: the authoritative on-device home for the synced entities. The
 // write helpers own the sync stamp — see `primary-store.ts`'s module doc.
 export {

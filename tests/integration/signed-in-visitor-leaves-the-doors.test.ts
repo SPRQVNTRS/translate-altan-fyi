@@ -138,10 +138,13 @@ describe('the doors, for somebody who is already through them', () => {
         'A signed-out stranger was redirected away from the account-creation form, so this instance cannot be joined.',
       );
 
+      // The sign-in loader answers with the `?next=` destination rather than
+      // `null`, so the assertion is that it RETURNED at all: a refusal here is
+      // a thrown redirect, which would fail the await above.
       const signInData = await signInLoader(
         loaderArgs({ url: 'https://translate.altan.fyi/sign-in', pattern: '/sign-in', cookie: null }),
       );
-      assert.equal(signInData, null, 'a signed-out visitor was turned away from the sign-in form');
+      assert.deepEqual(signInData, { next: '/' }, 'a signed-out visitor was turned away from the sign-in form');
     },
   );
 });

@@ -82,6 +82,21 @@ export type ResetResult =
   | { status: 'invalid-token' }
   | { status: 'invalid-password' };
 
+/**
+ * The outcome of a sign-in attempt.
+ *
+ * `refused` covers an unknown address AND a wrong password, which is what keeps
+ * this from being a list of who holds an account. `unconfirmed` is only ever
+ * reached with the correct password. See {@link signIn}.
+ */
+export type SignInResult =
+  | { status: 'ok'; user: SelectUser }
+  | { status: 'unconfirmed' }
+  | { status: 'refused' };
+
+/** The outcome of closing an account. */
+export type DeleteResult = { status: 'ok' } | { status: 'wrong-password' };
+
 /** The outcome of changing a password while signed in. */
 export type ChangeResult = { status: 'ok'; setCookie: string } | { status: 'wrong-password' } | { status: 'invalid-password' };
 
@@ -160,18 +175,28 @@ export async function verifyEmailToken(rawToken: string): Promise<ConsumeResult>
 }
 
 /**
- * The user behind an address and password, or `null`.
+ * The user behind an address and password.
  *
- * THE THREE REFUSALS ARE ONE ANSWER. An unknown address, a wrong password and
- * an unconfirmed address all return `null`, so a caller cannot turn this
- * function into an oracle even by accident. The bcrypt comparison runs even
- * when there is no row, so the two paths cost the same wall-clock time.
+ * TWO REFUSALS ARE ONE ANSWER, AND THE THIRD IS NOT. An unknown address and a
+ * wrong password both answer `refused`, so nothing here tells a stranger
+ * whether an address is on file. An address that is on file, confirmed by the
+ * CORRECT password and not yet verified, answers `unconfirmed`, because at that
+ * point the caller has already proved they hold the password: telling them to
+ * go and open the mailed link discloses nothing they did not just demonstrate,
+ * and the alternative is a person with the right credentials being told, over
+ * and over, that their password is wrong.
+ *
+ * THE ORDER OF THE CHECKS IS THE WHOLE PROPERTY. The password is compared
+ * BEFORE the confirmed state is read, and the bcrypt comparison runs even when
+ * there is no row at all, so an unknown address and a wrong password cost the
+ * same wall-clock time. Reading `emailVerifiedAt` first would answer
+ * `unconfirmed` to somebody guessing, which IS an oracle.
  *
  * @param input.email the address as typed.
  * @param input.password the password as typed.
- * @returns the user row, or `null`.
+ * @returns the user, an unconfirmed answer, or one refusal for two causes.
  */
-export async function signIn(input: { email: string; password: string }): Promise<SelectUser | null> {
+export async function signIn(input: { email: string; password: string }): Promise<SignInResult> {
   const user = await getRawDb().query.users.findFirst({ where: eq(users.email, normalizeEmail(input.email)) });
 
   // A DUMMY COMPARISON FOR AN UNKNOWN ADDRESS, so the answer takes the same
@@ -180,9 +205,9 @@ export async function signIn(input: { email: string; password: string }): Promis
   const hash = user?.passwordHash ?? DUMMY_HASH;
   const matches = await bcrypt.compare(input.password, hash);
 
-  if (!user || !matches) return null;
-  if (user.emailVerifiedAt === null) return null;
-  return user;
+  if (!user || !matches) return { status: 'refused' };
+  if (user.emailVerifiedAt === null) return { status: 'unconfirmed' };
+  return { status: 'ok', user };
 }
 
 /**
@@ -257,16 +282,28 @@ export async function changePassword(input: {
 }
 
 /**
- * Removes a user and everything hanging off them.
+ * Removes a user and everything hanging off them, on proof of the password.
  *
- * ONE STATEMENT, and that is the erasure guarantee: `user_tokens` and
- * `sync_blobs` both cascade, so there is no cleanup job to forget to run and no
- * window in which an orphaned document survives its owner.
+ * THE PASSWORD IS THE CONFIRMATION, and it replaces the "type DELETE to
+ * confirm" dialog this screen used to carry. A dialog asks whether the person
+ * at the keyboard meant it; the password asks whether the person at the
+ * keyboard is the owner, which is the question that matters on a phone somebody
+ * left unlocked on a table.
  *
- * @param userId the user to remove.
+ * THE DELETE ITSELF IS ONE STATEMENT, and that is the erasure guarantee:
+ * `user_tokens` and `sync_blobs` both cascade, so there is no cleanup job to
+ * forget to run and no window in which an orphaned document survives its owner.
+ *
+ * @param input.userId the signed-in user.
+ * @param input.password the current password, as typed.
+ * @returns `ok`, or `wrong-password` with nothing removed.
  */
-export async function deleteUser(userId: number): Promise<void> {
-  await getRawDb().delete(users).where(eq(users.id, userId));
+export async function deleteAccount(input: { userId: number; password: string }): Promise<DeleteResult> {
+  const user = await getRawDb().query.users.findFirst({ where: eq(users.id, input.userId) });
+  if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) return { status: 'wrong-password' };
+
+  await getRawDb().delete(users).where(eq(users.id, input.userId));
+  return { status: 'ok' };
 }
 
 // ---------------------------------------------------------------------------

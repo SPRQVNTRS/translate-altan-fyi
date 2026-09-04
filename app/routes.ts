@@ -89,8 +89,17 @@ export default [
     // that kept the old paths alive went with the invite links they preserved
     // (M191): an invite token was the only reason a query string had to survive
     // a hop, and there are no invites now.
-    route('/sign-up', 'routes/sign-up.tsx'),
-    route('/sign-in', 'routes/sign-in.tsx'),
+    // The five doors live OUTSIDE this shell, under `_auth-shell` below. The
+    // sidebar this layout opens is 256px wide for everybody, and a card
+    // centred inside the remaining column sits 128px right of the viewport
+    // centre, which a browser walk measured on 2026-09-04.
+    //
+    // POST only, and it has no component, so it needs no chrome. Its loader
+    // answers a GET with a redirect and changes nothing, because a URL that
+    // signs you out is a URL an image tag can visit. Its `clientAction` is what
+    // empties the device, which is why signing out is a route of its own rather
+    // than an intent on `/account`.
+    route('/sign-out', 'routes/sign-out.tsx'),
     // Public, and it reports the signed-out state rather than ending it. Its
     // loader already answers `null` for an anonymous visitor and never
     // redirects, which is the contract a public account screen needs.
@@ -102,7 +111,7 @@ export default [
     route('/offline', 'routes/offline.tsx'),
 
     // ── The gated half (M184, ADR-0009) ─────────────────────────────────
-    // A pathless layout carrying `accountMiddleware`. Every route in here has
+    // A pathless layout carrying `authMiddleware`. Every route in here has
     // NO public surface to preserve, so a layout-level redirect is the right
     // shape for it. See `routes/_app.gated.tsx` for why the middleware cannot
     // sit on `_app.tsx` itself.
@@ -127,9 +136,26 @@ export default [
     ]),
   ]),
 
-  layout('routes/_public.tsx', { id: '_public' }, [
-    route('/logout', 'routes/logout.tsx'),
+  // =============================================================================
+  // The account doors (M191/03)
+  // =============================================================================
+  // The same viewport-centred chrome `/legal/*` uses, and no navigation
+  // sidebar. See `routes/_auth-shell.tsx` for why these five are not in the app
+  // shell, and why `/account` still is.
+  //
+  // ALL FIVE ARE PUBLIC AND ALL FIVE MUST BE. A reader creating an account has
+  // no session, a reader clicking a confirmation link has none by definition,
+  // and a reader clicking a reset link has one they cannot use. A gate in front
+  // of any of them is a gate nobody can ever pass.
+  layout('routes/_auth-shell.tsx', { id: '_auth_shell' }, [
+    route('/sign-up', 'routes/sign-up.tsx'),
+    route('/sign-in', 'routes/sign-in.tsx'),
+    route('/verify-email', 'routes/verify-email.tsx'),
+    route('/forgot-password', 'routes/forgot-password.tsx'),
+    route('/reset-password', 'routes/reset-password.tsx'),
+  ]),
 
+  layout('routes/_public.tsx', { id: '_public' }, [
     // The three legal documents, all under `/legal/` rather than at the root.
     // One prefix keeps them together in a sitemap, in a footer and in a link
     // somebody pastes into a support thread, and it leaves the root namespace

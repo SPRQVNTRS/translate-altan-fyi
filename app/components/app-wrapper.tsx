@@ -115,7 +115,8 @@ function NavDrawer() {
 }
 
 /**
- * The account slot in the header: a sign-in name, or the way to get one.
+ * The account slot in the header: the reader's address, or the way to get an
+ * account.
  *
  * BOTH STATES ARE A DOOR, AND THAT IS THE POINT. Until M189 the shell showed
  * an anonymous visitor nothing at all about accounts, which was correct while
@@ -132,19 +133,16 @@ function NavDrawer() {
  * `truncate` with a width cap, because an address can be long and the header
  * must not grow a second line on a narrow phone.
  *
- * On `/sign-in` and `/sign-up` an anonymous visitor is already on the door or
- * its sibling, so the slot renders nothing there rather than a link to the
- * page they are already reading.
+ * IT NEEDS NO PER-PATH EXCEPTION ANY MORE. It used to render nothing on
+ * `/sign-in` and `/sign-up`, because a link to the page you are reading is
+ * noise. Those five screens left this shell in M191/03 (`_auth-shell.tsx`), so
+ * the only screen left that shows both doors as content is `/account`, and a
+ * signed-out reader arriving there is exactly who the link is for.
  */
 function AccountSlot() {
   const { t } = useTranslation();
-  const location = useLocation();
   const rootData = useRouteLoaderData<{ userEmail: string | null }>('root');
   const email = rootData?.userEmail ?? null;
-
-  if (email === null && (location.pathname === '/sign-in' || location.pathname === '/sign-up')) {
-    return null;
-  }
 
   if (email === null) {
     return (

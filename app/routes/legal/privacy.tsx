@@ -11,19 +11,23 @@ import { OPERATOR } from './operator';
 /**
  * The privacy policy, and the one page where a vague sentence is a liability.
  *
- * THE ASYMMETRY IS THE DOCUMENT. Two facts are both true and both required:
- * what you TYPE reaches the server as plaintext, because the server has to
- * search a dictionary with it, and what you SAVE is encrypted on the device
- * before it is sent. Selling the second without stating the first is the
- * failure mode this page exists to avoid. Section 4 states the plaintext half
- * before section 8 states the encrypted half, on purpose.
+ * THE ACCOUNT IS PLAIN NOW, AND SO IS THIS PAGE. Since ADR-0011 there is no
+ * encrypted personal zone to describe. Anonymous use still keeps everything on
+ * the device, but an account means the operator holds an address, a password
+ * hash and a READABLE copy of the lists, notes, revision progress and history.
+ * Section 8 says that in the plain words a reader needs, including the sentence
+ * about not writing into a note what you would not want the operator to see.
  *
  * EVERY CLAIM HERE WAS READ OUT OF THE CODE, NOT INFERRED FROM THE PLAN:
- *   - no account, and no email column: `drizzle/schema/accounts.ts` holds a
- *     handle, an optional display name and two HMAC verifiers, nothing else.
+ *   - the account row: `drizzle/schema/users.ts`, an email, a bcrypt hash and
+ *     the verification and password-change timestamps.
+ *   - the single-use mailed links, stored as SHA-256 hashes: `user_tokens` in
+ *     the same schema, and `app/services/auth.server.ts`.
+ *   - the readable sync copy: `sync_blobs.payload`, a `jsonb` column.
  *   - the device's own store: `app/lib/local-store/`.
  *   - history capped on the device: `HISTORY_MAX_ENTRIES` (500) and
  *     `HISTORY_MAX_AGE_DAYS` (90) in `app/lib/local-store/schema.ts`.
+ *   - the two mails and nothing else: `app/services/email.server.ts`.
  *   - the provider: `app/lib/llm/catalog.ts`, Gemini routed over OpenRouter.
  *   - what the provider receives: `app/lib/enrichment/job-payload.ts`, a
  *     `z.strictObject` with a headword and a language pair and no user field.
@@ -127,6 +131,7 @@ export function PrivacyContent() {
         <P className="mt-4">{t('privacy.s8Body1')}</P>
         <P className="mt-4">{t('privacy.s8Body2')}</P>
         <P className="mt-4">{t('privacy.s8Body3')}</P>
+        <P className="mt-4">{t('privacy.s8Body4')}</P>
       </section>
 
       <section className="mb-8">

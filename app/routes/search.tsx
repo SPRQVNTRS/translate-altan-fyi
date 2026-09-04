@@ -266,12 +266,20 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 md:max-w-5xl">
       {/* Today's three words, on the home screen and nowhere else. Client only:
           it renders nothing on the server and nothing until the device's own
-          store has been read, so the HTML this route sends is unchanged. It
+          store has been read, so the HTML this route sends is unchanged.
+
+          IT IS ONLY FOR A SIGNED-IN READER, and not because a stranger would
+          dislike it: reading the device's store OPENS `translate-primary` in
+          IndexedDB and starts a persister polling it. Rendering this for
+          everybody put that database back moments after sign-out deleted it,
+          and again on every reload of this page, which a browser walk found on
+          2026-09-04. A stranger also has no saved words for it to pick from,
+          so the card could never have anything to show. It
           sits above the two-pane surface, which is where it sat above the
           results area before the relayout: with the answer now beside the box
           rather than under it, "above both panes" is the only position that
           still means the same thing. */}
-      <DailyNudge />
+      {signedIn && <DailyNudge />}
 
       {/* THE HERO, ABOVE THE PANES, AND ONLY FOR A STRANGER. It is the section
           heading under the shell's own h1, and it carries the two doors

@@ -93,6 +93,11 @@ export const ROUTE_CLASSIFICATION = {
     access: 'public',
     reason: 'The shell itself. It carries no middleware on purpose, because `/` inside it must render for a stranger.',
   },
+  '_auth-shell.tsx': {
+    access: 'public',
+    reason:
+      'The chrome around the five account doors, and nothing else. It carries no middleware and refuses nobody: it exists to give those screens a viewport-centred container without the app shell sidebar.',
+  },
   '_app.gated.tsx': {
     access: 'gated-layout',
     reason: 'The pathless layout that carries `authMiddleware`. Everything nested under it inherits the gate.',
@@ -115,6 +120,26 @@ export const ROUTE_CLASSIFICATION = {
     reason:
       'Where every gated redirect lands, and where the link to account creation lives. Its loader sends an already signed-in reader to `/account` and turns no signed-out caller away.',
   },
+  'verify-email.tsx': {
+    access: 'public',
+    reason:
+      'Where the confirmation link lands. A reader clicking it has no session by definition, so a gate here would refuse everybody it exists for. The token in the query string is the whole of the proof, and its loader spends it in one statement.',
+  },
+  'forgot-password.tsx': {
+    access: 'public',
+    reason:
+      'The first half of a password reset, for a reader who cannot sign in. It answers the same sentence for a known and an unknown address, so it is open without being an oracle.',
+  },
+  'reset-password.tsx': {
+    access: 'public',
+    reason:
+      'Where the reset link lands. Same argument as `verify-email.tsx`: the mailed token is the credential, and the reader holding it has no usable session.',
+  },
+  'sign-out.tsx': {
+    access: 'public',
+    reason:
+      'Signing out must work from any state, including a broken one, so it refuses nobody. Its loader answers a GET with a redirect and changes nothing; only the POST ends a session, and its `clientAction` empties the device first.',
+  },
   'offline.tsx': {
     access: 'public',
     reason: 'The service-worker fallback. It renders with no network, which is not a state in which a session can be resolved.',
@@ -133,7 +158,6 @@ export const ROUTE_CLASSIFICATION = {
 
   // ── The public layout ──────────────────────────────────────────────────
   '_public.tsx': { access: 'public', reason: 'The chrome around the legal pages and the catch-all.' },
-  'logout.tsx': { access: 'public', reason: 'Signing out must work from any state, including a broken one.' },
   'legal/imprint.tsx': { access: 'public', reason: 'A legal document. It is a legal requirement that it is reachable.' },
   'legal/privacy.tsx': { access: 'public', reason: 'A legal document.' },
   'legal/terms.tsx': { access: 'public', reason: 'A legal document.' },

@@ -822,7 +822,7 @@ export function startLockedAutoSave(
     loadGate?: LoadGate | null;
     loadWaitTimeoutMs?: number;
   } = {},
-): () => void {
+): () => Promise<void> {
   if (!hasLocks) {
     log.warn('local-store: Web Locks API unavailable — falling back to unmutexed autosave for this tab', { dbName });
   }
@@ -858,12 +858,28 @@ export function startLockedAutoSave(
     pendingSinceSave = pendingSinceSave.filter((recorded) => !covered.has(recorded));
   }
 
-  async function triggerSave(): Promise<void> {
-    if (saveInFlight) {
-      saveAgainRequested = true;
-      return;
-    }
-    saveInFlight = true;
+  /**
+   * The save loop that is running right now, or an already-settled promise.
+   *
+   * IT EXISTS SO THE TEARDOWN CAN WAIT. Destroying a TinyBase persister while
+   * one of its own scheduled actions is mid-flight tears the action schedule
+   * out from under that action: `destroy()` filters and clears the schedule,
+   * and the running action's own `finally` then splices an array the destroy
+   * has already emptied. That surfaced in a browser walk on 2026-09-04 as
+   * `locked autosave failed ... Cannot read properties of undefined (reading
+   * 'splice')` at the instant of sign-out, and it left the delete that came
+   * after it unfinished. So the teardown drains before anything is destroyed.
+   */
+  let drain: Promise<void> = Promise.resolve();
+
+  /**
+   * Runs the coalescing save loop until nothing more is pending.
+   *
+   * `saveAgainRequested` is drained INSIDE this loop rather than by a second
+   * call, which is what makes awaiting {@link drain} enough: a write that
+   * lands while a save is in flight is covered by the same promise.
+   */
+  async function runSaveLoop(): Promise<void> {
     try {
       await runSaveCoveringPending();
       while (saveAgainRequested) {
@@ -875,6 +891,19 @@ export function startLockedAutoSave(
     } finally {
       saveInFlight = false;
     }
+  }
+
+  function triggerSave(): Promise<void> {
+    if (saveInFlight) {
+      saveAgainRequested = true;
+      // The caller is told to wait for the loop that is ALREADY running, not
+      // handed a resolved promise. A drain that returned early here would let
+      // a destroy start on top of a live save, which is the whole defect.
+      return drain;
+    }
+    saveInFlight = true;
+    drain = runSaveLoop();
+    return drain;
   }
 
   // Mechanism 5 (see this file's module doc). Non-null exactly while a load is
@@ -952,10 +981,24 @@ export function startLockedAutoSave(
   // chance to reach IndexedDB before the tab is torn down.
   const stopFlushOnHide = installFlushOnHide(triggerSave, { deps: flushOnHideDeps });
 
-  return () => {
+  let isStopped = false;
+
+  return async () => {
+    // IDEMPOTENT. `closePersistedStores` may be called twice (two sign-out
+    // clicks, or a retry), and `delListener` on an already-removed id is not
+    // something to rely on being harmless.
+    if (isStopped) {
+      await drain;
+      return;
+    }
+    isStopped = true;
+
+    // The listeners go first, so nothing can queue a NEW save while the drain
+    // below is waiting for the current one.
     store.delListener(listenerId);
     stopWatchingLoads();
     stopFlushOnHide();
+    await drain;
   };
 }
 
@@ -1108,13 +1151,112 @@ async function initPersistedStore(store: Store, dbName: string): Promise<Store> 
   // doesn't wait on winning anything. See `startLockedAutoSave`'s doc for why
   // this replaced the old single-elected-writer design (which silently
   // discarded every non-winning tab's writes — see this file's module doc).
-  startLockedAutoSave(store, dbName, persister);
+  const stopAutoSave = startLockedAutoSave(store, dbName, persister);
+
+  // BOTH TEARDOWNS ARE KEPT, and {@link closePersistedStores} is the only
+  // caller. Nothing here shuts down during a normal page's life; sign-out is
+  // the one moment this process has to let go of a database.
+  openHandles.set(dbName, { persister, stopAutoSave });
 
   return store;
 }
 
 let primaryPromise: Promise<Store> | null = null;
 let outboxPromise: Promise<Store> | null = null;
+
+/**
+ * What it takes to let go of one persisted store.
+ *
+ * `destroy` is narrowed to `void` rather than to TinyBase's own return (the
+ * persister itself, for chaining). Nothing here chains, and a seam that
+ * promised a persister back would have to name a vendor type this module
+ * otherwise never mentions.
+ */
+interface OpenStoreHandle {
+  persister: { destroy: () => void };
+  /** Removes the listeners AND awaits the save that is running, in that order. See {@link closePersistedStores}. */
+  stopAutoSave: () => Promise<void>;
+}
+
+/** The persisters this page has started, by database name. Empty until a store is first resolved. */
+const openHandles = new Map<string, OpenStoreHandle>();
+
+/**
+ * Lets go of every persisted store this page has opened.
+ *
+ * WHY SIGN-OUT CANNOT SKIP THIS, and why deleting the databases without it does
+ * nothing at all. `createIndexedDbPersister` runs an AUTO-LOAD POLL once a
+ * second, and each poll opens the database VERSIONLESS (`create=0`). So a
+ * `deleteDatabase` that succeeds is followed, within a second, by a poll that
+ * re-creates the very database that was just removed, as an empty v1 with no
+ * object stores at all. The poll is also what makes a delete arrive `blocked`.
+ *
+ * ── The order inside it is the fix, and it is not obvious ─────────────────
+ *
+ * A first version destroyed each persister immediately and nulled the two
+ * singletons first. A browser walk on 2026-09-04 found both faults it has:
+ *
+ *   1. `persister.destroy()` while one of that persister's own scheduled
+ *      actions is in flight tears the action schedule out from under it, and
+ *      the running action's `finally` then splices an array the destroy has
+ *      already emptied: `locked autosave failed ... Cannot read properties of
+ *      undefined (reading 'splice')`. So the SAVE IS DRAINED FIRST, by the
+ *      teardown `startLockedAutoSave` returns, and only then is the persister
+ *      destroyed.
+ *   2. Nulling `primaryPromise` before awaiting anything means a caller that
+ *      resolves the store during those awaits builds a BRAND NEW persister on
+ *      the same database, whose poll re-creates it moments later. So the
+ *      singletons are nulled LAST, and a handle leaves {@link openHandles}
+ *      only once its own teardown has finished.
+ *
+ * IT IS IDEMPOTENT AND SINGLE-FLIGHT. Two sign-out clicks, or a retry, share
+ * one run rather than racing two teardowns over the same persisters.
+ *
+ * THE SINGLETONS ARE RESET, so a later read rebuilds from an empty database
+ * rather than handing out a store whose persister is dead. That is the correct
+ * state after a sign-out: the same one a browser that has never opened this app
+ * is in.
+ *
+ * @returns the database names it let go of.
+ */
+export async function closePersistedStores(): Promise<string[]> {
+  closingPromise ??= closeEveryPersistedStore();
+  try {
+    return await closingPromise;
+  } finally {
+    closingPromise = null;
+  }
+}
+
+/** The single-flight slot for {@link closePersistedStores}. */
+let closingPromise: Promise<string[]> | null = null;
+
+/** The body of {@link closePersistedStores}. Separated so the single-flight guard above reads as one line. */
+async function closeEveryPersistedStore(): Promise<string[]> {
+  const closed: string[] = [];
+
+  // The map is NOT cleared up front. A handle is removed only after its own
+  // teardown resolved, so nothing that is still running is ever reachable
+  // through a structure this function already emptied. Deleting the CURRENT
+  // entry while iterating a `Map` is defined behaviour, and an entry added
+  // during one of the awaits below is visited too, which is what should happen
+  // to a store that was opened mid-close.
+  for (const [dbName, handle] of openHandles) {
+    // Drains the in-flight save and removes the listeners. It never throws:
+    // `runSaveLoop` logs its own failures.
+    await handle.stopAutoSave();
+    await handle.persister.destroy();
+    openHandles.delete(dbName);
+    closed.push(dbName);
+  }
+
+  // LAST, for the reason in the doc above: a caller that resolves a store
+  // while the awaits above are pending must get the store being torn down,
+  // not a fresh persister on the database that is about to be deleted.
+  primaryPromise = null;
+  outboxPromise = null;
+  return closed;
+}
 
 /**
  * The lazily-created, IndexedDB-backed PRIMARY store — the durable home for

@@ -90,7 +90,7 @@ are tempted to re-enable one:
 | `eslint/no-underscore-dangle` | `__workflowOrchestrator` and friends are deliberate `globalThis` singletons that survive HMR. |
 | `jsx-a11y/control-has-associated-label` | Fires on `<tr>` elements, which are not controls. Real label problems are still caught by `label-has-associated-control`, which stays on. |
 
-Also not enabled: the `react-perf` plugin, which flags every inline handler
+Also not enabled: the `react-perf` plugin, which flags every inline callback
 passed to a plain DOM element. It is built for memoized component trees and
 produces no signal here.
 
@@ -122,14 +122,15 @@ The boundary helpers that exist so you rarely need an assertion:
 | CLI | [.claude/cli.md](.claude/cli.md) |
 | Architecture Decisions | [.adr/README.md](.adr/README.md) |
 
-## Accounts and the encrypted personal layer
+## Accounts
 
 Two things about this app surprise people, so read them before touching anything
-under `app/lib/e2ee/`, `app/routes/sync.*` or `app/routes/api.v1.auth.*`.
+under `app/lib/sync/`, `app/routes/sign-*` or `app/routes/api.v1.auth.*`.
 
-**1. The app is invite-only, and the account gate is keyed on the request, not
-on the path.** Read [ADR-0009](.adr/0009-invite-only-accounts.md) before you
-move a route or a gate. The contract, in full:
+**1. Every search needs an account, and the account gate is keyed on the
+request, not on the path.** Signup is open (M191, [ADR-0011](.adr/0011-plain-accounts-replace-the-encrypted-layer.md)): there is no
+invite and no bootstrap token, so a route decision never needs to ask who
+minted a way in. The contract, in full:
 
 - `/` is public and must stay a `200` for a signed-out stranger, carrying a
   real worked example. It is the one screen that shows the product without
@@ -152,7 +153,9 @@ move a route or a gate. The contract, in full:
   `tests/integration/public-surface-*.test.ts` says so in executable form.
 - The doors are `/sign-in` and `/sign-up`. They were `/sync/login` and
   `/sync/setup` until M189. The old paths still answer, with a permanent
-  redirect that keeps the query string, so an `?invite=` survives the hop.
+  redirect that keeps the query string, from the era when a signup URL carried
+  an invite token that had to survive the hop; nothing survives that hop
+  today, since there is nothing left to carry.
 - **The home page and `/account` carry both doors.** This reverses the older
   rule that neither screen may ask anybody to sign up. That rule belonged to an
   anonymous-by-default product, and M184 ended it: an account is now required
@@ -177,8 +180,9 @@ move a route or a gate. The contract, in full:
 **2. The account is an address and a password (M191).** `users` holds the
 address, a bcrypt hash at cost 10, the confirmation instant, the password-change
 instant and the superadmin flag; `user_tokens` holds the digests of the two
-mailed links. Nothing here is encrypted material, and the synced document in
-`sync_blobs.payload` is plain JSON the operator can read.
+mailed links, `verify` and `reset`. Nothing here is derived material a browser
+computed, and the synced document in `sync_blobs.payload` is plain JSON the
+operator can read.
 
 Rules you cannot design around:
 
@@ -199,13 +203,28 @@ Rules you cannot design around:
 - **The rate limiter reads `x-client-ip`, which `server.ts` writes** from
   `req.ip` after Express resolves `trust proxy`, deleting any incoming value
   first. Reading `x-forwarded-for` in a middleware would count a header the
-  client can write.
-- **The encrypted layer is gone.** `app/lib/e2ee/`, the protocol document, the
+  client can write. It is an in-memory map (`app/middleware/rate-limit.ts`),
+  scoped to one process on purpose, and it resets on every deploy: a restart
+  clears every counter, which is accepted because the limiter's job is to slow
+  a script down, not to be exact.
+- **The old encrypted layer is gone.** `app/lib/e2ee/`, its wire specification, the
   `accounts`, `account_tokens`, `sync_key_records` and `invites` tables, and the
-  root secret they were peppered with, were all removed by M191. The copied sync ENGINE stays: `app/lib/sync/` still carries
-  the Lamport merge and the compare-and-swap loop, under
+  root secret they were peppered with, were all removed by M191. The copied sync
+  ENGINE stays: `app/lib/sync/` still carries the Lamport merge and the
+  compare-and-swap loop, under
   [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md), with the encrypt and
   decrypt steps replaced by JSON framing.
+- **Mail is a hard dependency, not an enhancement.** `app/services/email.server.ts`
+  sends over plain `fetch` against pigeon (`PIGEON_API_KEY`, `PIGEON_BASE_URL`),
+  from `EMAIL_FROM`. Production refuses to boot without both pigeon variables set
+  rather than fail a signup silently; every other environment falls back to a
+  console transport that prints the verification and reset links in full, which
+  is the only way to reach them in local dev with no mail service configured.
+
+**Tests for this area moved.** `tests/unit/e2ee/` is gone with the library it
+tested. In its place: `tests/unit/auth/` covers the password rule and the
+token digest and expiry logic, and `tests/unit/email/` covers the mail
+templates and the pigeon transport, including its console fallback.
 
 `users` is the only identity in this app. The organization tables are gone
 (M189, [ADR-0010](.adr/0010-drop-the-inherited-tenancy.md)): they held zero rows
@@ -216,7 +235,23 @@ screen-level superadmin is `users.is_superadmin`.
 `/super/*` holds two screens and nothing else: `llm`, which edits the model
 selection enrichment reads out of `app_settings`, and `whoami-ip`, which echoes
 the IP the server resolved so a `TRUST_PROXY` hop count can be checked against a
-live proxy. A bare `/super` redirects to `/super/llm`.
+live proxy. A bare `/super` redirects to `/super/llm`. On the hosted instance
+`/super` is fenced twice: Bay's `vpn_routes` restricts it to the operator's
+tailnet, and the superadmin session check runs as an independent second layer.
+
+### Account and mail environment variables
+
+| Variable | Required | What it does |
+|----------|----------|---------------|
+| `SESSION_SECRET` | Production | Signs and encrypts the session cookie. Rotating it signs everybody out. |
+| `PIGEON_API_KEY` | Production | The tenant key that authenticates mail sends to pigeon. |
+| `PIGEON_BASE_URL` | Production | The pigeon service address, e.g. `http://100.64.0.1:3601`. |
+| `EMAIL_FROM` | No, defaults to `no-reply@translate.altan.fyi` | The sender address on outgoing mail. |
+
+Production refuses to start if `PIGEON_API_KEY` or `PIGEON_BASE_URL` is unset.
+The root peppering secret and the one-shot signup token from the account model
+M191 removed are both gone, and no replacement was needed: this table is now
+the complete list.
 
 ## Architecture Decision Records (ADRs)
 
@@ -240,9 +275,10 @@ Significant decisions — anything that constrains future work, locks in a trade
 | [0004](.adr/0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint | Accepted |
 | [0005](.adr/0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](.adr/0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
-| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
-| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Accepted |
+| [0008](.adr/0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Superseded by 0011 |
+| [0009](.adr/0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Superseded by 0011 |
 | [0010](.adr/0010-drop-the-inherited-tenancy.md) | Drop the inherited tenancy, org and CMS surfaces | Accepted |
+| [0011](.adr/0011-plain-accounts-replace-the-encrypted-layer.md) | Plain accounts replace the encrypted layer | Accepted |
 
 ## Coding Style Summary
 
@@ -313,9 +349,9 @@ export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
 }
 ```
 
-**Layer 3 — DirectTransport handler** (`cli/lib/direct-transport-handlers.ts`)
+**Layer 3 — DirectTransport registration** (`cli/lib/direct-transport-handlers.ts`)
 
-Register a handler with the same path/method/shape as the HTTP route. This is what runs when the CLI is invoked without `--remote` (the default for local dev). All registrations live in one file — do **not** scatter `direct.register(...)` calls across command files.
+Register a responder with the same path/method/shape as the HTTP route. This is what runs when the CLI is invoked without `--remote` (the default for local dev). All registrations live in one file — do **not** scatter `direct.register(...)` calls across command files.
 
 ```typescript
 direct.register('GET', '/api/v1/foos', async ({ query }) => {
@@ -424,7 +460,7 @@ Schema migrations (`drizzle/migrations/`) change the shape of the DB. **Data mig
 **Key properties:**
 - Tracked in a `data_migrations` table (name + applied_at) so each runs at most once per environment
 - Discovered from `drizzle/data-migrations/<YYYY-MM-DD>-<slug>.ts` at startup
-- Each migration is an async function that receives a DB handle and runs inside a transaction
+- Each migration is an async function that receives a DB connection and runs inside a transaction
 - Run by `pnpm cli data-migration run` (deploy invokes this after schema migrations)
 
 **When to write one:**

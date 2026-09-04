@@ -55,6 +55,7 @@ gets an edit.
 | [0004](0004-custom-server-is-the-production-entry.md) | The custom `server.ts` is the production entrypoint | Accepted |
 | [0005](0005-oxlint-and-anti-slop-are-the-lint-gate.md) | oxlint + anti-slop is the lint gate | Accepted |
 | [0007](0007-one-linter-and-typescript-7.md) | One linter (oxlint), and TypeScript 7 | Accepted |
-| [0008](0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Accepted |
-| [0009](0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Accepted |
+| [0008](0008-e2ee-sync-copied-not-extracted.md) | The E2EE sync code is copied from openplate-sync, not shared | Superseded by 0011 |
+| [0009](0009-invite-only-accounts.md) | Invite-only accounts, bootstrapped by a one-shot token | Superseded by 0011 |
 | [0010](0010-drop-the-inherited-tenancy.md) | Drop the inherited tenancy, org and CMS surfaces | Accepted |
+| [0011](0011-plain-accounts-replace-the-encrypted-layer.md) | Plain accounts replace the encrypted layer | Accepted |

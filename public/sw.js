@@ -11,7 +11,7 @@
 // Bump CACHE_VERSION whenever the shell routes change. An install that already
 // ran an older shell keeps its old `pages-*` cache forever otherwise, because
 // nothing ever re-adds a newly listed entry to it.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const PAGES_CACHE = `pages-${CACHE_VERSION}`;
 
@@ -100,16 +100,29 @@ self.addEventListener('fetch', (event) => {
 // Request classifiers
 // ---------------------------------------------------------------------------
 
+// The account screens. Every one of them renders differently depending on who
+// is signed in, and two of them are reached from a mailed link. A cached copy
+// of any of them is a page showing the previous reader's state to the next one.
+const AUTH_PATHS = new Set([
+  '/sign-in',
+  '/sign-up',
+  '/sign-out',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+]);
+
 /**
  * Never cache: react-router's single-fetch route data (the `.data` suffix,
- * with or without a `_routes` search param), any `/api/` endpoint, and any URL
- * with a query string. A loader or action response is live data by definition,
- * and a query string means the URL names a specific answer rather than a
- * shell.
+ * with or without a `_routes` search param), any `/api/` endpoint, any account
+ * screen, and any URL with a query string. A loader or action response is live
+ * data by definition, and a query string means the URL names a specific answer
+ * rather than a shell.
  */
 function isUncacheable(url) {
   if (url.pathname.endsWith('.data')) return true;
   if (url.pathname.startsWith('/api/')) return true;
+  if (AUTH_PATHS.has(url.pathname)) return true;
   if (url.search !== '') return true;
   return false;
 }

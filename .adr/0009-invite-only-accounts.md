@@ -1,5 +1,6 @@
 # 0009: Invite-only accounts, bootstrapped by a one-shot token
 
+- **Status: Superseded by ADR-0011 (2026-09-04)**
 - **Status:** Accepted
 - **Date:** 2026-09-03
 - **Deciders:** operator

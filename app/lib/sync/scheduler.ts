@@ -14,13 +14,13 @@
  * ask the outbox to drain. That is correct for a WRITE and wrong for
  * everything else, because THE OUTBOX CARRIES WRITES. A device that has never
  * made a local edit has an empty outbox, `selectFlushableRecords` picks
- * nothing, and no cycle ever runs — so a second device signed in with the same
- * handle sat on "No lists yet" forever while the account's blob was sitting on
+ * nothing, and no cycle ever runs — so a second device signed into the same
+ * account sat on "No lists yet" forever while the account's blob was sitting on
  * the server. A device with nothing to say still needs to listen.
  *
  * So the boot, session, `focus` and `online` triggers now run a CYCLE. A cycle
- * is not a push: `runSyncCycleForCurrentSession` pulls, decrypts, merges,
- * applies, and pushes only when the merge contributed something
+ * is not a push: `runSyncCycleForCurrentSession` pulls, merges, applies, and
+ * pushes only when the merge contributed something
  * (`orchestrator.ts` skips the push when `payloadsEqual`), so running one on a
  * device with nothing to contribute costs a pull and no blob version.
  *
@@ -70,15 +70,29 @@ export const PUSH_DEBOUNCE_MS = 1_500;
  * flush. That is reported as a RETRY rather than a success: the intent has not
  * been carried up, and removing it from the queue on the strength of nobody
  * having tried would silently drop the edit that queued it.
+ *
+ * AN UNREADABLE DOCUMENT IS REPORTED AS `400`, WHICH IS FATAL. A payload this
+ * build cannot parse, a leftover from another shape of this app or one written
+ * by a newer one, throws `invalid` with no HTTP status of its own, and a `null`
+ * status would be classified as transient and retried eight times over several
+ * minutes for something no retry can fix. `classifyFlushOutcome` treats `400`
+ * as a permanent rejection, which parks the record as blocked and stops.
  */
 const syncIntentRunner: OutboxRunner = async () => {
   try {
     const result = await runSyncCycleForCurrentSession();
     return { ok: result !== null, status: null };
   } catch (cause) {
-    return { ok: false, status: isSyncRequestError(cause) ? cause.status : null };
+    return { ok: false, status: statusForFlush(cause) };
   }
 };
+
+/** The status `classifyFlushOutcome` should judge this failure by. See {@link syncIntentRunner}. */
+function statusForFlush(cause: unknown): number | null {
+  if (!isSyncRequestError(cause)) return null;
+  if (cause.kind === 'invalid') return cause.status ?? 400;
+  return cause.status;
+}
 
 /**
  * One cycle, with its failures absorbed.
@@ -128,6 +142,11 @@ export function startSyncScheduler(): () => void {
   };
 
   const onTrigger = (): void => {
+    // The store listener is attached here rather than once at start, because
+    // a session can appear mid-page and opening the store before one exists is
+    // what re-creates a just-deleted database. It returns immediately when
+    // there is no session or one is already attached.
+    void attachStoreListener();
     void catchUp();
   };
 
@@ -151,13 +170,33 @@ export function startSyncScheduler(): () => void {
     }, PUSH_DEBOUNCE_MS);
   };
 
+  /**
+   * Subscribes to local writes, and OPENS THE DEVICE'S STORE to do it.
+   *
+   * IT REFUSES TO RUN WITHOUT A SESSION, and that is not a micro-optimisation.
+   * Resolving the primary store CREATES `translate-primary` in IndexedDB and
+   * starts a persister polling it once a second. Doing that for a signed-out
+   * visitor put the database back moments after sign-out deleted it, and again
+   * on every reload of the home page, which is what a browser walk found on
+   * 2026-09-04. It also contradicts this module's own rule, stated above: with
+   * no session the scheduler subscribes to nothing.
+   *
+   * It is called again from the session trigger, so a reader who signs in
+   * mid-page gets the listener without a reload.
+   */
   const attachStoreListener = async (): Promise<void> => {
+    if (isStopped || getSyncSession() === null) return;
+    // Already subscribed. The session trigger fires on every focus and every
+    // session install, and a second listener would double every debounce.
+    if (detachStoreListener !== null) return;
+
     try {
       const store = await getPrimaryStore();
       const listenerId = store.addTablesListener(onLocalWrite);
       // The store resolves asynchronously, so a caller that stopped the
-      // scheduler in the meantime would otherwise be left subscribed forever.
-      if (isStopped) {
+      // scheduler, or signed out, in the meantime would otherwise be left
+      // subscribed forever.
+      if (isStopped || getSyncSession() === null) {
         store.delListener(listenerId);
         return;
       }
@@ -172,18 +211,17 @@ export function startSyncScheduler(): () => void {
 
   window.addEventListener('focus', onTrigger);
   window.addEventListener('online', onTrigger);
-  // The vault is the one place that knows a session appeared, and both the
-  // setup ceremony and the sign-in form reach it in the same turn that
-  // produced the key. Listening here is what lets a second device show its
-  // lists straight after it signs in, instead of waiting for the user to
-  // switch tabs and come back. The notification carries NO session: the DEK
-  // stays in the vault, and this module reads it back through
-  // `getSyncSession` like every other trigger.
+  // A session can appear mid-page: `_app.tsx` installs one as soon as the root
+  // loader reports a signed-in reader, which is the navigation right after the
+  // sign-in form posts. Listening here is what lets a second device show its
+  // lists straight after it signs in, instead of waiting for the user to switch
+  // tabs and come back. The notification carries NO session; this module reads
+  // it back through `getSyncSession` like every other trigger.
   setSyncSessionListener(onTrigger);
-  void attachStoreListener();
-  // Boot. Usually a no-op, because a reload loses the DEK and the session is
-  // null a line later — the session trigger above is what covers the case this
-  // one cannot.
+  // Boot. It used to be a no-op, because a reload lost the in-memory data key
+  // and the session was null a line later. The credential is a cookie now and
+  // `_app.tsx` installs the session from the root loader's answer, so a reload
+  // on a signed-in device pulls here rather than waiting for a focus event.
   onTrigger();
 
   return () => {
@@ -193,6 +231,7 @@ export function startSyncScheduler(): () => void {
     window.removeEventListener('online', onTrigger);
     setSyncSessionListener(null);
     detachStoreListener?.();
+    detachStoreListener = null;
     setOutboxRunner(null);
   };
 }
