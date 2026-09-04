@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
 import { Link } from 'react-router';
 import type { Route } from './+types/settings';
+import { InstallApp } from '#app/components/install-app';
 import { LanguageToggle } from '#app/components/language-toggle';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveUser } from '#app/middleware/auth';
@@ -43,6 +44,9 @@ export default function SettingsRoute() {
           <LanguageToggle />
         </div>
       </div>
+      {/* Renders nothing on a device that cannot install the app, and on one
+          that already has, so there is no empty card to explain. */}
+      <InstallApp />
       <LegalLinksCard />
     </div>
   );
