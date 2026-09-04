@@ -223,7 +223,13 @@ container and shadow, and render simple rows on the page.
 
 ## 6. The shell
 
-The wrapper in `app/components/app-wrapper.tsx` renders both responsive layouts:
+The wrapper in `app/components/app-wrapper.tsx` renders both responsive layouts.
+Its header carries one account slot on every screen: a "Sign in" link to
+`/sign-in` for an anonymous visitor, and the reader's sign-in name, linking to
+`/account`, for a signed-in one. An account is required for every search since
+M184, so the shell shows the door rather than hiding it. The two doors are
+`/sign-up` and `/sign-in`; sync is a consequence of holding an account and is
+never presented as something a reader sets up.
 
 - **Mobile:** A fixed bottom tab bar (`app/components/bottom-nav.tsx`) links to
   Search, Lists, and History. A left-side slide-out drawer holds the full site

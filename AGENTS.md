@@ -149,13 +149,23 @@ move a route or a gate. The contract, in full:
   `app/routes/_app.gated.tsx`, which carries `accountMiddleware`. Not
   `authMiddleware`, which also demands a linked `users` row: almost no account
   has one, so it would bounce nearly every invited reader.
-- The front door stays open. `/account`, `/sync/login`, `/sync/setup` and
-  `/offline` are never gated, because a gate in front of the sign-in page is a
-  gate nobody can ever pass. `/healthcheck` and `/legal/*` stay public too, and
+- The front door stays open. `/account`, `/sign-in`, `/sign-up` and `/offline`
+  are never gated, because a gate in front of the sign-in page is a gate nobody
+  can ever pass. `/healthcheck` and `/legal/*` stay public too, and
   `tests/integration/public-surface-*.test.ts` says so in executable form.
-- `/` and `/account` still ask nobody to sign up. The invite arrives out of
-  band, and the one signup link in the app sits on `/sync/login`, whose reader
-  is already dealing with an account.
+- The doors are `/sign-in` and `/sign-up`. They were `/sync/login` and
+  `/sync/setup` until M189. The old paths still answer, with a permanent
+  redirect that keeps the query string, so an `?invite=` survives the hop.
+- **The home page and `/account` carry both doors.** This reverses the older
+  rule that neither screen may ask anybody to sign up. That rule belonged to an
+  anonymous-by-default product, and M184 ended it: an account is now required
+  for every search, so a home page with no way in is a wall, not restraint.
+  `/sign-up` is the primary action and `/sign-in` the secondary one on both
+  screens, and the shell header carries the same pair.
+- **An account is an account, and sync is a consequence of holding one.** No
+  user-facing screen presents sync as something to set up. In the interface the
+  `handle` is a "sign-in name" and the passphrase is a "password"; the code, the
+  schema and `PROTOCOL.md` keep their own names for both.
 - Creating an account needs an invite. `ACCOUNT_BOOTSTRAP_TOKEN` stands in for
   one while `accounts` is empty, and it dies with the first account. Every
   cause of refusal answers with one `403` and one message, so signup is not an
@@ -168,9 +178,10 @@ move a route or a gate. The contract, in full:
   decides who may reach it. A new route file that nobody classified fails a
   unit test.
 
-**2. There is no email, no password and no reset link.** Accounts are identified
-by a `handle`, a short opaque name the CLIENT generates. Authentication is a
-passphrase, from which the browser derives an Argon2id key and then two separate
+**2. There is no email address and no reset link.** Accounts are identified by a
+`handle`, a short opaque name the CLIENT generates, which the interface calls a
+sign-in name. Authentication is a passphrase, which the interface calls a
+password, and from which the browser derives an Argon2id key and then two separate
 HKDF branches: one becomes the key-encryption key that wraps the data key, the
 other becomes an auth hash. The server stores only `HMAC(pepper, authHash)` and
 never sees the passphrase, the KEK or the data key. Recovery is a recovery code,

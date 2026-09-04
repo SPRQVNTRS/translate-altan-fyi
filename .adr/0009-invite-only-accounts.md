@@ -127,3 +127,32 @@ already got through the gate.
   has no address column, and why `app/lib/invites/` sits outside
   `app/lib/e2ee/`.
 - `PROTOCOL.md` §5.8, the normative signup flow the redemption check hangs off.
+
+## Amendment, 2026-09-04: the doors are named, and they are visible
+
+Two things this ADR settled in M184 are now wrong, and both are corrected here
+rather than in a second ADR, because both are consequences of the decision
+above rather than new decisions.
+
+**The routes are `/sign-in` and `/sign-up`.** They were `/sync/login` and
+`/sync/setup`. The old names described the machinery, not the reader: a person
+arriving at an invite-only product creates an account, and their devices then
+carry the same words. Sync is a consequence of holding an account and is no
+longer presented as something a reader sets up. The old paths answer forever,
+with a permanent redirect that preserves the query string, because an invite is
+handed out as `?invite=<token>` and a hop that dropped it would read as a broken
+invite.
+
+**The rule that `/` and `/account` must never prompt for signup is removed.**
+That rule was correct for an anonymous-by-default product, where an account
+bought sync and nothing else, and asking for one on the home page would have
+been asking for something the reader did not need. The gate this ADR introduced
+removed the premise: every search now requires an account. What survived was a
+product that demands an account, hides the only link to creating one on the
+sign-in page, and shows a stranger a working demonstration with no way in. That
+is a defect, not restraint. The home page, `/account` and the app shell header
+now carry "Create account" as the primary action and "Sign in" beside it.
+
+Nothing about the invite itself changes. Creating an account still needs a valid
+invite or the bootstrap token, and signup still answers every cause of refusal
+with one message, so a visible door is not a wider one.

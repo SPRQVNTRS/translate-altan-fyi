@@ -389,12 +389,12 @@ async function deleteHalfBuiltAccount(authHash: string): Promise<void> {
     });
     if (!response.ok) {
       reportError(new Error(`rollback failed with status ${response.status}`), {
-        operation: 'sync-setup',
+        operation: 'create-account',
         step: 'deleteHalfBuiltAccount',
       });
     }
   } catch (cause) {
-    reportError(cause, { operation: 'sync-setup', step: 'deleteHalfBuiltAccount' });
+    reportError(cause, { operation: 'create-account', step: 'deleteHalfBuiltAccount' });
   }
 }
 

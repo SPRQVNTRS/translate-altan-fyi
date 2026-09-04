@@ -11,8 +11,8 @@
  * which screen is showing and how it responds to an event. The actual
  * engine calls (Argon2id/HKDF/AES-GCM — `app/lib/sync/engine/`) and the
  * key-record PUT requests are the imperative shell around this reducer,
- * living in `SyncSetupFlow`
- * (`#app/components/sync-setup-flow.tsx`) — mirrors the `tao-of-node-react`
+ * living in `CreateAccountFlow`
+ * (`#app/components/account/create-account-flow.tsx`) — mirrors the `tao-of-node-react`
  * "useReducer over chained useState" pattern: invalid combinations (e.g.
  * "generating" AND an error message) are unrepresentable because they're
  * different `kind`s, not independent booleans.
@@ -31,15 +31,19 @@ export const MIN_SYNC_PASSPHRASE_LENGTH = 12;
 export type Translate = (key: string, params?: Readonly<Record<string, string | number | boolean | Date>>) => string;
 
 /**
- * Validates a candidate sync passphrase.
+ * Validates a candidate password.
  *
- * @param passphrase - the raw, untrimmed passphrase input.
+ * The interface says "password" and the protocol says "passphrase". They are
+ * the same string: this is the one place the two vocabularies meet, so the
+ * name faces the UI and the constant it checks keeps the wire's word.
+ *
+ * @param password - the raw, untrimmed password input.
  * @param t - translation lookup for the rejection message.
- * @returns an error message when invalid, or `null` when the passphrase is acceptable.
+ * @returns an error message when invalid, or `null` when the password is acceptable.
  */
-export function validateSyncPassphrase(passphrase: string, t: Translate): string | null {
-  if (passphrase.trim().length < MIN_SYNC_PASSPHRASE_LENGTH) {
-    return t('sync.setup.passphraseTooShort', { min: MIN_SYNC_PASSPHRASE_LENGTH });
+export function validatePassword(password: string, t: Translate): string | null {
+  if (password.trim().length < MIN_SYNC_PASSPHRASE_LENGTH) {
+    return t('account.passwordTooShort', { min: MIN_SYNC_PASSPHRASE_LENGTH });
   }
   return null;
 }
@@ -61,10 +65,10 @@ export function validateSyncPassphrase(passphrase: string, t: Translate): string
 export type SyncSetupOutcome = { status: 'ready'; handle: string; recoveryCode: string };
 
 export type SyncSetupState =
-  /** The one form: the handle (generated, editable) and the passphrase. */
+  /** The one form: the invite code and the password. */
   | { kind: 'enter-details'; error: string | null }
   | { kind: 'generating' }
-  /** THE ACCOUNT CARD: handle and recovery code on one screen, behind one save confirmation. */
+  /** THE READY SCREEN: sign-in name and recovery code on one screen, behind one save confirmation. */
   | { kind: 'show-account-card'; handle: string; recoveryCode: string; hasConfirmedSaved: boolean }
   | { kind: 'error'; message: string }
   | { kind: 'complete' };

@@ -4,8 +4,8 @@
  * WHY THIS CASE EXISTS AT ALL
  *   Every other case in this milestone shuts a door, and the cheapest way to
  *   make all of them green is to shut every door. That would ship an instance
- *   nobody can join, the operator included. `/account`, `/sync/setup` and
- *   `/sync/login` are the front door: they are how an invited person becomes a
+ *   nobody can join, the operator included. `/account`, `/sign-up` and
+ *   `/sign-in` are the front door: they are how an invited person becomes a
  *   reader, and a gate in front of them is a gate nobody can ever pass.
  *
  * TWO LINKS, BOTH CHECKED
@@ -15,8 +15,8 @@
  *   request with no cookie, and answers `null` rather than throwing, which is
  *   the contract a public account screen needs.
  *
- * THE FRONT DOOR IS CHECKED AS A SET, not one route. `sync.setup.tsx` and
- * `sync.login.tsx` are asserted ungated in the same case, because losing either
+ * THE FRONT DOOR IS CHECKED AS A SET, not one route. `sign-up.tsx` and
+ * `sign-in.tsx` are asserted ungated in the same case, because losing either
  * one has the same effect as losing this one.
  *
  * NO ROW IS CREATED OR DELETED. Both cases only read.
@@ -40,7 +40,7 @@ const DB_HOST = process.env.DB_HOST;
 const GATED_LAYOUT_FILE = 'routes/_app.gated.tsx';
 
 /** The three files an invited person has to reach before they have an account. */
-const FRONT_DOOR_FILES = ['routes/account.tsx', 'routes/sync.setup.tsx', 'routes/sync.login.tsx'];
+const FRONT_DOOR_FILES = ['routes/account.tsx', 'routes/sign-up.tsx', 'routes/sign-in.tsx'];
 
 /**
  * Every descendant file of the first entry with this file, at any depth.

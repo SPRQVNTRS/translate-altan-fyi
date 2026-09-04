@@ -114,7 +114,7 @@ function searchRequest(q: string): Request {
   createdCounterKeys.push(counterKey('ip', ip));
   const url = `https://translate.altan.fyi/search?q=${encodeURIComponent(q)}&from=${FROM}&to=${TO}`;
   // SIGNED IN, SINCE M184. A typed search requires an account: the loader
-  // redirects a signed-out caller to `/sync/login` before it reads the
+  // redirects a signed-out caller to `/sign-in` before it reads the
   // dictionary, so an anonymous request here would assert nothing about the
   // panel. The session is a real invited account, created in `before()`,
   // because the gate resolves the access token against the database and a

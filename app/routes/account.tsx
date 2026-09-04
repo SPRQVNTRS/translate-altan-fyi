@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
+import { Link } from '#app/components/link';
+import { buttonVariants } from '#app/components/ui/button';
 import type { Route } from './+types/account';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { getAccountSession } from '#app/services/account-session.server';
@@ -90,10 +92,17 @@ function formatByteSize(input: { bytes: number; language: string }): string {
  * There are no plans and no payment in this product, so this screen is about
  * the device and the account, never about billing.
  *
- * NO SIGN-IN CALL TO ACTION, IN EITHER STATE. This is a navigation
- * destination, and an account prompt on one would make the app ask for an
- * account on a path that must never need one. The single entry point to
- * syncing is the card on `/settings`, and the signed-out copy says so.
+ * THE SIGNED-OUT STATE CARRIES BOTH DOORS, THE SAME PAIR THE HOME PAGE DOES.
+ * The old rule here was the opposite: no sign-in call to action in either
+ * state, because a navigation destination must not ask for an account the
+ * product does not need. M184 removed the premise by making an account
+ * mandatory for every search, and this page then showed a reader the word
+ * "account" and no way to get one. A screen named after the thing is the
+ * second most obvious place to look for it, after the home page.
+ *
+ * IT IS STILL NOT GATED. Showing the doors is not the same as demanding one
+ * before the page will render: the loader above answers `null` and this
+ * component renders the signed-out card.
  */
 export default function AccountRoute({ loaderData }: Route.ComponentProps) {
   const { t, i18n } = useTranslation();
@@ -110,6 +119,16 @@ export default function AccountRoute({ loaderData }: Route.ComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           {handle === null ? t('account.signedOutBody') : t('account.signedInBody')}
         </p>
+        {handle === null && (
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <Link to="/sign-up" className={buttonVariants()}>
+              {t('account.createAction')}
+            </Link>
+            <Link to="/sign-in" className="text-sm underline underline-offset-4 hover:text-foreground">
+              {t('account.signInAction')}
+            </Link>
+          </div>
+        )}
         {handle !== null && (
           <div className="mt-4">
             <div className="text-xs text-muted-foreground">{t('account.handleLabel')}</div>

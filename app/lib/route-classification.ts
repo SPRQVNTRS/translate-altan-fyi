@@ -98,13 +98,23 @@ export const ROUTE_CLASSIFICATION = {
     access: 'public',
     reason: 'Reports the signed-out state rather than ending it. Its loader answers `null` for an anonymous visitor and never redirects.',
   },
-  'sync.setup.tsx': {
+  'sign-up.tsx': {
     access: 'public',
-    reason: 'Account creation. A gate here would be a gate nobody could ever pass.',
+    reason:
+      'Account creation. A gate here would be a gate nobody could ever pass. Its loader reads `?invite=` from the URL, and sends a reader who ALREADY has a resolvable session on to `/account`: it refuses nobody, it answers a finished question.',
   },
-  'sync.login.tsx': {
+  'sign-in.tsx': {
     access: 'public',
-    reason: 'Where every gated redirect lands, and where the link to account creation lives.',
+    reason:
+      'Where every gated redirect lands, and where the link to account creation lives. Its loader sends an already signed-in reader to `/account` and turns no signed-out caller away.',
+  },
+  'sync.setup-redirect.ts': {
+    access: 'public',
+    reason: 'A permanent redirect from the old `/sync/setup` to `/sign-up`. It reads no session and answers every caller the same way.',
+  },
+  'sync.login-redirect.ts': {
+    access: 'public',
+    reason: 'A permanent redirect from the old `/sync/login` to `/sign-in`. It reads no session and answers every caller the same way.',
   },
   'offline.tsx': {
     access: 'public',

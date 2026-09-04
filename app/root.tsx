@@ -15,6 +15,7 @@ import {
 import type { Route } from './+types/root';
 import { getToast } from '#app/utils/toast.server';
 import { sessionStorage } from '#app/services/session.server';
+import { readAccountHandleForDisplay } from '#app/services/account-session.server';
 import stylesheet from './app.css?url';
 import { combineHeaders } from '#app/utils/misc';
 import { Toaster } from '#app/components/ui/toaster';
@@ -75,9 +76,18 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Stage and localhost fall through both and render no tag at all.
   const isAnalyticsEnabled = isAnalyticsHost(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
 
+  // THE NAME IN THE HEADER, AND NOTHING MORE. The app shell shows either the
+  // reader's sign-in name or a way in, so it needs one bit of account state on
+  // every screen. It is read straight off the signed cookie: no token is
+  // resolved and no row is read, so this hot path costs no round trip and
+  // keeps answering while the database is down. Nothing gates on it, see
+  // `readAccountHandleForDisplay`.
+  const accountHandle = await readAccountHandleForDisplay(request);
+
   return {
     toast,
     user,
+    accountHandle,
     language,
     isAnalyticsEnabled,
     headers: combineHeaders(toastHeaders),
@@ -154,6 +164,10 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
     return {
       toast: null,
       user: null,
+      // The cookie is httpOnly, so client code cannot read the name out of it.
+      // The header falls back to offering a way in, which is the harmless
+      // direction to be wrong in: nothing gates on this value.
+      accountHandle: null,
       language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
       // Offline there is nothing to report and no tracker to report it to.
       isAnalyticsEnabled: false,

@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { passphraseStrengthKey, ratePassphrase } from '#app/lib/e2ee/flows/passphrase-strength';
+import { passphraseStrengthKey, ratePassphrase } from '#app/lib/e2ee/flows/password-strength';
 import { cn } from '#app/lib/utils';
 
 /**
- * The live strength hint under the passphrase field.
+ * The live strength hint under the password field.
  *
  * Three bands, exactly the three `ratePassphrase` can return, and the label
  * comes from `passphraseStrengthKey` rather than from a lookup table written
@@ -12,16 +12,17 @@ import { cn } from '#app/lib/utils';
  * as a plausible word and nobody files a bug about it. There is no `?? key`
  * fallback for the same reason, a missing translation must be a visible hole.
  *
- * It is a HINT and never a gate. The hard floor is `validateSyncPassphrase`,
+ * It is a HINT and never a gate. The hard floor is `validatePassword`,
  * and this widget refuses nothing: a meter that blocks pushes people towards
  * whatever pattern satisfies it rather than towards length.
  */
 const FILLED_SEGMENTS = { weak: 1, fair: 2, strong: 3 } as const;
 const TOTAL_SEGMENTS = 3;
 
-export function PassphraseStrengthMeter({ passphrase }: { passphrase: string }) {
+export function PasswordStrengthMeter({ password }: { password: string }) {
   const { t } = useTranslation();
-  const strength = ratePassphrase(passphrase);
+  // `ratePassphrase` keeps the protocol's word; the prop keeps the interface's.
+  const strength = ratePassphrase(password);
   const filled = FILLED_SEGMENTS[strength];
 
   return (

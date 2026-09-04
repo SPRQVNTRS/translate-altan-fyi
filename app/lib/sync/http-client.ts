@@ -12,7 +12,7 @@
  * section 4.1 pairs with "no ambient credential" buys nothing, while an
  * httpOnly cookie keeps the token out of reach of injected script. Every
  * request below therefore carries `credentials: 'same-origin'` and NO
- * `Authorization` header, exactly as `app/components/sync/sync-client.ts`
+ * `Authorization` header, exactly as `app/components/account/sync-client.ts`
  * already does.
  *
  * ── Every response is parsed ──────────────────────────────────────────────

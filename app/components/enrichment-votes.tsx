@@ -190,7 +190,7 @@ export function EnrichmentVotes(props: EnrichmentVotesProps): ReactNode {
           and do not make this one more prominent. */}
       {messageKey !== null && isSignInPrompt && (
         <p className="mt-2 text-xs">
-          <Link to="/sync/login" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <Link to="/sign-in" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
             {t(messageKey)}
           </Link>
         </p>

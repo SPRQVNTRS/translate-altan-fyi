@@ -61,7 +61,7 @@ import type { SessionAccount } from '#app/types/session';
 const log = createComponentLogger('AccountSession');
 
 /** Where a signed-out visitor is sent when a route requires an account. */
-export const ACCOUNT_LOGIN_PATH = '/sync/login';
+export const ACCOUNT_LOGIN_PATH = '/sign-in';
 
 /** The resolved caller. Deliberately minimal: everything else is a database read away. */
 export interface AccountSessionValue {
@@ -109,6 +109,26 @@ export async function getAccountSession(request: Request): Promise<AccountSessio
     });
     return null;
   }
+}
+
+/**
+ * The sign-in name in the cookie, for the chrome to render, or `null`.
+ *
+ * IT VALIDATES NOTHING AND IT MUST NEVER GATE ANYTHING. Unlike
+ * {@link getAccountSession} it does not resolve the access token, so it costs
+ * no database round trip and it keeps answering while the database is down.
+ * That is the right trade for a name in a header and the wrong one for a
+ * decision: an expired session still renders its name here, and the first
+ * gated screen the reader opens sends them to `/sign-in` as it always did.
+ *
+ * The cookie is signed, so the name cannot be forged, only stale.
+ *
+ * @param request the incoming request, read only for its cookie header.
+ * @returns the stored handle, or `null` when the cookie carries no account.
+ */
+export async function readAccountHandleForDisplay(request: Request): Promise<string | null> {
+  const stored = await readAccountCookie(request);
+  return stored?.handle ?? null;
 }
 
 /**

@@ -21,8 +21,8 @@ import { accountMiddleware } from '#app/middleware/auth';
  *   `/?q=` wide open. A rule keyed on the shape of the request belongs in the
  *   loader that reads that shape, which is where `search.tsx` now carries it.
  *
- * WHAT IS NOT IN HERE, DELIBERATELY. `/`, `/search`, `/account`, `/sync/login`,
- * `/sync/setup` and `/offline` all stay outside: the first two are public with
+ * WHAT IS NOT IN HERE, DELIBERATELY. `/`, `/search`, `/account`, `/sign-in`,
+ * `/sign-up` and `/offline` all stay outside: the first two are public with
  * a request-keyed rule inside their shared loader, the next three are the front
  * door an invited person arrives through, and `/offline` must render with no
  * network at all, which is not a state in which a session can be resolved.

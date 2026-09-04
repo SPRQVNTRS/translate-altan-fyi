@@ -1,7 +1,7 @@
 import type { Route } from './+types/search';
 import type { MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
-import { Landing } from '#app/components/landing';
+import { Landing, LandingDoors } from '#app/components/landing';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchPanes } from '#app/components/search-panes';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
@@ -14,7 +14,7 @@ import { normalizeQuery } from '#app/lib/dictionary/normalize';
 import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
-import { requireAccountSession } from '#app/services/account-session.server';
+import { readAccountHandleForDisplay, requireAccountSession } from '#app/services/account-session.server';
 import { getRawDb } from '#drizzle/tenant-db';
 
 // `meta()` runs outside the React tree, so it has no `t`. It goes through the
@@ -76,12 +76,31 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   below. A rule inside the one loader both ids share can do neither, and a
   //   third alias inherits it for free.
   //
-  //   `requireAccountSession` THROWS A REDIRECT to `/sync/login`. It does not
+  //   `requireAccountSession` THROWS A REDIRECT to `/sign-in`. It does not
   //   return a flag, so there is no way to forget to act on the answer, and the
   //   throw is a `Response` the router turns into an ordinary 302. Nothing here
   //   touches the device's own store: the gate blocks the screen, and a
   //   visitor's local lists and history are untouched by the redirect.
   const account = q === '' ? null : await requireAccountSession(request);
+
+  // WHO IS READING, ASKED SEPARATELY AND ONLY ON THE OPEN BRANCH.
+  //   The gate above answers "may this request search", and on the landing
+  //   branch it deliberately does not ask. The screen still needs to know
+  //   whether somebody is signed in, for one reason: the doors above the pane
+  //   invite a reader to create an account they already hold.
+  //
+  //   IT IS A DISPLAY QUESTION, SO IT IS ANSWERED BY THE DISPLAY READ.
+  //   `readAccountHandleForDisplay` unseals the signed cookie and resolves no
+  //   token, so the public landing page costs no extra query, and the answer
+  //   here is the same one the chrome's header already renders from the ROOT
+  //   loader. A stale cookie therefore hides the doors and keeps the name in
+  //   the header, which is one wrong answer rather than two disagreeing ones,
+  //   and the first search still redirects to `/sign-in` as it always did.
+  //
+  //   IT GATES NOTHING. Nothing below reads it, and nothing may: the moment a
+  //   decision that costs money is taken from this boolean, an unvalidated
+  //   cookie has become a credential.
+  const signedIn = account !== null || (await readAccountHandleForDisplay(request)) !== null;
 
   const db = getRawDb();
   // The UI language comes from the request cookie, not from the i18next
@@ -101,7 +120,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // dictionary that has stopped answering.
   if (q === '') {
     const example = await loadLandingExample((params) => searchHeadwords(db, params));
-    return { q, direction, hits: [], phrase: null, didYouMean: null, example, phraseWordsOmitted: 0, panel: null };
+    return { q, direction, signedIn, hits: [], phrase: null, didYouMean: null, example, phraseWordsOmitted: 0, panel: null };
   }
 
   // ONE PIPELINE, TWO BRANCHES, AND THE BRANCH IS DECIDED HERE.
@@ -144,7 +163,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (query.isPhrase) {
     const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
     const phraseWordsOmitted = query.tokens.length - phrase.tokens.length;
-    return { q, direction, hits: [], phrase, didYouMean: null, example: null, phraseWordsOmitted, panel: null };
+    return { q, direction, signedIn, hits: [], phrase, didYouMean: null, example: null, phraseWordsOmitted, panel: null };
   }
 
   // THE WHOLE POINT OF THE DETECTION. `direction.from` and `direction.to` go
@@ -200,7 +219,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         accountId: account?.accountId ?? null,
       });
 
-  return { q, direction, hits, phrase: null, didYouMean, example: null, phraseWordsOmitted: 0, panel };
+  return { q, direction, signedIn, hits, phrase: null, didYouMean, example: null, phraseWordsOmitted: 0, panel };
 }
 
 /**
@@ -222,7 +241,7 @@ export async function loader({ request }: Route.LoaderArgs) {
  * two panes look like.
  */
 export default function SearchRoute({ loaderData }: Route.ComponentProps) {
-  const { q, direction, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
+  const { q, direction, signedIn, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 md:max-w-5xl">
@@ -234,6 +253,14 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           rather than under it, "above both panes" is the only position that
           still means the same thing. */}
       <DailyNudge />
+
+      {/* THE DOORS, ABOVE THE PANE, AND ONLY FOR A STRANGER. Under the pitch is
+          where they used to be, which on a phone put them below the whole
+          search surface: the one thing a visitor without an account needs was
+          the last thing they could reach. Above the pane they are on the first
+          screen at every width. A signed-in reader sees neither these nor the
+          pitch below, since both address somebody who has not joined yet. */}
+      {q === '' && !signedIn && <LandingDoors />}
 
       <SearchPanes
         q={q}
@@ -254,8 +281,11 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
 
       {/* The landing surface. With nothing typed there is no result to show, so
           the screen explains what a search returns and shows one, rather than
-          leaving a stranger with an empty box and a full-stop. */}
-      {q === '' && <Landing example={example} />}
+          leaving a stranger with an empty box and a full-stop. For a signed-in
+          reader the explanation is dropped and the worked example is kept: they
+          have already joined, and the example is a demonstration rather than a
+          pitch. */}
+      {q === '' && <Landing example={example} signedIn={signedIn} />}
     </div>
   );
 }

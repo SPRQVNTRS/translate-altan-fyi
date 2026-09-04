@@ -12,7 +12,7 @@
  *
  * IT USES THE CLIENT'S OWN REQUEST BUILDER
  *   The body is built by `buildSignupRequest` from
- *   `app/components/sync/sync-client.ts`, which is the function the setup
+ *   `app/components/account/sync-client.ts`, which is the function the setup
  *   screen calls, rather than by a literal written here. That is the whole
  *   point: a literal would prove the SERVICE accepts an invite, which
  *   `signup-requires-invite.test.ts` already covers, and would go on passing
@@ -44,7 +44,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { closePool, db, poolInitialized } from '../../drizzle/db';
 import { accounts, invites } from '../../drizzle/schema';
 import { CONFIG } from '../../app/config';
-import { buildSignupRequest } from '../../app/components/sync/sync-client';
+import { buildSignupRequest } from '../../app/components/account/sync-client';
 import { handleSignup } from '../../app/lib/e2ee/auth-handlers';
 import type { JsonValue } from '../../app/lib/e2ee/json';
 import { createAuthContext } from '../../app/lib/e2ee/e2ee-context.server';

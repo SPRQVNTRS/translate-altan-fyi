@@ -106,13 +106,22 @@ export default [
     // gate `/search?q=` and leave `/?q=`, the primary URL, wide open, which is
     // the exact hole M184 exists to close.
     route('/search', 'routes/search.tsx', { id: 'search-alias' }),
-    // Sync lives inside the app shell, not in `_public`, because it is a
-    // setting of an app the visitor is already using and not a gateway into
-    // it. Both stay PUBLIC: they are the front door an invited person walks
-    // through, and a gate in front of the sign-in page is a gate nobody can
-    // ever pass.
-    route('/sync/setup', 'routes/sync.setup.tsx'),
-    route('/sync/login', 'routes/sync.login.tsx'),
+    // The two doors, inside the app shell rather than in `_public`, because a
+    // visitor arriving at one is already looking at the product. Both stay
+    // PUBLIC: they are the front door an invited person walks through, and a
+    // gate in front of the sign-in page is a gate nobody can ever pass.
+    //
+    // THE PATHS NAME THE ACCOUNT, NOT THE SYNC. They were `/sync/setup` and
+    // `/sync/login` until M189, which asked a newcomer to configure a feature
+    // before they had an account for it to apply to. Sync is a consequence of
+    // holding an account, never a thing a reader sets up.
+    route('/sign-up', 'routes/sign-up.tsx'),
+    route('/sign-in', 'routes/sign-in.tsx'),
+    // The old paths, kept forever. They are in bookmarks, in histories and in
+    // invites already sent, and each hop preserves the query string so an
+    // `?invite=` survives it. Loader only: a hop is not a screen.
+    route('/sync/setup', 'routes/sync.setup-redirect.ts'),
+    route('/sync/login', 'routes/sync.login-redirect.ts'),
     // Public, and it reports the signed-out state rather than ending it. Its
     // loader already answers `null` for an anonymous visitor and never
     // redirects, which is the contract a public account screen needs.

@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
 import { Label } from '#app/components/ui/label';
-import { unlockSyncSession } from '#app/components/sync/sync-client';
+import { unlockSyncSession } from '#app/components/account/sync-client';
 import { setSyncSession } from '#app/lib/sync/sync-session';
 import { classifySignInFailure } from '#app/lib/e2ee/flows/sign-in-error';
 import { reportError } from '#app/lib/report-error';
@@ -64,7 +64,7 @@ export function SyncUnlockCard({ handle, onUnlocked }: { handle: string; onUnloc
       // It never left this call frame and the vault, and holding it in
       // component state past the call would be a fourth place it lives.
       setPassphrase('');
-      toast.success(t('sync.unlockedToast'));
+      toast.success(t('account.unlockedToast'));
       onUnlocked();
     } catch (cause) {
       const failure = classifySignInFailure(cause);
@@ -72,7 +72,7 @@ export function SyncUnlockCard({ handle, onUnlocked }: { handle: string; onUnloc
       // Anything else is unexpected, and the payload is a fixed literal: the
       // passphrase and every key derived from it are in scope right here.
       if (failure !== 'rejected') reportError(cause, { operation: 'sync-unlock', step: 'unlockSyncSession' });
-      setError(failure === 'rejected' ? t('sync.unlockFailed') : t('sync.genericError'));
+      setError(failure === 'rejected' ? t('account.unlockFailed') : t('sync.genericError'));
     } finally {
       setIsWorking(false);
     }
@@ -80,13 +80,13 @@ export function SyncUnlockCard({ handle, onUnlocked }: { handle: string; onUnloc
 
   return (
     <form className="rounded-xl border bg-card p-6" onSubmit={handleSubmit}>
-      <h2 className="font-display text-base font-semibold">{t('sync.lockedTitle')}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{t('sync.lockedBody')}</p>
+      <h2 className="font-display text-base font-semibold">{t('account.unlockTitle')}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{t('account.unlockBody')}</p>
 
       <div className="mt-4 flex flex-col gap-2">
-        <Label htmlFor="sync-unlock-passphrase">{t('sync.lockedPassphraseLabel')}</Label>
+        <Label htmlFor="account-unlock-password">{t('account.passwordLabel')}</Label>
         <Input
-          id="sync-unlock-passphrase"
+          id="account-unlock-password"
           type="password"
           autoComplete="current-password"
           value={passphrase}
@@ -102,7 +102,7 @@ export function SyncUnlockCard({ handle, onUnlocked }: { handle: string; onUnloc
 
       <Button type="submit" className="mt-6 w-full sm:w-auto" disabled={isWorking}>
         {isWorking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {isWorking ? t('sync.unlockPending') : t('sync.unlockSubmit')}
+        {isWorking ? t('account.unlockPending') : t('account.unlockSubmit')}
       </Button>
     </form>
   );

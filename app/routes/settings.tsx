@@ -3,7 +3,7 @@ import type { MetaFunction } from 'react-router';
 import { Link } from 'react-router';
 import type { Route } from './+types/settings';
 import { LanguageToggle } from '#app/components/language-toggle';
-import { SyncSettingsCards } from '#app/components/sync/sync-settings-cards';
+import { AccountSettingsCards } from '#app/components/account/account-settings-cards';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { getAccountSession } from '#app/services/account-session.server';
 
@@ -61,7 +61,7 @@ export default function SettingsRoute({ loaderData }: Route.ComponentProps) {
           <LanguageToggle />
         </div>
       </div>
-      <SyncSettingsCards isSignedIn={loaderData.isSignedIn} handle={loaderData.handle} />
+      <AccountSettingsCards isSignedIn={loaderData.isSignedIn} handle={loaderData.handle} />
       <LegalLinksCard />
     </div>
   );

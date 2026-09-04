@@ -7,7 +7,7 @@
  * A cheap, honest passphrase strength HINT — deliberately not a gate.
  *
  * The hard floor stays where it was: 12 characters (`setup-flow.ts`'s
- * `MIN_SYNC_PASSPHRASE_LENGTH`), enforced by `validateSyncPassphrase`. This
+ * `MIN_SYNC_PASSPHRASE_LENGTH`), enforced by `validatePassword`. This
  * module adds a signal on top of it, and never blocks. Counsel's reasoning,
  * worth keeping written down: a strength meter that REFUSES pushes people
  * towards whatever pattern satisfies it (`Password1!`) rather than towards
@@ -63,5 +63,5 @@ function countCharacterClasses(value: string): number {
 
 /** The i18n key for a strength verdict — one place, so the three cases can never drift apart across surfaces. */
 export function passphraseStrengthKey(strength: PassphraseStrength): string {
-  return `sync.passphrase.strength.${strength}`;
+  return `account.passwordStrength.${strength}`;
 }

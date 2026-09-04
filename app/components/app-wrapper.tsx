@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useLocation, useMatches, useNavigation } from 'react-router';
+import { useLocation, useMatches, useNavigation, useRouteLoaderData } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Menu } from 'lucide-react';
 import { Link } from '#app/components/link';
@@ -115,6 +115,58 @@ function NavDrawer() {
 }
 
 /**
+ * The account slot in the header: a sign-in name, or the way to get one.
+ *
+ * BOTH STATES ARE A DOOR, AND THAT IS THE POINT. Until M189 the shell showed
+ * an anonymous visitor nothing at all about accounts, which was correct while
+ * the product was anonymous by default and wrong the moment M184 made an
+ * account mandatory: an invited reader had to be told a URL by hand. A signed
+ * in reader gets the opposite job done, seeing which name this device is
+ * carrying, which matters on a product whose accounts are opaque handles
+ * rather than email addresses.
+ *
+ * IT READS THE ROOT LOADER, NOT A SESSION. `accountHandle` is a name for the
+ * chrome and nothing more; every real gate resolves the token itself on the
+ * server. It comes from `root` rather than from a layout loader so it survives
+ * the offline fallback in `root.tsx` unchanged.
+ *
+ * `truncate` with a width cap, because a handle is client-generated and the
+ * header must not grow a second line on a narrow phone.
+ *
+ * On `/sign-in` and `/sign-up` an anonymous visitor is already on the door or
+ * its sibling, so the slot renders nothing there rather than a link to the
+ * page they are already reading.
+ */
+function AccountSlot() {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const rootData = useRouteLoaderData<{ accountHandle: string | null }>('root');
+  const handle = rootData?.accountHandle ?? null;
+
+  if (handle === null && (location.pathname === '/sign-in' || location.pathname === '/sign-up')) {
+    return null;
+  }
+
+  if (handle === null) {
+    return (
+      <Link
+        to="/sign-in"
+        className="text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      >
+        {t('account.signInAction')}
+      </Link>
+    );
+  }
+
+  return (
+    <Link to="/account" className="flex max-w-32 items-center gap-1 text-sm hover:text-primary">
+      <span className="sr-only">{t('account.handleLabel')}</span>
+      <span className="truncate font-mono text-xs">{handle}</span>
+    </Link>
+  );
+}
+
+/**
  * The imprint and privacy links, at the bottom of every screen in the shell.
  *
  * A German Impressum has to be reachable from every page in two clicks, and
@@ -221,6 +273,7 @@ function InnerContent({ title, backTo, children }: { title?: string; backTo?: st
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              <AccountSlot />
               <ThemeToggle />
             </div>
           </div>

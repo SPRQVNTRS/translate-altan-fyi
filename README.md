@@ -84,8 +84,9 @@ mint one. `ACCOUNT_BOOTSTRAP_TOKEN` is the way in. Signup accepts it in place of
 an invite, and only while the `accounts` table is still empty. It therefore
 invalidates itself as soon as your first account exists.
 
-The server can never create an account for you. Identity here is a passphrase
-that your browser turns into keys, and the server never learns it, so no
+The server can never create an account for you. Identity here is a password,
+called a passphrase in the code, that your browser turns into keys. The server
+never learns it, so no
 environment variable and no CLI command can seed an account. A real browser has
 to do the signup. [ADR-0009](.adr/0009-invite-only-accounts.md) explains the
 consequences.
@@ -96,11 +97,11 @@ Do these steps in this order. The first three are the block above.
 2. Run `pnpm drizzle:migrate`, which creates the `accounts` and `invites`
    tables.
 3. Start the app with `pnpm dev`, or with `pnpm start` and `pnpm worker`.
-4. Open `/sync/setup` in a browser. Typing a search on the front page also
-   takes you there, by way of `/sync/login` and its "create an account" card.
-5. Paste the bootstrap token into the invite field, choose a passphrase, and
-   finish the signup. Write down the handle and the recovery code that the app
-   shows you. Nobody can recover them for you.
+4. Open `/sign-up` in a browser. The front page carries a "Create account"
+   button that goes to the same screen.
+5. Paste the bootstrap token into the invite field, choose a password, and
+   finish creating the account. Write down the sign-in name and the recovery
+   code that the app shows you. Nobody can recover them for you.
 6. Grant yourself the admin screens under `/super/`:
 
    ```bash
@@ -283,7 +284,10 @@ TypeScript packages.
 The application is **invite-only**. The front page is public and carries a
 worked example. Everything past it needs an account: a typed search, entry
 pages, lists, history, review, and voice input. A signed-out visitor who
-searches is sent to `/sync/login`, and that page links on to `/sync/setup`.
+searches is sent to `/sign-in`, and the front page, `/account` and the app
+header all carry a "Create account" button beside a "Sign in" link. The old
+paths `/sync/login` and `/sync/setup` still answer, with a permanent redirect
+that keeps the query string.
 Signup refuses any request without a valid invite. It answers every cause of
 refusal with the same message, so it tells a caller nothing about which invites
 exist. [ADR-0009](.adr/0009-invite-only-accounts.md) records the decision, and
@@ -294,7 +298,7 @@ person's devices. Word lists and history are still written on the device that
 made them. They reach the server only after the browser has encrypted them with
 **end-to-end encryption**:
 
-- The browser derives an Argon2id key from a passphrase. It splits this key into
+- The browser derives an Argon2id key from the password. It splits this key into
   two separate branches using HKDF, a key derivation function. One branch acts
   as a key-encryption key to wrap the user data key. The other branch serves as
   an authentication hash.
@@ -302,8 +306,8 @@ made them. They reach the server only after the browser has encrypted them with
   the database in `SERVER_SECRET`. The server never receives the passphrase, the
   key-encryption key, or the raw data key. The server cannot read decrypted user
   data by cryptographic design.
-- The system identifies accounts using an opaque **handle** rather than an email
-  address. The database stores no email records, so the app provides no
+- The system identifies accounts using an opaque **handle**, shown in the
+  interface as a sign-in name, rather than an email address. The database stores no email records, so the app provides no
   verification emails or password reset links.
 - Users recover accounts with a **recovery code**. This code serves as an
   alternate authenticator that encrypts the same underlying data key. The UI
