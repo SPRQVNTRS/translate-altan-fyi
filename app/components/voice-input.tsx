@@ -409,6 +409,14 @@ export interface VoiceControlProps {
   language: LanguageCode;
   onLanguageChange: (code: LanguageCode) => void;
   onToggle: () => void;
+  /**
+   * Whether this control has already written words into the search box.
+   *
+   * It gates the best-effort note. That note is advice about a transcription,
+   * and on a fresh page there is no transcription: it read as a second hint
+   * under the input pane's own note, before the reader had touched anything.
+   */
+  hasTranscript: boolean;
   /** Ids for the picker label, so two controls on one screen cannot collide. */
   triggerId: string;
   className?: string;
@@ -426,6 +434,7 @@ export function VoiceControl({
   language,
   onLanguageChange,
   onToggle,
+  hasTranscript,
   triggerId,
   className,
 }: VoiceControlProps) {
@@ -433,6 +442,8 @@ export function VoiceControl({
 
   const isListening = state.kind === 'listening';
   const isChecking = state.kind === 'checking';
+  // Nothing has gone wrong, so the line below is free to say what is happening.
+  const isSpeaking = state.kind !== 'denied' && state.kind !== 'failed';
   const buttonLabel =
     isChecking ? t('voice.checking')
     : isListening ? t('voice.stop')
@@ -459,12 +470,17 @@ export function VoiceControl({
       </div>
 
       {/* One line at a time, and it is always the most useful one: what went
-          wrong if something did, otherwise the honest note about how good
-          browser recognition is. */}
+          wrong if something did, otherwise what is happening now.
+
+          THE BEST-EFFORT NOTE WAITS FOR A TRANSCRIPTION. It is advice about
+          words a recogniser wrote, so on an untouched page it said nothing
+          about anything, and it stacked a second hint under the input pane's
+          own note on the first screen a reader ever sees. */}
       <output className="text-xs text-muted-foreground">
         {state.kind === 'denied' && t('voice.denied')}
         {state.kind === 'failed' && t('voice.failed')}
-        {state.kind !== 'denied' && state.kind !== 'failed' && (isListening ? t('voice.listening') : t('voice.bestEffort'))}
+        {isSpeaking && isListening && t('voice.listening')}
+        {isSpeaking && !isListening && hasTranscript && t('voice.bestEffort')}
       </output>
     </div>
   );
@@ -738,6 +754,10 @@ export function VoiceInput({
 }: VoiceInputProps) {
   const [state, setState] = useState<VoiceState>({ kind: 'checking' });
   const [language, setLanguage] = useState<LanguageCode>(sourceLanguage);
+  // Whether this control has ever written into the box. It survives the end of
+  // a session, which `state` does not: the state returns to `idle` and the
+  // words stay in the box, so the note about them has to outlast the session.
+  const [hasTranscript, setHasTranscript] = useState(false);
   const constructorRef = useRef<SpeechRecognizerConstructor | null>(null);
   const recognizerRef = useRef<SpeechRecognizer | null>(null);
 
@@ -776,6 +796,10 @@ export function VoiceInput({
     setState({ kind: 'listening', interim: '' });
     startVoiceSession(recognizer, voiceLanguageTag(language), {
       ...handlers,
+      onTranscript: (result) => {
+        setHasTranscript(true);
+        handlers.onTranscript(result);
+      },
       onEnd: () => {
         recognizerRef.current = null;
         handlers.onEnd();
@@ -810,6 +834,7 @@ export function VoiceInput({
       language={language}
       onLanguageChange={handleLanguageChange}
       onToggle={handleToggle}
+      hasTranscript={hasTranscript}
       triggerId={triggerId}
       className={className}
     />

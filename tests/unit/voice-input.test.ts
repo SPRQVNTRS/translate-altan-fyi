@@ -145,8 +145,13 @@ function englishInstance() {
   return instance;
 }
 
-/** The control rendered in one state, as static markup. */
-function renderControl(state: VoiceState): string {
+/**
+ * The control rendered in one state, as static markup.
+ *
+ * `hasTranscript` defaults to false, which is a fresh page: the control has
+ * written nothing into the search box yet.
+ */
+function renderControl(state: VoiceState, hasTranscript = false): string {
   // The on-device control no longer accepts `unsupported`: that state is the
   // server fallback's, and `renderServerControl` below renders it.
   if (state.kind === 'unsupported') throw new Error('render the unsupported state through renderServerControl');
@@ -160,6 +165,7 @@ function renderControl(state: VoiceState): string {
         language: 'de',
         onLanguageChange: () => undefined,
         onToggle: () => undefined,
+        hasTranscript,
         triggerId: 'voice-language',
       }),
     ),
@@ -224,7 +230,20 @@ describe('voice input support detection', () => {
     const markup = renderControl({ kind: 'idle' });
     assert.ok(markup.includes('<button'), 'a supported browser must get a button');
     assert.ok(!markup.includes(enCommon.voice.unsupported), 'a supported browser must not be told it is unsupported');
-    assert.ok(markup.includes(enCommon.voice.bestEffort), 'the best-effort note must be visible');
+  });
+
+  it('holds the best-effort note back until there is a transcription to be advised about', () => {
+    // On a fresh page the input pane already carries its own note. A second
+    // hint under it, about words nobody has spoken, is the one the reader has
+    // no use for yet.
+    const fresh = renderControl({ kind: 'idle' });
+    assert.ok(!fresh.includes(enCommon.voice.bestEffort), `an untouched control showed the note: ${fresh}`);
+
+    const afterSpeaking = renderControl({ kind: 'idle' }, true);
+    assert.ok(
+      afterSpeaking.includes(enCommon.voice.bestEffort),
+      'a reader whose spoken words were just written into the box was never told they can edit them first',
+    );
   });
 });
 

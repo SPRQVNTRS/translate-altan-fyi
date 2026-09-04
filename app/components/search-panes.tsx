@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation } from 'react-router';
@@ -22,6 +22,14 @@ export interface SearchPanesProps {
   /** How many words of a phrase the search never looked at. Zero on every other branch. */
   phraseWordsOmitted: number;
   panel: EnrichmentPanel | null;
+  /**
+   * What the output pane holds while nothing has been searched for.
+   *
+   * The pane would otherwise be a hole beside the input box on every desktop
+   * first visit. The caller decides what goes there; this component only
+   * decides that it goes THERE rather than under both panes.
+   */
+  emptyPane?: ReactNode;
 }
 
 /**
@@ -42,8 +50,13 @@ export interface SearchPanesProps {
  *
  * THE OUTPUT PANE HAS NO CARD OF ITS OWN. `SearchResults` and `PhraseResults`
  * already render cards, and a card holding cards is a frame around a frame. The
- * pane is a plain column, so with nothing searched it is simply empty rather
- * than an empty box explaining its own emptiness.
+ * pane is a plain column, so it never becomes an empty box explaining its own
+ * emptiness.
+ *
+ * WITH NOTHING SEARCHED THE PANE HOLDS `emptyPane`. An empty right-hand column
+ * beside a filled left one is a hole the width of half the page, and the home
+ * screen's worked example used to sit below both panes where it left that hole
+ * open. The caller supplies the example; this component only places it.
  *
  * IT IS PURE OVER ITS PROPS, AND IT IS A COMPONENT RATHER THAN ROUTE MARKUP FOR
  * ONE REASON. The search route is gated: any non-empty `q` needs an account, so
@@ -54,7 +67,16 @@ export interface SearchPanesProps {
  * been deleted now that the decision is applied. The seam stays: it is what any
  * future sessionless render of this surface would use.
  */
-export function SearchPanes({ q, direction, hits, phrase, didYouMean, phraseWordsOmitted, panel }: SearchPanesProps) {
+export function SearchPanes({
+  q,
+  direction,
+  hits,
+  phrase,
+  didYouMean,
+  phraseWordsOmitted,
+  panel,
+  emptyPane,
+}: SearchPanesProps) {
   const { t } = useTranslation();
   // The word the inline panel belongs to. It is read once here rather than as
   // `hits[0]` at the render site, so the panel and the id it polls with cannot
@@ -129,10 +151,13 @@ export function SearchPanes({ q, direction, hits, phrase, didYouMean, phraseWord
         <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
       </div>
 
-      {/* THE OUTPUT PANE. What renders inside it is unchanged by this
-          relayout: the same results, the same correction, moved from under the
-          box to beside it. */}
+      {/* THE OUTPUT PANE. The same results and the same correction a search
+          renders, and with nothing searched whatever the caller passed as
+          `emptyPane`. `aria-live` stays on the section: the example is static
+          and server rendered, so it is announced by nothing, and moving the
+          attribute inward would leave a real answer unannounced. */}
       <section aria-live="polite" className="flex flex-col gap-4">
+        {q === '' && emptyPane}
         {q !== '' && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">

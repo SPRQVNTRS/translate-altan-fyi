@@ -5,14 +5,16 @@ import { SearchResults } from '#app/components/search-results';
 import type { LandingExample } from '#app/lib/dictionary/landing-example';
 
 /**
- * The two doors, for a visitor with no account.
+ * The hero, for a visitor with no account.
  *
- * IT IS A COMPONENT OF ITS OWN BECAUSE IT DOES NOT SIT WHERE THE PITCH SITS.
- * The doors render ABOVE the two-pane surface and the pitch renders below it,
- * so one component holding both could only ever put the doors where the pitch
- * belongs. That is what shipped first: on a phone the card sat under the whole
- * search pane, off the first screen, and a stranger scrolled past a working
- * demonstration to reach the way in.
+ * IT IS A PLAIN BLOCK, NOT A CARD. A bordered box spanning the full column
+ * above the two panes read as a third pane, and the widths jumped between full
+ * and half twice on the way down the page.
+ *
+ * ITS HEADING IS AN `h2`, NOT AN `h1`. The app shell's header already renders
+ * the route title as the page's `h1`, and a browser walk found both on the home
+ * screen. This is the section heading under that one; the type scale is the
+ * hero's either way.
  *
  * The primary action is a real button and the secondary one is a link, so the
  * two doors are not weighted the same: a reader who is here without an account
@@ -25,9 +27,9 @@ export function LandingDoors() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-6">
-      <h2 className="font-display text-lg font-semibold">{t('landing.heading')}</h2>
-      <p className="text-sm text-muted-foreground">{t('landing.doorsBody')}</p>
+    <div className="flex flex-col gap-3">
+      <h2 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">{t('landing.heading')}</h2>
+      <p className="max-w-prose text-base text-muted-foreground">{t('landing.doorsBody')}</p>
       <div className="flex flex-wrap items-center gap-4">
         <Link to="/sign-up" className={buttonVariants()}>
           {t('account.createAction')}
@@ -41,54 +43,47 @@ export function LandingDoors() {
 }
 
 /**
- * The pitch under the search box, for a visitor who has typed nothing yet.
+ * One worked example, for the OUTPUT PANE of an empty search.
  *
- * It is part of the search route rather than a page of its own. A separate
- * marketing route would mean a stranger lands somewhere the product is
- * described and then has to click into the product; here the first thing on
- * screen is the search box, and this section explains what pressing it does.
+ * `search.tsx` hands this to `SearchPanes` as its `emptyPane`, so with nothing
+ * typed the right-hand column holds a real answer instead of a hole beside the
+ * input box. On a phone the panes stack and it sits under the box, which is
+ * where an answer belongs there too.
  *
- * Three sentences and one real result, in that order: what a search returns,
- * what lists are for, and what the server can and cannot read. The privacy
- * paragraph carries BOTH halves. Selling the encrypted personal zone while
- * going quiet about the word travelling to the server would be the flattering
- * version, and the privacy policy this links to says the same two things.
- *
- * The example card is rendered by `SearchResults`, the component a real search
- * uses, from a real row of the dictionary. It is server rendered, so it is in
- * the HTML a crawler and a curl see.
- *
- * THE THREE SENTENCES ARE FOR A STRANGER AND THE EXAMPLE IS FOR EVERYBODY. A
- * signed-in reader has already been sold: the pitch reads as an advertisement
- * for something they hold, and the doors above the pane are gone for them for
- * the same reason. The worked example stays, because it is not a pitch. It is
- * the one thing on an empty home screen that shows the dictionary answering,
- * and it is the same row a search of that word returns.
+ * IT IS FOR EVERYBODY, signed in or not. It is a demonstration rather than a
+ * pitch: the same `SearchResults` component a real search renders, fed a real
+ * row of the dictionary, server rendered so a crawler and a curl see it.
  */
-export function Landing({ example, signedIn }: { example: LandingExample | null; signedIn: boolean }) {
+export function LandingExampleCard({ example }: { example: LandingExample }) {
   const { t } = useTranslation();
 
   return (
-    <section className="flex flex-col gap-4">
-      {!signedIn && (
-        <ul className="flex list-none flex-col gap-2 pl-0 text-sm text-muted-foreground">
-          <li>{t('landing.search')}</li>
-          <li>{t('landing.lists')}</li>
-          <li>
-            {t('landing.privacy')} {t('landing.privacyPlaintext')}{' '}
-            <Link to="/legal/privacy" className="underline underline-offset-4 hover:text-foreground">
-              {t('landing.privacyLink')}
-            </Link>
-          </li>
-        </ul>
-      )}
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium">{t('landing.exampleHeading', { word: example.word })}</h3>
+      <SearchResults hits={[example.hit]} to={example.to} />
+    </div>
+  );
+}
 
-      {example !== null && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">{t('landing.exampleHeading', { word: example.word })}</h3>
-          <SearchResults hits={[example.hit]} to={example.to} />
-        </div>
-      )}
-    </section>
+/**
+ * The one line under the panes, for a visitor with no account.
+ *
+ * THE PITCH LIST IS GONE. Three sentences describing the product, under a hero
+ * that already describes it, said the same thing a third time at a third width.
+ * What survives is the half that is not a pitch: the privacy paragraph, which
+ * carries BOTH halves. Selling the encrypted personal zone while going quiet
+ * about the word travelling to the server would be the flattering version, and
+ * the privacy policy this links to says the same two things.
+ */
+export function LandingPrivacyNote() {
+  const { t } = useTranslation();
+
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t('landing.privacy')} {t('landing.privacyPlaintext')}{' '}
+      <Link to="/legal/privacy" className="underline underline-offset-4 hover:text-foreground">
+        {t('landing.privacyLink')}
+      </Link>
+    </p>
   );
 }

@@ -322,8 +322,6 @@
   "landing": {
     "heading": "Four-language dictionary with flashcards and example sentences",
     "doorsBody": "Create an account to search and use lists on any device.",
-    "search": "Translations, meanings, and credited examples, even with typos.",
-    "lists": "Save words to lists. Review as flashcards.",
     "privacy": "The server cannot read your encrypted lists, history, or notes.",
     "privacyPlaintext": "The typed word is sent to the server dictionary.",
     "privacyLink": "Privacy policy",

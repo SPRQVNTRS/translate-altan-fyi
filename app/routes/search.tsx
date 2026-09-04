@@ -1,7 +1,7 @@
 import type { Route } from './+types/search';
 import type { MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
-import { Landing, LandingDoors } from '#app/components/landing';
+import { LandingDoors, LandingExampleCard, LandingPrivacyNote } from '#app/components/landing';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchPanes } from '#app/components/search-panes';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
@@ -236,9 +236,11 @@ export async function loader({ request }: Route.LoaderArgs) {
  * time a surface has to be shown to somebody without a session.
  *
  * WHAT STAYS HERE IS EVERYTHING THAT IS NOT THE SURFACE: the day's nudge above
- * it, the history write beside it, and the landing pitch under it. Each one is
- * a side effect or a screen of its own, and none of them is part of what the
- * two panes look like.
+ * it, the hero above that for a stranger, the history write beside it, and the
+ * one privacy line under it. The worked example is the exception. It is handed
+ * to `SearchPanes` as `emptyPane` rather than rendered here, because it belongs
+ * IN the output pane: below both panes it left the right-hand column empty on
+ * every desktop first visit.
  */
 export default function SearchRoute({ loaderData }: Route.ComponentProps) {
   const { q, direction, signedIn, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
@@ -254,12 +256,13 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           still means the same thing. */}
       <DailyNudge />
 
-      {/* THE DOORS, ABOVE THE PANE, AND ONLY FOR A STRANGER. Under the pitch is
-          where they used to be, which on a phone put them below the whole
-          search surface: the one thing a visitor without an account needs was
-          the last thing they could reach. Above the pane they are on the first
-          screen at every width. A signed-in reader sees neither these nor the
-          pitch below, since both address somebody who has not joined yet. */}
+      {/* THE HERO, ABOVE THE PANES, AND ONLY FOR A STRANGER. It is the section
+          heading under the shell's own h1, and it carries the two doors
+          beneath it. Below the panes is where the doors used
+          to be, which on a phone put the one thing a visitor without an
+          account needs behind the whole search surface. A signed-in reader
+          sees neither this nor the privacy line below: both address somebody
+          who has not joined yet. */}
       {q === '' && !signedIn && <LandingDoors />}
 
       <SearchPanes
@@ -270,6 +273,12 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
         didYouMean={didYouMean}
         phraseWordsOmitted={phraseWordsOmitted}
         panel={panel}
+        // THE WORKED EXAMPLE, IN THE OUTPUT PANE. With nothing typed there is
+        // no answer to show, so the pane shows one instead of standing empty
+        // beside a filled input pane. It is passed for a signed-in reader too:
+        // it is a demonstration rather than a pitch, and it is the only thing
+        // on an empty home screen that shows the dictionary answering.
+        emptyPane={example === null ? undefined : <LandingExampleCard example={example} />}
       />
 
       {/* The history WRITE, and it renders nothing. It is here rather than in
@@ -279,13 +288,12 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           renders the panes must not record searches nobody made. */}
       <RecordSearch query={q} from={direction.from} to={direction.to} headwordId={hits[0]?.headwordId ?? null} />
 
-      {/* The landing surface. With nothing typed there is no result to show, so
-          the screen explains what a search returns and shows one, rather than
-          leaving a stranger with an empty box and a full-stop. For a signed-in
-          reader the explanation is dropped and the worked example is kept: they
-          have already joined, and the example is a demonstration rather than a
-          pitch. */}
-      {q === '' && <Landing example={example} signedIn={signedIn} />}
+      {/* ONE LINE, AND IT IS NOT A PITCH. The three sentences that described
+          the product under the panes are gone: the hero above already says
+          what this is, and saying it twice more at a third width is what made
+          this screen read as three loose blocks. What is left is the privacy
+          sentence, which carries both halves, and it is for a stranger only. */}
+      {q === '' && !signedIn && <LandingPrivacyNote />}
     </div>
   );
 }
