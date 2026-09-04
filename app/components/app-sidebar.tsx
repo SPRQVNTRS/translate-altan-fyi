@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { BookMarked, History, ScrollText, Search, Settings, UserRound, type LucideIcon } from 'lucide-react';
-import { useLocation } from 'react-router';
+import { BookMarked, History, ScrollText, Search, Settings, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { useLocation, useRouteLoaderData } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { cn } from '#app/lib/utils';
 import { Link } from '#app/components/link';
@@ -42,6 +42,12 @@ export type NavigationItem = {
    * drift into two different labels for one destination.
    */
   tab?: { order: number };
+  /**
+   * Present only for the operator link. `visibleFooterNavigationItems` is the
+   * one place this is read, so an ordinary reader and an anonymous visitor
+   * never have the row in the DOM at all, not merely hidden with CSS.
+   */
+  requiresSuperadmin?: boolean;
 };
 
 /**
@@ -62,6 +68,11 @@ export const navigationItems: NavigationItem[] = [
   // No `tab`: the mobile bar stays three tabs. Sources is a licence
   // obligation the reader consults once, not a place they go every day.
   { labelKey: 'nav.attribution', to: '/attribution', icon: ScrollText, group: 'footer' },
+  // The operator link, last in the catalog and last in the footer group.
+  // `/super` itself is a redirect to `/super/llm` (`routes/super/index-redirect.ts`),
+  // never a 404, and `superadminMiddleware` re-checks the flag on every
+  // request this link can lead to.
+  { labelKey: 'nav.admin', to: '/super', icon: ShieldCheck, group: 'footer', requiresSuperadmin: true },
 ];
 
 /** The day-to-day destinations, in catalog order: the top block of the drawer and the sidebar. */
@@ -69,6 +80,22 @@ export const primaryNavigationItems: NavigationItem[] = navigationItems.filter((
 
 /** The separated group at the bottom of the drawer and the sidebar. */
 export const footerNavigationItems: NavigationItem[] = navigationItems.filter((item) => item.group === 'footer');
+
+/**
+ * The footer group as a reader with `isSuperadmin` should actually see it.
+ *
+ * A row marked `requiresSuperadmin` is DROPPED, not merely hidden, for
+ * anybody else: an anonymous visitor and a signed-in reader who is not a
+ * superadmin both pass `isSuperadmin: false` here and get no such element in
+ * the DOM. Both the sidebar and the mobile drawer read this instead of
+ * `footerNavigationItems` directly, so the two surfaces cannot drift.
+ *
+ * @param isSuperadmin - the root loader's `isSuperadmin`, itself a display
+ *   convenience: `superadminMiddleware` is what actually gates `/super/*`.
+ */
+export function visibleFooterNavigationItems(isSuperadmin: boolean): NavigationItem[] {
+  return footerNavigationItems.filter((item) => !item.requiresSuperadmin || isSuperadmin);
+}
 
 /**
  * The mobile tab bar's destinations, in bar order. Derived rather than
@@ -157,6 +184,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation();
   const location = useLocation();
   const activeHref = activeNavigationHref(location.pathname);
+  // Read through the root loader, the same source `AccountSlot` reads: a
+  // display convenience, never a gate. See `visibleFooterNavigationItems`.
+  const rootData = useRouteLoaderData<{ isSuperadmin: boolean }>('root');
+  const footerItems = visibleFooterNavigationItems(rootData?.isSuperadmin ?? false);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -183,7 +214,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
-          {footerNavigationItems.map((item) => (
+          {footerItems.map((item) => (
             <NavigationRow key={item.to} item={item} isActive={activeHref === item.to} />
           ))}
         </SidebarMenu>

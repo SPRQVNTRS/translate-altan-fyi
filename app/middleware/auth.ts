@@ -83,12 +83,19 @@ export async function resolveUser(request: Request): Promise<AuthenticatedUser |
   return { id: user.id, email: user.email, isSuperadmin: user.isSuperadmin };
 }
 
-/** The two facts the client is given about the signed-in reader. Neither is a credential. */
+/** The three facts the client is given about the signed-in reader. None is a credential. */
 export interface DisplayUser {
   /** Keys the device's own sync state and decides whether a cycle is worth starting. The cookie is what authorises one. */
   id: number;
   /** What the header renders. */
   email: string;
+  /**
+   * Whether the shell shows the `/super` sidebar link. The link is a
+   * convenience, not a gate: `superadminMiddleware` re-reads this same column
+   * on every `/super/*` request, so a stale or forged value here opens no
+   * door, it only shows or hides one.
+   */
+  isSuperadmin: boolean;
 }
 
 /**
@@ -110,7 +117,7 @@ export interface DisplayUser {
  */
 export async function readUserForDisplay(request: Request): Promise<DisplayUser | null> {
   const user = await resolveUser(request);
-  return user === null ? null : { id: user.id, email: user.email };
+  return user === null ? null : { id: user.id, email: user.email, isSuperadmin: user.isSuperadmin };
 }
 
 /** The refusal this request should get: JSON for `/api/`, a redirect for everything else. */

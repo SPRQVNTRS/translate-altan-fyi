@@ -10,7 +10,8 @@
     "drawerDescription": "Navigation links for the app.",
     "bottomBarLabel": "Main navigation",
     "back": "Back",
-    "attribution": "Sources"
+    "attribution": "Sources",
+    "admin": "Admin"
   },
   "theme": {
     "selector": "Color theme",

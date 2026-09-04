@@ -82,6 +82,10 @@ export async function loader({ request }: Route.LoaderArgs) {
     // The id the sync engine keys this device's bookkeeping on. `_app.tsx`
     // installs it; nothing authorises anything with it.
     userId: displayUser?.id ?? null,
+    // Whether the shell shows the `/super` sidebar link. See
+    // `DisplayUser.isSuperadmin` in `app/middleware/auth.ts`: this is a
+    // display convenience, `superadminMiddleware` is the actual gate.
+    isSuperadmin: displayUser?.isSuperadmin ?? false,
     language,
     isAnalyticsEnabled,
     headers: combineHeaders(toastHeaders),
@@ -164,6 +168,9 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
       // Same reasoning, and one more: with no id the sync engine is told there
       // is no session, so it starts no cycle it could not authorise anyway.
       userId: null,
+      // No server to ask, so no sidebar admin link either: the harmless
+      // direction to be wrong in, same as `userEmail` above.
+      isSuperadmin: false,
       language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
       // Offline there is nothing to report and no tracker to report it to.
       isAnalyticsEnabled: false,

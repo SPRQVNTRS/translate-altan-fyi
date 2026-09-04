@@ -10,9 +10,9 @@ import { cn } from '#app/lib/utils';
 import {
   activeNavigationHref,
   AppSidebar,
-  footerNavigationItems,
   navigationItems,
   primaryNavigationItems,
+  visibleFooterNavigationItems,
   type NavigationItem,
 } from './app-sidebar';
 import { BottomNav } from './bottom-nav';
@@ -85,6 +85,9 @@ function NavDrawer() {
   const [isOpen, setIsOpen] = React.useState(false);
   const close = (): void => setIsOpen(false);
   const activeHref = activeNavigationHref(location.pathname);
+  // Same source and same convenience-not-a-gate reasoning as `AppSidebar`.
+  const rootData = useRouteLoaderData<{ isSuperadmin: boolean }>('root');
+  const footerItems = visibleFooterNavigationItems(rootData?.isSuperadmin ?? false);
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -105,7 +108,7 @@ function NavDrawer() {
           {/* The same footer separation the sidebar draws: the things you set
               once sit below a rule, not among the places you go every day. */}
           <Separator className="my-2" />
-          {footerNavigationItems.map((item) => (
+          {footerItems.map((item) => (
             <DrawerRow key={item.to} item={item} isActive={activeHref === item.to} onNavigate={close} />
           ))}
         </nav>
