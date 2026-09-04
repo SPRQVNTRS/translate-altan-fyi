@@ -4,7 +4,7 @@
  *
  * WHY THIS CASE IS THE FIRST ONE IN THE MILESTONE
  *   Everything else here closes a door. This one holds a door open. The gate
- *   added to `search.tsx`'s loader is one line away from swallowing the landing
+ *   added to `translate.tsx`'s loader is one line away from swallowing the landing
  *   page as well, and the failure would be silent in the worst way: a stranger
  *   following a link to translate.altan.fyi would be bounced to a sign-in form
  *   for an account they cannot create, and nothing in a typecheck, a lint or a
@@ -35,7 +35,7 @@ import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
 import { LANDING_EXAMPLE } from '../../app/lib/dictionary/landing-example';
-import { loader as searchLoader } from '../../app/routes/search';
+import { loader as translateLoader } from '../../app/routes/translate';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -48,7 +48,7 @@ const DB_HOST = process.env.DB_HOST;
  */
 async function loadLandingAnonymously() {
   const request = new Request('https://translate.altan.fyi/');
-  return searchLoader({
+  return translateLoader({
     request,
     url: new URL(request.url),
     params: {},

@@ -1,6 +1,6 @@
 {
   "nav": {
-    "search": "Search",
+    "search": "Translate",
     "lists": "Lists",
     "history": "History",
     "settings": "Settings",
@@ -20,12 +20,12 @@
     "dark": "Dark"
   },
   "search": {
-    "metaTitle": "Search",
-    "metaDescription": "Search words for meanings and examples.",
-    "fieldLabel": "Word or phrase",
+    "metaTitle": "Translate",
+    "metaDescription": "Translate words and short phrases, with meanings and examples.",
+    "fieldLabel": "Text to translate",
     "placeholder": "Type a word, for example: Feierabend",
-    "submit": "Search",
-    "note": "Type in four languages. It finds translations, meanings, and examples, even with spelling mistakes.",
+    "submit": "Translate",
+    "note": "Four languages. Translations, meanings and examples, even with spelling mistakes.",
     "resultsHeading": "Results",
     "resultsFor": "Results for {{query}}",
     "noResults": "Nothing matched {{query}}. Check the spelling, or try another word.",
@@ -42,10 +42,19 @@
     "phraseTruncatedNote": "Only the first {{lookedUp}} words were searched. The rest was ignored.",
     "phraseTokenNoResults": "No dictionary entry for {{token}}.",
     "phraseExamplesHeading": "Recorded sentences with this phrase",
-    "phraseNoExamples": "No recorded sentences contain this exact phrase."
+    "phraseNoExamples": "No recorded sentences contain this exact phrase.",
+    "sourceLabel": "Language to translate from",
+    "targetLabel": "Language to translate into",
+    "detectLanguage": "Detect language",
+    "detectedAs": "{{language}} (detected)",
+    "swapLanguages": "Swap the two languages",
+    "resultLabel": "Translation",
+    "resultEmpty": "No translation for this yet.",
+    "wordByWordNote": "Word by word. This is a dictionary, so it does not build sentences.",
+    "copy": "Copy the translation",
+    "copied": "Copied"
   },
   "voice": {
-    "fieldLabel": "Language",
     "start": "Listen",
     "stop": "Stop",
     "listening": "Listening",
@@ -160,7 +169,11 @@
     "appearanceBody": "The theme switch in the header works today. Controls for your translation languages will live here once they are built.",
     "languageTitle": "App language",
     "languageBody": "Choose the language for the buttons and labels in the app. This does not change the languages you translate.",
-    "languageFieldLabel": "App language"
+    "languageFieldLabel": "App language",
+    "installTitle": "Install the app",
+    "installBody": "Install the app on this device. It then opens from your home screen and starts without the browser bar.",
+    "installAction": "Install",
+    "installIosStep": "On iPhone and iPad, open the Share menu in the browser and choose \"Add to Home Screen\"."
   },
   "account": {
     "metaTitle": "Account",

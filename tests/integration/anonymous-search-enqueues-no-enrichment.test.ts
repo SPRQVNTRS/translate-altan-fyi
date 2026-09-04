@@ -10,7 +10,7 @@
  *   money instead of the status code.
  *
  * WHERE THE MONEY ACTUALLY LEAVES, AS OF TODAY
- *   Not in `search.tsx` any more. M185/03 moved the decision into
+ *   Not in `translate.tsx` any more. M185/03 moved the decision into
  *   `app/lib/enrichment/trigger.server.ts`, which the search screen and the
  *   entry page both call: `resolveTriggeredPanel` reads the cache, and
  *   `triggerEnrichment` beneath it calls `enqueueEnrichmentInBackground`, which
@@ -56,7 +56,7 @@ import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import { enrichmentSingletonKey } from '../../app/lib/enrichment/enqueue.server';
 import { ENRICHMENT_QUEUE } from '../../app/lib/enrichment/limits';
 import { PROMPT_VERSION } from '../../app/prompts/enrichment/version';
-import { loader as searchLoader } from '../../app/routes/search';
+import { loader as translateLoader } from '../../app/routes/translate';
 import { initializeWorkflows, stopOrchestrator } from '../../app/services/workflows.server';
 import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
@@ -104,7 +104,7 @@ async function search(cookie: string | null) {
   const request = new Request(`https://translate.altan.fyi/?q=${encodeURIComponent(lemma)}&from=${FROM}&to=${TO}`, {
     headers: cookie === null ? { 'x-forwarded-for': ip } : { 'x-forwarded-for': ip, cookie },
   });
-  return searchLoader({
+  return translateLoader({
     request,
     url: new URL(request.url),
     params: {},
@@ -234,7 +234,7 @@ describe('an anonymous search spends nothing', () => {
       0,
       `A signed-out GET /?q= left ${jobs} enrichment job(s) on the '${ENRICHMENT_QUEUE}' queue. Each one is a ` +
         "paid provider call billed to the operator, for a visitor with no account. The gate has to run BEFORE " +
-        'resolveTriggeredPanel in app/routes/search.tsx, not after it: a redirect issued after an enqueue ' +
+        'resolveTriggeredPanel in app/routes/translate.tsx, not after it: a redirect issued after an enqueue ' +
         'still costs money and still looks correct from the outside.',
     );
 

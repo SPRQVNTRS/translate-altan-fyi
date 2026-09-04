@@ -12,7 +12,7 @@ import { routeTitle, type TitleHandle } from '#app/lib/route-title';
  * is the whole point of this file: the first version of `routeTitle` read a
  * field called `data`, React Router 8 calls it `loaderData`, and every match
  * therefore answered `undefined`. The `titleKey` branch never touches loader
- * data, so `/search` looked correct while `/entry/:headwordId` silently fell
+ * data, so `/translate` looked correct while `/entry/:headwordId` silently fell
  * back to the wordmark. A fixture that invented its own field name would have
  * passed against the broken code, so `UIMatch` is what pins the name here.
  */
@@ -71,8 +71,8 @@ describe('routeTitle', () => {
 
   it('resolves a static titleKey through the translator', () => {
     const searchMatch: UIMatch = {
-      id: 'routes/search',
-      pathname: '/search',
+      id: 'routes/translate',
+      pathname: '/translate',
       params: {},
       loaderData: { q: '', direction: null, hits: [] },
       handle: searchHandle,

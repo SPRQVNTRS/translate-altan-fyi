@@ -17,11 +17,11 @@ import { authMiddleware } from '#app/middleware/auth';
  *
  *   REJECTED: one middleware on `_app.tsx` that reads the request path and
  *   waives itself for the public ones. That is a path-keyed rule, and this
- *   milestone exists because a path-keyed rule gated `/search` while leaving
+ *   milestone exists because a path-keyed rule gated `/search` (now `/translate`) while leaving
  *   `/?q=` wide open. A rule keyed on the shape of the request belongs in the
- *   loader that reads that shape, which is where `search.tsx` now carries it.
+ *   loader that reads that shape, which is where `translate.tsx` now carries it.
  *
- * WHAT IS NOT IN HERE, DELIBERATELY. `/`, `/search`, `/account`, `/sign-in`,
+ * WHAT IS NOT IN HERE, DELIBERATELY. `/`, `/translate`, `/account`, `/sign-in`,
  * `/sign-up` and `/offline` all stay outside: the first two are public with
  * a request-keyed rule inside their shared loader, the next three are the front
  * door an invited person arrives through, and `/offline` must render with no

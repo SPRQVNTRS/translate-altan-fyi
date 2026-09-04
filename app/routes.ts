@@ -64,19 +64,29 @@ export default [
     // classifies a route: `app/lib/route-classification.ts` records the same
     // fact in one readable place, and a unit test fails when a route file
     // exists in neither.
-    index('routes/search.tsx'),
-    // `/search` renders the SAME module as the index route, under a second id.
-    // The stage verification hits `/search`, and a redirect to `/` would be a
-    // second round trip on every linkable results URL. React Router's typegen
-    // emits ONE `+types/search` whose `Matches` is a union of both ids.
+    index('routes/translate.tsx'),
+    // `/translate` renders the SAME module as the index route, under a second
+    // id. The stage verification hits `/translate`, and a redirect to `/`
+    // would be a second round trip on every linkable results URL. React
+    // Router's typegen emits ONE `+types/translate` whose `Matches` is a
+    // union of both ids. `/search` WAS this same route's id before today's
+    // rename, and it turned out an open tab, a bookmark and a `?next=` in
+    // flight all still pointed at it, so it now redirects below rather than
+    // 404ing.
     //
     // BOTH IDS ARE PUBLIC HERE, AND NEITHER IS OPEN. The account rule for this
     // screen is keyed on the REQUEST, not on the path: an empty `q` is the
     // landing page and a non-empty `q` needs a session, decided at the top of
     // the one loader both ids share. Gating the alias from here instead would
-    // gate `/search?q=` and leave `/?q=`, the primary URL, wide open, which is
-    // the exact hole M184 exists to close.
-    route('/search', 'routes/search.tsx', { id: 'search-alias' }),
+    // gate `/translate?q=` and leave `/?q=`, the primary URL, wide open,
+    // which is the exact hole M184 exists to close.
+    route('/translate', 'routes/translate.tsx', { id: 'translate-alias' }),
+    // `/search` is the route id `/translate` carried until earlier today. A
+    // rename is invisible to a tab already open, a bookmark, or a `?next=`
+    // already in flight from the account gate, so all three landed on a 404
+    // the moment the rename shipped. This one hop, `301`, keeps the query
+    // string: see `routes/search-redirect.ts`.
+    route('/search', 'routes/search-redirect.ts'),
     // The two doors, inside the app shell rather than in `_public`, because a
     // visitor arriving at one is already looking at the product. Both stay
     // PUBLIC: they are the front door a stranger walks through, and a

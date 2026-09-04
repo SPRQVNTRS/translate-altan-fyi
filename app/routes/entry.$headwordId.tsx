@@ -170,7 +170,7 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
               this entry for translations into its own language would be a
               guaranteed empty panel. */}
           {direction !== null && (
-            <DirectionChip direction={direction} query={entry.lemma} flipTo="/search" className="ml-auto" />
+            <DirectionChip direction={direction} query={entry.lemma} flipTo="/translate" className="ml-auto" />
           )}
         </div>
         <div className="mt-4">

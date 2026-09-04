@@ -1,7 +1,8 @@
-import type { Route } from './+types/search';
+import type { Route } from './+types/translate';
 import { redirect, type MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
 import { LandingDoors, LandingExampleCard, LandingPrivacyNote } from '#app/components/landing';
+import { PersistLanguagePair } from '#app/components/persist-language-pair';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchPanes } from '#app/components/search-panes';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
@@ -10,6 +11,7 @@ import { detectLanguage } from '#app/lib/dictionary/detect-language';
 import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
 import { entrySensesQuery } from '#app/lib/dictionary/entry.server';
 import { loadLandingExample } from '#app/lib/dictionary/landing-example';
+import { reconcilePairWithDirection, resolveLanguagePair } from '#app/lib/dictionary/language-pair';
 import { normalizeQuery } from '#app/lib/dictionary/normalize';
 import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import type { TitleHandle } from '#app/lib/route-title';
@@ -35,7 +37,7 @@ export const meta: MetaFunction = ({ matches }) => {
  * The name of this screen, for the chrome's `h1`.
  *
  * Search lives at `/`, which the nav catalog does carry, but the same screen is
- * also reachable at `/search`, which it does not. The handle names it once for
+ * also reachable at `/translate`, which it does not. The handle names it once for
  * both, and reuses the catalog's own label so the header and the sidebar can
  * never disagree.
  */
@@ -88,9 +90,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   and reaches no dictionary query and no queue.
   //
   //   IT CANNOT BE A LAYOUT MIDDLEWARE, AND IT MUST NOT BE A PATH RULE. `/` and
-  //   `/search` are two route ids over THIS ONE FILE (`app/routes.ts`), and the
+  //   `/translate` are two route ids over THIS ONE FILE (`app/routes.ts`), and the
   //   product's real URL is `/?q=<word>`, the index carrying a query. A rule
-  //   hung off `/search` would gate the alias and leave the primary open, which
+  //   hung off `/translate` would gate the alias and leave the primary open, which
   //   is precisely the bug this milestone was written to fix; a rule on the
   //   `_app` layout would gate `/` as well and break the public landing render
   //   below. A rule inside the one loader both ids share can do neither, and a
@@ -123,11 +125,31 @@ export async function loader({ request }: Route.LoaderArgs) {
   // The UI language comes from the request cookie, not from the i18next
   // singleton: that instance is process-wide and would leak one reader's
   // language into another reader's request.
-  const uiLanguage = resolveRequestLanguage(request.headers.get('cookie'));
-  const direction = await detectLanguage(db, {
-    q,
+  const cookieHeader = request.headers.get('cookie');
+  const uiLanguage = resolveRequestLanguage(cookieHeader);
+  // THE PAIR THE BAR IS SET TO, WHICH IS NOT THE SAME QUESTION AS THE
+  //   DIRECTION THE SEARCH RAN IN. The pair carries the reader's own statement,
+  //   `detect` included; the direction is what that statement resolved to once
+  //   the query was looked at. The screen needs both: the bar shows the
+  //   statement, and the results show the resolution.
+  //
+  //   THE URL WINS, THEN THE COOKIE, THEN THE DEFAULT. A shared result link has
+  //   to render the pair it was captured with rather than the pair the device
+  //   opening it prefers. The cookie is the device's own mirror of the TinyBase
+  //   store, and it exists because the server renders this bar in the first
+  //   byte of HTML and cannot read IndexedDB.
+  const pair = resolveLanguagePair({
     from: url.searchParams.get('from'),
     to: url.searchParams.get('to'),
+    cookieHeader,
+  });
+  const direction = await detectLanguage(db, {
+    q,
+    // `detect` is not a served language, so `chooseDirection` ignores it and
+    // falls through to the exact-hit count and the character heuristic. That is
+    // the whole server-side handling of detection, and it needs no branch here.
+    from: pair.source,
+    to: pair.target,
     uiLanguage,
   });
   // NO QUERY MEANS THIS IS THE LANDING PAGE, so the loader spends one query on
@@ -137,7 +159,23 @@ export async function loader({ request }: Route.LoaderArgs) {
   // dictionary that has stopped answering.
   if (q === '') {
     const example = await loadLandingExample((params) => searchHeadwords(db, params));
-    return { q, direction, signedIn, hits: [], phrase: null, didYouMean: null, example, phraseWordsOmitted: 0, panel: null };
+    // NOT RECONCILED, AND THAT IS RIGHT. `direction` here is only what an empty
+    // query would resolve to if it were searched; nothing below this branch
+    // reads it, and no search ran to have used it. Reconciling `pair` against a
+    // direction nobody searched with would report a target for a search that
+    // never happened.
+    return {
+      q,
+      direction,
+      pair,
+      signedIn,
+      hits: [],
+      phrase: null,
+      didYouMean: null,
+      example,
+      phraseWordsOmitted: 0,
+      panel: null,
+    };
   }
 
   // ONE PIPELINE, TWO BRANCHES, AND THE BRANCH IS DECIDED HERE.
@@ -176,11 +214,30 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   what keeps a partly read query from rendering as a whole answer. It is
   //   computed from what the search ACTUALLY looked at rather than from the
   //   constant, so it cannot drift if the cap moves.
+  // THE PAIR THE BAR SHOWS FOR THIS ANSWER, RECONCILED WITH THE SEARCH THAT
+  //   ACTUALLY RAN. `pair` above is the reader's own statement and `direction`
+  //   is what that statement resolved to; from here on the two branches below
+  //   have run a real search, so the bar has to show the side that search used,
+  //   not the side the reader merely stated. See `reconcilePairWithDirection`
+  //   for the collision this fixes.
+  const resolvedPair = reconcilePairWithDirection(pair, direction);
+
   const query = normalizeQuery(q, direction.from);
   if (query.isPhrase) {
     const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
     const phraseWordsOmitted = query.tokens.length - phrase.tokens.length;
-    return { q, direction, signedIn, hits: [], phrase, didYouMean: null, example: null, phraseWordsOmitted, panel: null };
+    return {
+      q,
+      direction,
+      pair: resolvedPair,
+      signedIn,
+      hits: [],
+      phrase,
+      didYouMean: null,
+      example: null,
+      phraseWordsOmitted,
+      panel: null,
+    };
   }
 
   // THE WHOLE POINT OF THE DETECTION. `direction.from` and `direction.to` go
@@ -216,9 +273,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   would be no decision. The cost is a handful of local statements, no
   //   provider call: the enqueue behind them is still fire and forget.
   const topHit = hits[0];
-  const panel = topHit === undefined
-    ? null
-    : await resolveTriggeredPanel({
+  const panel =
+    topHit === undefined ? null : (
+      await resolveTriggeredPanel({
         db,
         request,
         headwordId: topHit.headwordId,
@@ -234,9 +291,21 @@ export async function loader({ request }: Route.LoaderArgs) {
         // reachable with `q !== ''`, so `user` is never null here, and
         // re-reading would risk two answers to one question in one request.
         accountId: user?.id ?? null,
-      });
+      })
+    );
 
-  return { q, direction, signedIn, hits, phrase: null, didYouMean, example: null, phraseWordsOmitted: 0, panel };
+  return {
+    q,
+    direction,
+    pair: resolvedPair,
+    signedIn,
+    hits,
+    phrase: null,
+    didYouMean,
+    example: null,
+    phraseWordsOmitted: 0,
+    panel,
+  };
 }
 
 /**
@@ -256,14 +325,19 @@ export async function loader({ request }: Route.LoaderArgs) {
  * it, the hero above that for a stranger, the history write beside it, and the
  * one privacy line under it. The worked example is the exception. It is handed
  * to `SearchPanes` as `emptyPane` rather than rendered here, because it belongs
- * IN the output pane: below both panes it left the right-hand column empty on
- * every desktop first visit.
+ * where the answer card goes: a reader meets the box and then an answer, which
+ * is the order the screen is read in.
  */
-export default function SearchRoute({ loaderData }: Route.ComponentProps) {
-  const { q, direction, signedIn, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
+export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
+  const { q, direction, pair, signedIn, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
 
+  // ONE COLUMN, ONE WIDTH, AT EVERY VIEWPORT. `max-w-2xl` and nothing wider:
+  // the surface below used to widen to `max-w-5xl` from `md` up so a second
+  // column had room, and there is no second column now. Letting one column of
+  // content grow to five columns' worth of width puts a reading line where no
+  // eye tracks it.
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 md:max-w-5xl">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       {/* Today's three words, on the home screen and nowhere else. Client only:
           it renders nothing on the server and nothing until the device's own
           store has been read, so the HTML this route sends is unchanged.
@@ -274,35 +348,34 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           everybody put that database back moments after sign-out deleted it,
           and again on every reload of this page, which a browser walk found on
           2026-09-04. A stranger also has no saved words for it to pick from,
-          so the card could never have anything to show. It
-          sits above the two-pane surface, which is where it sat above the
-          results area before the relayout: with the answer now beside the box
-          rather than under it, "above both panes" is the only position that
-          still means the same thing. */}
+          so the card could never have anything to show. It sits above the
+          translator surface, which is the top of the single column: the day's
+          words are context for the screen rather than part of the question the
+          box asks. */}
       {signedIn && <DailyNudge />}
 
-      {/* THE HERO, ABOVE THE PANES, AND ONLY FOR A STRANGER. It is the section
-          heading under the shell's own h1, and it carries the two doors
-          beneath it. Below the panes is where the doors used
-          to be, which on a phone put the one thing a visitor without an
-          account needs behind the whole search surface. A signed-in reader
-          sees neither this nor the privacy line below: both address somebody
-          who has not joined yet. */}
+      {/* THE HERO, ABOVE THE SURFACE, AND ONLY FOR A STRANGER. It is the
+          section heading under the shell's own h1, and it carries the two doors
+          beneath it. Below the surface is where the doors used to be, which put
+          the one thing a visitor without an account needs behind the whole
+          search column. A signed-in reader sees neither this nor the privacy
+          line below: both address somebody who has not joined yet. */}
       {q === '' && !signedIn && <LandingDoors />}
 
       <SearchPanes
         q={q}
         direction={direction}
+        pair={pair}
         hits={hits}
         phrase={phrase}
         didYouMean={didYouMean}
         phraseWordsOmitted={phraseWordsOmitted}
         panel={panel}
-        // THE WORKED EXAMPLE, IN THE OUTPUT PANE. With nothing typed there is
-        // no answer to show, so the pane shows one instead of standing empty
-        // beside a filled input pane. It is passed for a signed-in reader too:
-        // it is a demonstration rather than a pitch, and it is the only thing
-        // on an empty home screen that shows the dictionary answering.
+        // THE WORKED EXAMPLE, WHERE THE ANSWER CARD GOES. With nothing typed
+        // there is no answer to show, so that place in the column shows one. It
+        // is passed for a signed-in reader too: it is a demonstration rather
+        // than a pitch, and it is the only thing on an empty home screen that
+        // shows the dictionary answering.
         emptyPane={example === null ? undefined : <LandingExampleCard example={example} />}
       />
 
@@ -311,13 +384,20 @@ export default function SearchRoute({ loaderData }: Route.ComponentProps) {
           learn what anybody looked up. It sits beside the surface rather than
           inside it because it is not part of the surface: a review page that
           renders the panes must not record searches nobody made. */}
+      {/* The language pair WRITE, and it renders nothing. It is here rather
+          than inside `SearchPanes` for the reason `RecordSearch` is: a
+          sessionless render of the surface must not write to the device. It
+          writes both copies, the device store and the cookie the server reads
+          on the next request. */}
+      <PersistLanguagePair pair={pair} />
+
       <RecordSearch query={q} from={direction.from} to={direction.to} headwordId={hits[0]?.headwordId ?? null} />
 
       {/* ONE LINE, AND IT IS NOT A PITCH. The three sentences that described
-          the product under the panes are gone: the hero above already says
-          what this is, and saying it twice more at a third width is what made
-          this screen read as three loose blocks. What is left is the privacy
-          sentence, which carries both halves, and it is for a stranger only. */}
+          the product under the surface are gone: the hero above already says
+          what this is, and saying it twice more is what made this screen read
+          as three loose blocks. What is left is the privacy sentence, which
+          carries both halves, and it is for a stranger only. */}
       {q === '' && !signedIn && <LandingPrivacyNote />}
     </div>
   );

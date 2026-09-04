@@ -195,7 +195,7 @@ export interface DidYouMeanProps {
  */
 export function DidYouMean({ suggestion, from, to }: DidYouMeanProps) {
   const { t } = useTranslation();
-  const href = `/search?q=${encodeURIComponent(suggestion)}&from=${from}&to=${to}`;
+  const href = `/translate?q=${encodeURIComponent(suggestion)}&from=${from}&to=${to}`;
 
   return (
     <p className="text-sm text-muted-foreground">

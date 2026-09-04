@@ -231,7 +231,7 @@ function InnerContent({ title, backTo, children }: { title?: string; backTo?: st
   // which is the only way a screen inside this layout can reach the header at
   // all. Failing that, the nav catalog already knows the name of the screen the
   // user is on, so the header reads it from there rather than making every
-  // route repeat its own label. Screens outside the catalog, `/search` and
+  // route repeat its own label. Screens outside the catalog, `/translate` and
   // `/entry/:id`, are exactly why the handle exists: without it the h1 fell all
   // the way back to the wordmark and the mobile header said "translate" twice.
   const activeHref = activeNavigationHref(location.pathname);

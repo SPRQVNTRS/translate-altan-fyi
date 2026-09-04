@@ -3,7 +3,7 @@
  * `<textarea>`.
  *
  * WHAT THIS GUARDS. `VoiceInput` writes the recognised words into the search
- * box and then submits the search form. The two-pane relayout replaced the
+ * box and then submits the search form. The translator relayout replaced the
  * single-line `<input>` with a `<textarea>`, and `VoiceInput`'s `inputRef`
  * prop was typed as `RefObject<HTMLTextAreaElement>`'s sibling,
  * `RefObject<HTMLInputElement>`, which a textarea ref cannot satisfy. The prop
@@ -43,11 +43,11 @@ import {
 /**
  * The search SURFACE as text. Read once: three cases ask different questions of it.
  *
- * It is `SearchPanes` rather than `routes/search.tsx` since M186: the two-pane
- * markup, and with it the textarea, the form and the voice control, moved out of
- * the route into a component so a dev-only review page could render the same
- * surface without a session. The wiring this file pins is unchanged, so only the
- * file it is read from moves.
+ * It is `SearchPanes` rather than `routes/translate.tsx` since M186: the
+ * translator markup, and with it the textarea, the form and the voice control,
+ * moved out of the route into a component so a dev-only review page could
+ * render the same surface without a session. The wiring this file pins is
+ * unchanged, so only the file it is read from moves.
  */
 const ROUTE_SOURCE = readFileSync(new URL('../../app/components/search-panes.tsx', import.meta.url), 'utf8');
 

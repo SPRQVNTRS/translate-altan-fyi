@@ -32,15 +32,15 @@ import { PHRASE_TOKEN_LIMIT } from '../../app/lib/dictionary/search.server';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
-const ROUTE_SOURCE = readFileSync(join(REPO_ROOT, 'app/routes/search.tsx'), 'utf8');
+const ROUTE_SOURCE = readFileSync(join(REPO_ROOT, 'app/routes/translate.tsx'), 'utf8');
 /**
  * The surface, as text, and it is a SECOND file since M186.
  *
- * The two-pane markup moved out of the route into `SearchPanes`, so the route
+ * The translator markup moved out of the route into `SearchPanes`, so the route
  * still owns the arithmetic and the component now owns the notice. Reading only
- * the route would have made the pane cases pass on a file that no longer
- * contains a pane. The questions are unchanged, only the file each one is asked
- * of.
+ * the route would have made the surface cases pass on a file that no longer
+ * renders the surface. The questions are unchanged, only the file each one is
+ * asked of.
  */
 const PANES_SOURCE = readFileSync(join(REPO_ROOT, 'app/components/search-panes.tsx'), 'utf8');
 const SEARCH_SOURCE = readFileSync(join(REPO_ROOT, 'app/lib/dictionary/search.server.ts'), 'utf8');

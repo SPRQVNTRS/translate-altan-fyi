@@ -34,9 +34,8 @@ import { Loader2, Mic, MicOff, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '#app/components/ui/button';
-import { Label } from '#app/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#app/components/ui/select';
 import type { LanguageCode } from '#app/lib/dictionary/detect-language';
+import { LANGUAGE_NAMES } from '#app/lib/dictionary/language-pair';
 import {
   detectAudioRecorder,
   pickRecordingMimeType,
@@ -159,12 +158,18 @@ export interface VoiceLanguage {
  * A region has to be chosen because BCP-47 recognisers want one, and a bare
  * `en` is refused by some engines. These are the widest-supported region for
  * each language, not a claim about the reader's accent.
+ *
+ * THE NAMES ARE NOT WRITTEN HERE. They come from `LANGUAGE_NAMES` in
+ * `app/lib/dictionary/language-pair.ts`, which is the one table that says what
+ * a language is called. A language named twice in two files is a language that
+ * will eventually be named two different ways, and the language bar above the
+ * search box names all four.
  */
 export const VOICE_LANGUAGES = [
-  { code: 'en', tag: 'en-US', label: 'English' },
-  { code: 'de', tag: 'de-DE', label: 'Deutsch' },
-  { code: 'tr', tag: 'tr-TR', label: 'Türkçe' },
-  { code: 'es', tag: 'es-ES', label: 'Español' },
+  { code: 'en', tag: 'en-US', label: LANGUAGE_NAMES.en },
+  { code: 'de', tag: 'de-DE', label: LANGUAGE_NAMES.de },
+  { code: 'tr', tag: 'tr-TR', label: LANGUAGE_NAMES.tr },
+  { code: 'es', tag: 'es-ES', label: LANGUAGE_NAMES.es },
 ] as const satisfies readonly VoiceLanguage[];
 
 const VOICE_LANGUAGE_CODES: ReadonlySet<string> = new Set(VOICE_LANGUAGES.map((language) => language.code));
@@ -179,29 +184,15 @@ export function voiceLanguageTag(code: LanguageCode): string {
   return VOICE_LANGUAGES.find((language) => language.code === code)?.tag ?? 'en-US';
 }
 
-/** Where the last picked spoken language is remembered. Device-local, like the app language. */
-export const VOICE_LANGUAGE_STORAGE_KEY = 'translate-voice-language';
-
-/** CLIENT: the last spoken language this device picked. SSR-safe, and never throws. */
-export function readStoredVoiceLanguage(): LanguageCode | null {
-  if (globalThis.localStorage === undefined) return null;
-  try {
-    const raw = localStorage.getItem(VOICE_LANGUAGE_STORAGE_KEY);
-    return isVoiceLanguage(raw) ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
-/** CLIENT: remember the picked spoken language. Never throws (private mode, quota). */
-export function writeStoredVoiceLanguage(code: LanguageCode): void {
-  if (globalThis.localStorage === undefined) return;
-  try {
-    localStorage.setItem(VOICE_LANGUAGE_STORAGE_KEY, code);
-  } catch {
-    /* storage blocked, the pick simply lasts for this visit */
-  }
-}
+/**
+ * THERE IS NO SPOKEN-LANGUAGE PICKER, AND NO STORED PICK BEHIND ONE. Both were
+ * deleted with the language bar's arrival. The screen now states its source
+ * language once, above both panes, and this control speaks whatever that
+ * resolved to: a second language control beside the first is two answers to
+ * one question, and the reader has no way to know which one the microphone
+ * obeyed. The recogniser tag therefore comes from `sourceLanguage`, which the
+ * search screen passes as `direction.from`.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* State                                                                        */
@@ -335,7 +326,9 @@ export function createVoiceHandlers(targets: SearchFormTargets, updateState: Voi
   return {
     onTranscript: (result) => {
       deliverTranscript(targets, result);
-      updateState((previous) => (previous.kind === 'listening' ? { kind: 'listening', interim: result.transcript } : previous));
+      updateState((previous) =>
+        previous.kind === 'listening' ? { kind: 'listening', interim: result.transcript } : previous,
+      );
     },
     onError: (code) => updateState(() => voiceStateForError(code)),
     onEnd: () => updateState((previous) => (previous.kind === 'listening' ? { kind: 'idle' } : previous)),
@@ -345,53 +338,6 @@ export function createVoiceHandlers(targets: SearchFormTargets, updateState: Voi
 /* -------------------------------------------------------------------------- */
 /* The control                                                                  */
 /* -------------------------------------------------------------------------- */
-
-/**
- * The spoken language picker, shared by the on-device control and the server
- * fallback.
- *
- * One component rather than two copies: the two paths offer the SAME four
- * languages, and a list that drifted would make the fallback quietly narrower
- * than the control it replaces.
- */
-export function VoiceLanguagePicker({
-  language,
-  onLanguageChange,
-  triggerId,
-}: {
-  language: LanguageCode;
-  onLanguageChange: (code: LanguageCode) => void;
-  triggerId: string;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <>
-      <Label htmlFor={triggerId} className="sr-only">
-        {t('voice.fieldLabel')}
-      </Label>
-      <Select
-        value={language}
-        onValueChange={(next) => {
-          // Radix hands back a plain string. Narrow it rather than assert it:
-          // an unoffered code would be sent straight to the recogniser.
-          if (isVoiceLanguage(next)) onLanguageChange(next);
-        }}
-      >
-        <SelectTrigger id={triggerId} size="sm" className="w-32" aria-label={t('voice.fieldLabel')}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {VOICE_LANGUAGES.map((option) => (
-            <SelectItem key={option.code} value={option.code}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
-  );
-}
 
 /** Every state the ON-DEVICE control renders. `unsupported` is not one of them: see `VoiceControlProps`. */
 export type BrowserVoiceState = Exclude<VoiceState, { kind: 'unsupported' }>;
@@ -406,8 +352,6 @@ export type BrowserVoiceState = Exclude<VoiceState, { kind: 'unsupported' }>;
  */
 export interface VoiceControlProps {
   state: BrowserVoiceState;
-  language: LanguageCode;
-  onLanguageChange: (code: LanguageCode) => void;
   onToggle: () => void;
   /**
    * Whether this control has already written words into the search box.
@@ -417,8 +361,6 @@ export interface VoiceControlProps {
    * under the input pane's own note, before the reader had touched anything.
    */
   hasTranscript: boolean;
-  /** Ids for the picker label, so two controls on one screen cannot collide. */
-  triggerId: string;
   className?: string;
 }
 
@@ -429,15 +371,7 @@ export interface VoiceControlProps {
  * an argument. That is what lets a unit test render the unsupported branch and
  * the refused-microphone branch without a browser.
  */
-export function VoiceControl({
-  state,
-  language,
-  onLanguageChange,
-  onToggle,
-  hasTranscript,
-  triggerId,
-  className,
-}: VoiceControlProps) {
+export function VoiceControl({ state, onToggle, hasTranscript, className }: VoiceControlProps) {
   const { t } = useTranslation();
 
   const isListening = state.kind === 'listening';
@@ -452,12 +386,15 @@ export function VoiceControl({
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <VoiceLanguagePicker language={language} onLanguageChange={onLanguageChange} triggerId={triggerId} />
-
         <Button
           type="button"
           variant={isListening ? 'default' : 'outline'}
           size="sm"
+          // 44px, to match the submit button it now shares a row with on the
+          // translator surface. The shared `sm` size is 32px, a plain
+          // utility rather than a data-variant, so this override wins under
+          // tailwind-merge with no extra selector needed.
+          className="h-11"
           onClick={onToggle}
           disabled={isChecking}
           aria-pressed={isListening}
@@ -508,10 +445,7 @@ export type ServerVoiceState =
 /** Everything the rendered fallback needs, and nothing it can decide for itself. */
 export interface ServerVoiceControlProps {
   state: ServerVoiceState;
-  language: LanguageCode;
-  onLanguageChange: (code: LanguageCode) => void;
   onToggle: () => void;
-  triggerId: string;
   className?: string;
 }
 
@@ -527,14 +461,7 @@ export interface ServerVoiceControlProps {
  * reader deciding whether to press the button is entitled to know all of that
  * before pressing it, not after.
  */
-export function ServerVoiceControl({
-  state,
-  language,
-  onLanguageChange,
-  onToggle,
-  triggerId,
-  className,
-}: ServerVoiceControlProps) {
+export function ServerVoiceControl({ state, onToggle, className }: ServerVoiceControlProps) {
   const { t } = useTranslation();
 
   const isRecording = state.kind === 'recording';
@@ -555,12 +482,13 @@ export function ServerVoiceControl({
       {state.kind !== 'no-recorder' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <VoiceLanguagePicker language={language} onLanguageChange={onLanguageChange} triggerId={triggerId} />
-
             <Button
               type="button"
               variant={isRecording ? 'default' : 'outline'}
               size="sm"
+              // Same 44px override as the Web Speech control's button, and the
+              // same reason: this row now sits beside the submit button.
+              className="h-11"
               onClick={onToggle}
               disabled={isSending}
               aria-pressed={isRecording}
@@ -599,9 +527,8 @@ export function ServerVoiceControl({
 export interface ServerVoiceFallbackProps {
   inputRef: RefObject<TranscriptSink | null>;
   formRef: RefObject<HTMLFormElement | null>;
+  /** The language the clip will be transcribed as. The screen's own source language. */
   language: LanguageCode;
-  onLanguageChange: (code: LanguageCode) => void;
-  triggerId: string;
   className?: string;
 }
 
@@ -612,14 +539,7 @@ export interface ServerVoiceFallbackProps {
  * including the failed ones. A live track left open keeps the browser's
  * recording indicator lit, which reads as an app that is still listening.
  */
-export function ServerVoiceFallback({
-  inputRef,
-  formRef,
-  language,
-  onLanguageChange,
-  triggerId,
-  className,
-}: ServerVoiceFallbackProps) {
+export function ServerVoiceFallback({ inputRef, formRef, language, className }: ServerVoiceFallbackProps) {
   const [state, setState] = useState<ServerVoiceState>({ kind: 'ready' });
   const constructorRef = useRef<AudioRecorderConstructor | null>(null);
   const mimeTypeRef = useRef<string | null>(null);
@@ -696,23 +616,17 @@ export function ServerVoiceFallback({
       // The same delivery the Web Speech path uses: the words land in the
       // ordinary search box and the ordinary form submits them, so the query
       // travels the normal normalisation, fuzzy match and did-you-mean path.
-      deliverTranscript({ input: inputRef.current, form: formRef.current }, { transcript: outcome.text, isFinal: true });
+      deliverTranscript(
+        { input: inputRef.current, form: formRef.current },
+        { transcript: outcome.text, isFinal: true },
+      );
       setState({ kind: 'transcribed', model: outcome.model, labelKey: outcome.labelKey });
     };
 
     void run().catch(() => setState({ kind: 'refused', messageKey: TRANSCRIPTION_FAILED_KEY }));
   }, [formRef, inputRef, language]);
 
-  return (
-    <ServerVoiceControl
-      state={state}
-      language={language}
-      onLanguageChange={onLanguageChange}
-      onToggle={handleToggle}
-      triggerId={triggerId}
-      className={className}
-    />
-  );
+  return <ServerVoiceControl state={state} onToggle={handleToggle} className={className} />;
 }
 
 /**
@@ -731,10 +645,13 @@ export interface VoiceInputProps {
   inputRef: RefObject<TranscriptSink | null>;
   /** The search form a settled phrase submits. */
   formRef: RefObject<HTMLFormElement | null>;
-  /** The language the reader is looking a word up FROM, the best guess at what they will say. */
+  /**
+   * The language the reader is looking a word up FROM, and therefore the
+   * language the recogniser is told to expect. It is the screen's own source
+   * language, resolved by the language bar above both panes, so the microphone
+   * and the search can never be set to two different languages.
+   */
   sourceLanguage: LanguageCode;
-  /** The id the picker's label binds to. */
-  triggerId?: string;
   className?: string;
 }
 
@@ -745,15 +662,8 @@ export interface VoiceInputProps {
  * first client render agree. The one frame in `checking` is the price of not
  * lying to either of them.
  */
-export function VoiceInput({
-  inputRef,
-  formRef,
-  sourceLanguage,
-  triggerId = 'voice-language',
-  className,
-}: VoiceInputProps) {
+export function VoiceInput({ inputRef, formRef, sourceLanguage, className }: VoiceInputProps) {
   const [state, setState] = useState<VoiceState>({ kind: 'checking' });
-  const [language, setLanguage] = useState<LanguageCode>(sourceLanguage);
   // Whether this control has ever written into the box. It survives the end of
   // a session, which `state` does not: the state returns to `idle` and the
   // words stay in the box, so the note about them has to outlast the session.
@@ -766,20 +676,10 @@ export function VoiceInput({
     constructorRef.current = recognizerConstructor;
     setState(recognizerConstructor === null ? { kind: 'unsupported' } : { kind: 'idle' });
 
-    // The reader's own last pick wins over the detected search direction: they
-    // chose it, the direction was guessed for them.
-    const remembered = readStoredVoiceLanguage();
-    if (remembered) setLanguage(remembered);
-
     return () => {
       recognizerRef.current?.abort();
       recognizerRef.current = null;
     };
-  }, []);
-
-  const handleLanguageChange = useCallback((code: LanguageCode) => {
-    setLanguage(code);
-    writeStoredVoiceLanguage(code);
   }, []);
 
   const handleToggle = useCallback(() => {
@@ -794,7 +694,7 @@ export function VoiceInput({
     recognizerRef.current = recognizer;
     const handlers = createVoiceHandlers({ input: inputRef.current, form: formRef.current }, setState);
     setState({ kind: 'listening', interim: '' });
-    startVoiceSession(recognizer, voiceLanguageTag(language), {
+    startVoiceSession(recognizer, voiceLanguageTag(sourceLanguage), {
       ...handlers,
       onTranscript: (result) => {
         setHasTranscript(true);
@@ -809,7 +709,7 @@ export function VoiceInput({
         handlers.onError(code);
       },
     });
-  }, [formRef, inputRef, language]);
+  }, [formRef, inputRef, sourceLanguage]);
 
   // The two paths are different components, not two branches of one, because
   // they are different bargains: one keeps the audio on the device and the
@@ -817,26 +717,9 @@ export function VoiceInput({
   // compulsory rather than optional.
   if (state.kind === 'unsupported') {
     return (
-      <ServerVoiceFallback
-        inputRef={inputRef}
-        formRef={formRef}
-        language={language}
-        onLanguageChange={handleLanguageChange}
-        triggerId={triggerId}
-        className={className}
-      />
+      <ServerVoiceFallback inputRef={inputRef} formRef={formRef} language={sourceLanguage} className={className} />
     );
   }
 
-  return (
-    <VoiceControl
-      state={state}
-      language={language}
-      onLanguageChange={handleLanguageChange}
-      onToggle={handleToggle}
-      hasTranscript={hasTranscript}
-      triggerId={triggerId}
-      className={className}
-    />
-  );
+  return <VoiceControl state={state} onToggle={handleToggle} hasTranscript={hasTranscript} className={className} />;
 }

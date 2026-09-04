@@ -4,7 +4,7 @@
  *
  * WHY THIS TEST EXISTS NOW. The box on `/` is a `<textarea>`, so multi-word
  * input is the ordinary case rather than the rare one it was behind a one-line
- * field. That makes `search.tsx`'s phrase branch the MAIN path, and a
+ * field. That makes `translate.tsx`'s phrase branch the MAIN path, and a
  * regression in it would not look like a crash: the single-word path answers a
  * whole sentence by folding it into one string, comparing that string against
  * `headwords.lemma_normalized`, finding nothing, and then handing back whichever
@@ -47,7 +47,7 @@ const UNREACHABLE_DSN = 'postgres://user:pass@127.0.0.1:1/none';
 const db = drizzle(new pg.Pool({ connectionString: UNREACHABLE_DSN }), { schema });
 
 /** The route as text. Read once, questioned three times. */
-const ROUTE_SOURCE = readFileSync(new URL('../../app/routes/search.tsx', import.meta.url), 'utf8');
+const ROUTE_SOURCE = readFileSync(new URL('../../app/routes/translate.tsx', import.meta.url), 'utf8');
 
 /** What a translator actually puts in a text area. */
 const PHRASES = [
@@ -73,7 +73,7 @@ function phraseBranch() {
   const match = /if \(\w+\.isPhrase\) \{([\s\S]*?)\n {2}\}/.exec(ROUTE_SOURCE);
   assert.ok(
     match,
-    'search.tsx has no `if (<query>.isPhrase) { ... }` branch in its loader. Without it a ' +
+    'translate.tsx has no `if (<query>.isPhrase) { ... }` branch in its loader. Without it a ' +
       'typed sentence goes to searchHeadwords, which answers it with the single word that ' +
       'happens to share the most trigrams.',
   );

@@ -1,9 +1,9 @@
 /**
- * A signed-out `GET /search?q=Haus` is sent to the sign-in page too (M184
+ * A signed-out `GET /translate?q=Haus` is sent to the sign-in page too (M184
  * spec 03).
  *
  * WHY THIS FILE EXISTS BESIDE `anonymous-index-query-redirects.test.ts`
- *   `/` and `/search` are two route ids over ONE module. The rule that gates
+ *   `/` and `/translate` are two route ids over ONE module. The rule that gates
  *   them lives in the single loader they share, keyed on the request rather
  *   than on the path, and this file is the evidence that the sharing is real:
  *   one check, both URLs, with nothing written twice. The pair matters more
@@ -27,7 +27,7 @@ import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
 import { SIGN_IN_PATH } from '../../app/lib/auth/paths';
-import { loader as searchLoader } from '../../app/routes/search';
+import { loader as translateLoader } from '../../app/routes/translate';
 import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
@@ -37,16 +37,16 @@ const WORD = 'Haus';
 
 let session: TestUserSession | null = null;
 
-/** `GET /search?q=Haus`, on the `search-alias` route id's own pattern. */
+/** `GET /translate?q=Haus`, on the `translate-alias` route id's own pattern. */
 async function loadAliasQuery(cookie: string | null) {
-  const request = new Request(`https://translate.altan.fyi/search?q=${WORD}&from=de&to=en`, {
+  const request = new Request(`https://translate.altan.fyi/translate?q=${WORD}&from=de&to=en`, {
     headers: cookie === null ? {} : { cookie },
   });
-  return searchLoader({
+  return translateLoader({
     request,
     url: new URL(request.url),
     params: {},
-    pattern: '/search',
+    pattern: '/translate',
     context: new RouterContextProvider(),
   });
 }
@@ -66,7 +66,7 @@ after(async () => {
   await closePool();
 });
 
-describe('an anonymous query on the /search alias', () => {
+describe('an anonymous query on the /translate alias', () => {
   it('redirects to the sign-in page', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
     const thrown = await loadAliasQuery(null).then(
       () => null,
@@ -75,7 +75,7 @@ describe('an anonymous query on the /search alias', () => {
 
     assert.ok(
       thrown instanceof Response,
-      'GET /search?q= answered a signed-out visitor with data. Both route ids run one loader, so this and the ' +
+      'GET /translate?q= answered a signed-out visitor with data. Both route ids run one loader, so this and the ' +
         'index case must always agree: if only one of them is red, the rule has been moved onto a path.',
     );
     assert.equal(thrown.status, 302);

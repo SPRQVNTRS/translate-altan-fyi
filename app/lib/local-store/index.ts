@@ -107,12 +107,7 @@ export {
   resolveDeviceId,
   nextLamport,
 } from './primary-store';
-export type {
-  LocalListInput,
-  LocalListItemInput,
-  LocalNoteInput,
-  LocalReviewStateInput,
-} from './primary-store';
+export type { LocalListInput, LocalListItemInput, LocalNoteInput, LocalReviewStateInput } from './primary-store';
 
 // The device-only search log, capped on every write and never synced.
 export { recordSearch, listHistory, clearHistory, pruneHistory, importHistoryEntries } from './history';
@@ -197,3 +192,11 @@ export { shouldFallbackOffline } from './offline-fallback';
 // never enters the encrypted blob, so one device's nudge cannot silence
 // another's. See `nudge.ts`.
 export { localDateKey, shouldShowNudge, getNudgeShownOn, markNudgeShown } from './nudge';
+
+// The translator's language pair, as two device-local store VALUES. Not
+// entities and never synced: a phone set to Turkish must not retarget the
+// laptop. See `language-pair.ts` here, and `app/lib/dictionary/language-pair.ts`
+// for the shape itself and for the cookie that mirrors it to the server.
+// `persistLanguagePair` is the one writer: it writes the store value AND the
+// cookie mirror, so no caller can perform half of the pair of writes.
+export { getLanguagePair, setLanguagePair, persistLanguagePair } from './language-pair';

@@ -11,10 +11,10 @@
  *   DOORS, in the rendered HTML, the way a reader meets them.
  *
  * IT RENDERS THE WHOLE ROUTE WITH THE REAL LOADER'S DATA, AND IT ASSERTS THE
- * ORDER. The doors used to live inside a component `search.tsx` renders BELOW
+ * ORDER. The doors used to live inside a component `translate.tsx` renders BELOW
  * the two-pane surface, so on a phone the card a stranger needs sat off the
  * first screen behind a search box they may not use. A test that only asked
- * "is the link in the HTML" passed throughout. So this renders `SearchRoute`
+ * "is the link in the HTML" passed throughout. So this renders `TranslateRoute`
  * itself, through `createRoutesStub` because the surface calls `useNavigation`
  * and needs a data router, and compares the two positions in the document.
  * Asserting the `href` and the `<textarea` rather than the labels is
@@ -53,7 +53,7 @@ import { createRoutesStub, RouterContextProvider } from 'react-router';
 
 import enCommon from '#app/locales/en/common.json';
 import { closePool, poolInitialized } from '../../drizzle/db';
-import SearchRoute, { loader as searchLoader } from '../../app/routes/search';
+import TranslateRoute, { loader as translateLoader } from '../../app/routes/translate';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -79,12 +79,12 @@ function englishInstance() {
  * a plain `MemoryRouter` throws. The stub carries no loader of its own, so the
  * render is synchronous and `renderToStaticMarkup` sees the finished tree.
  */
-function renderRoute(loaderData: Awaited<ReturnType<typeof searchLoader>>): string {
+function renderRoute(loaderData: Awaited<ReturnType<typeof translateLoader>>): string {
   const Stub = createRoutesStub([
     {
       path: '/',
       Component: () =>
-        createElement(SearchRoute, {
+        createElement(TranslateRoute, {
           loaderData,
           actionData: undefined,
           params: {},
@@ -133,7 +133,7 @@ describe('the front door an anonymous visitor is shown', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const request = new Request('https://translate.altan.fyi/');
-      const loaderData = await searchLoader({
+      const loaderData = await translateLoader({
         request,
         url: new URL(request.url),
         params: {},
@@ -199,7 +199,7 @@ describe('the front door an anonymous visitor is shown', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const request = new Request('https://translate.altan.fyi/');
-      const anonymous = await searchLoader({
+      const anonymous = await translateLoader({
         request,
         url: new URL(request.url),
         params: {},

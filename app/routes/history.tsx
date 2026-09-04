@@ -93,7 +93,7 @@ function formatRelativeTime(atMs: number, nowMs: number, language: string): stri
 /** The URL that re-runs this search, direction included so the repeat is the same search. */
 function repeatSearchHref(entry: { query: string; from: string; to: string }): string {
   const params = new URLSearchParams({ q: entry.query, from: entry.from, to: entry.to });
-  return `/search?${params.toString()}`;
+  return `/translate?${params.toString()}`;
 }
 
 interface HistoryEntryView {

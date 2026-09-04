@@ -5,13 +5,13 @@
  * WHY A MANIFEST AT ALL, WHEN THE ROUTING TREE ALREADY SAYS MOST OF THIS.
  *   Because it does not say all of it, and the parts it leaves out are the ones
  *   that cost money. Three of this app's gates are invisible in `routes.ts`:
- *   `search.tsx` decides per REQUEST inside its loader, `api.v1.transcribe.ts`
+ *   `translate.tsx` decides per REQUEST inside its loader, `api.v1.transcribe.ts`
  *   and `api.enrichment-vote.ts` each carry their own check in the file, and
  *   the `/api/v1/*` routes answer to a bearer token rather than to a session.
  *   A reader auditing "what can an anonymous stranger reach" would otherwise
  *   have to open seventy files to find out, and the first draft of this
  *   milestone proved what happens when somebody reads the tree and stops: it
- *   gated `/search` and left `/?q=` open, which is the same loader.
+ *   gated `/search` (now `/translate`) and left `/?q=` open, which is the same loader.
  *
  *   The second job is the one the test does: a new route file that nobody
  *   classified fails `tests/unit/route-classification-completeness.test.ts`.
@@ -22,7 +22,7 @@
  * WHAT THIS MODULE IS NOT. It is not a gate and nothing enforces anything from
  * it at runtime. A rule that read this map to decide access would be keyed on
  * the path, and a path-keyed rule is exactly the defect M184 exists to remove:
- * `/` and `/search` are two paths over one file, so no map keyed on either of
+ * `/` and `/translate` are two paths over one file, so no map keyed on either of
  * them could ever describe that file's real rule. The gates live where the
  * decision is made, this map records where to find them.
  *
@@ -41,7 +41,7 @@ export type RouteAccess =
   /** Reachable by anyone, signed in or not, with no account check anywhere in the file. */
   | 'public'
   /**
-   * `search.tsx`, and only `search.tsx`. One file, two route ids, and a rule
+   * `translate.tsx`, and only `translate.tsx`. One file, two route ids, and a rule
    * keyed on the REQUEST inside the one loader they share: an empty `q` is the
    * public landing page, any non-empty `q` requires an account. Its own
    * category because neither `public` nor `gated-layout` is true of it, and
@@ -102,9 +102,14 @@ export const ROUTE_CLASSIFICATION = {
     access: 'gated-layout',
     reason: 'The pathless layout that carries `authMiddleware`. Everything nested under it inherits the gate.',
   },
-  'search.tsx': {
+  'translate.tsx': {
     access: 'landing-loader-split',
-    reason: 'Served at `/` and at `/search`. Empty `q` is public, any non-empty `q` requires an account, decided in the one shared loader.',
+    reason: 'Served at `/` and at `/translate`. Empty `q` is public, any non-empty `q` requires an account, decided in the one shared loader.',
+  },
+  'search-redirect.ts': {
+    access: 'public',
+    reason:
+      '`/search` is the old `/translate` route id. A permanent redirect that carries the query string, reachable by anyone: the destination gates itself per request, so a gate here would only be a gate in front of a signpost.',
   },
   'account.tsx': {
     access: 'public',

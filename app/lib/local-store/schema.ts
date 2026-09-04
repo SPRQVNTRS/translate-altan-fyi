@@ -79,6 +79,27 @@ export const MIGRATION_GATE_CLEARED_FOR_VALUE = 'migrationGateClearedFor';
  */
 export const NUDGE_SHOWN_ON_VALUE = 'nudgeShownOn';
 
+/**
+ * Store-level values holding the language pair the translator screen is set
+ * to: the SOURCE side, which may be the literal `detect`, and the TARGET side,
+ * which is always one served language.
+ *
+ * VALUES, NOT ROWS, AND DEVICE-ONLY, for the same reason the nudge marker
+ * above is. The pair is a preference like the theme, not something a person
+ * wrote, it carries no {@link SyncStamp}, and it never enters the synced blob:
+ * `blob-schema.ts` projects the four synced COLLECTIONS and values are not
+ * among them. Syncing it would mean a phone set to Turkish retargets the
+ * laptop mid-sentence.
+ *
+ * THEY ARE MIRRORED IN A COOKIE, AND THE MIRROR IS NOT A DUPLICATE STORE. The
+ * server renders the language bar in the first byte of HTML and cannot read
+ * IndexedDB, so `app/lib/dictionary/language-pair.ts` owns a cookie that is
+ * written on every change beside these values. See that module's header for
+ * why the durable copy is here rather than there.
+ */
+export const SOURCE_LANGUAGE_VALUE = 'sourceLanguage';
+export const TARGET_LANGUAGE_VALUE = 'targetLanguage';
+
 /** The per-entity ordering stamp. Higher lamport wins; ties break on lexicographic deviceId. */
 export interface SyncStamp {
   lamport: number;

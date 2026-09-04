@@ -17,8 +17,9 @@ export interface DirectionChipProps {
   query: string;
   /**
    * Where the flipped link points. Defaults to the current path, which is the
-   * search screen's case. An entry page passes `/search`, because flipping an
-   * entry in place would ask for translations into the entry's own language.
+   * search screen's case. An entry page passes `/translate`, because flipping
+   * an entry in place would ask for translations into the entry's own
+   * language.
    */
   flipTo?: string;
   className?: string;

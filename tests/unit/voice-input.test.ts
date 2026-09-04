@@ -102,7 +102,8 @@ class StubRecognizer implements SpeechRecognizer {
 
   /** One `result` event carrying every phrase heard so far, as a browser sends it. */
   hear(phrases: readonly string[], isFinal: boolean): void {
-    const results: Record<number, { readonly length: number; readonly 0: { transcript: string }; isFinal: boolean }> = {};
+    const results: Record<number, { readonly length: number; readonly 0: { transcript: string }; isFinal: boolean }> =
+      {};
     phrases.forEach((phrase, index) => {
       results[index] = { length: 1, 0: { transcript: phrase }, isFinal };
     });
@@ -162,11 +163,8 @@ function renderControl(state: VoiceState, hasTranscript = false): string {
       { i18n: englishInstance() },
       createElement(VoiceControl, {
         state,
-        language: 'de',
-        onLanguageChange: () => undefined,
         onToggle: () => undefined,
         hasTranscript,
-        triggerId: 'voice-language',
       }),
     ),
   );
@@ -186,10 +184,7 @@ function renderServerControl(state: ServerVoiceState): string {
       { i18n: englishInstance() },
       createElement(ServerVoiceControl, {
         state,
-        language: 'de',
-        onLanguageChange: () => undefined,
         onToggle: () => undefined,
-        triggerId: 'voice-language',
       }),
     ),
   );
@@ -213,7 +208,10 @@ describe('voice input support detection', () => {
 
   it('tells an unsupported browser that cannot record either to type instead', () => {
     const markup = renderServerControl({ kind: 'no-recorder' });
-    assert.ok(markup.includes(enCommon.voice.serverUnsupportedRecording), `the dead-end sentence is missing: ${markup}`);
+    assert.ok(
+      markup.includes(enCommon.voice.serverUnsupportedRecording),
+      `the dead-end sentence is missing: ${markup}`,
+    );
     assert.ok(!markup.includes('<button'), `a browser that cannot record must get no button, got: ${markup}`);
   });
 
@@ -324,7 +322,11 @@ describe('voice input transcripts', () => {
   it('keeps a multi-word phrase whole', () => {
     const event: SpeechResultsEvent = {
       resultIndex: 0,
-      results: { length: 2, 0: { length: 1, 0: { transcript: 'guten ' }, isFinal: true }, 1: { length: 1, 0: { transcript: ' Abend' }, isFinal: true } },
+      results: {
+        length: 2,
+        0: { length: 1, 0: { transcript: 'guten ' }, isFinal: true },
+        1: { length: 1, 0: { transcript: ' Abend' }, isFinal: true },
+      },
     };
     assert.deepEqual(transcriptFromEvent(event), { transcript: 'guten Abend', isFinal: true });
   });

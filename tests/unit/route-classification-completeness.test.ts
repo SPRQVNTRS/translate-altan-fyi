@@ -5,12 +5,12 @@
  *
  * WHAT THIS PROTECTS, AND WHAT IT DELIBERATELY DOES NOT
  *   It cannot check that a classification is TRUE. Nothing static can: the rule
- *   for `search.tsx` lives inside a loader and reads the request, and the rule
+ *   for `translate.tsx` lives inside a loader and reads the request, and the rule
  *   for `api.v1.transcribe.ts` is three lines of an action. What it CAN do is
  *   make an unclassified route file impossible to ship. The failure mode this
  *   milestone exists to prevent is not a wrong answer, it is a route nobody
  *   asked the question about, which is exactly how `/?q=` stayed open while
- *   `/search` was being gated.
+ *   `/translate` was being gated.
  *
  *   So the test is a forcing function with a loud remedy, not a proof. A new
  *   file fails it, and the only way to make it pass is to write down which of
@@ -120,11 +120,11 @@ describe('route classification completeness', () => {
     assert.equal(ROUTE_CLASSIFICATION['api.enrichment-vote.ts'].access, 'gated-inline');
   });
 
-  it('keeps search.tsx in its own category, and out of the public list', () => {
-    // `search.tsx` is half public and half gated, decided per request. Calling
+  it('keeps translate.tsx in its own category, and out of the public list', () => {
+    // `translate.tsx` is half public and half gated, decided per request. Calling
     // it `public` would be a lie that reopens `/?q=`; calling it `gated-layout`
     // would be a lie that breaks the landing page. It has its own category so
     // that neither lie is expressible.
-    assert.equal(ROUTE_CLASSIFICATION['search.tsx'].access, 'landing-loader-split');
+    assert.equal(ROUTE_CLASSIFICATION['translate.tsx'].access, 'landing-loader-split');
   });
 });

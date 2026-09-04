@@ -1,6 +1,6 @@
 {
   "nav": {
-    "search": "Suche",
+    "search": "Übersetzen",
     "lists": "Listen",
     "history": "Verlauf",
     "settings": "Einstellungen",
@@ -20,12 +20,12 @@
     "dark": "Dunkel"
   },
   "search": {
-    "metaTitle": "Suche",
-    "metaDescription": "Schlage Wörter nach für Bedeutungen und Beispiele.",
-    "fieldLabel": "Wort oder Ausdruck",
+    "metaTitle": "Übersetzen",
+    "metaDescription": "Übersetze Wörter und kurze Ausdrücke, mit Bedeutungen und Beispielen.",
+    "fieldLabel": "Text zum Übersetzen",
     "placeholder": "Gib ein Wort ein, zum Beispiel: Feierabend",
-    "submit": "Suchen",
-    "note": "Tippe in vier Sprachen. Findet Übersetzungen, Bedeutungen und Beispiele, selbst bei Tippfehlern.",
+    "submit": "Übersetzen",
+    "note": "Vier Sprachen. Übersetzungen, Bedeutungen und Beispiele, selbst bei Tippfehlern.",
     "resultsHeading": "Ergebnisse",
     "resultsFor": "Ergebnisse für {{query}}",
     "noResults": "Keine Treffer für {{query}}. Schreibweise prüfen oder ein anderes Wort versuchen.",
@@ -42,10 +42,19 @@
     "phraseTruncatedNote": "Nur die ersten {{lookedUp}} Wörter wurden durchsucht. Der Rest wurde ignoriert.",
     "phraseTokenNoResults": "Kein Wörterbucheintrag für {{token}}.",
     "phraseExamplesHeading": "Hinterlegte Sätze mit diesem Ausdruck",
-    "phraseNoExamples": "Keine hinterlegten Sätze enthalten genau diesen Ausdruck."
+    "phraseNoExamples": "Keine hinterlegten Sätze enthalten genau diesen Ausdruck.",
+    "sourceLabel": "Sprache, aus der übersetzt wird",
+    "targetLabel": "Sprache, in die übersetzt wird",
+    "detectLanguage": "Sprache erkennen",
+    "detectedAs": "{{language}} (erkannt)",
+    "swapLanguages": "Die beiden Sprachen tauschen",
+    "resultLabel": "Übersetzung",
+    "resultEmpty": "Dafür gibt es noch keine Übersetzung.",
+    "wordByWordNote": "Wort für Wort. Dies ist ein Wörterbuch, es bildet keine Sätze.",
+    "copy": "Übersetzung kopieren",
+    "copied": "Kopiert"
   },
   "voice": {
-    "fieldLabel": "Sprache",
     "start": "Zuhören",
     "stop": "Stopp",
     "listening": "Hört zu",
@@ -160,7 +169,11 @@
     "appearanceBody": "Das Farbschema kannst du oben im Kopfbereich bereits anpassen. Die Einstellungen für deine Übersetzungssprachen findest du hier, sobald sie fertig sind.",
     "languageTitle": "App-Sprache",
     "languageBody": "Wähle die Sprache für die Schaltflächen und Texte in der App. Das ändert nichts an den Sprachen, die du übersetzt.",
-    "languageFieldLabel": "App-Sprache"
+    "languageFieldLabel": "App-Sprache",
+    "installTitle": "App installieren",
+    "installBody": "Installiere die App auf diesem Gerät. Sie öffnet sich dann über den Startbildschirm und startet ohne Browserleiste.",
+    "installAction": "Installieren",
+    "installIosStep": "Auf iPhone und iPad öffnest du im Browser das Teilen-Menü und wählst „Zum Home-Bildschirm“."
   },
   "account": {
     "metaTitle": "Konto",

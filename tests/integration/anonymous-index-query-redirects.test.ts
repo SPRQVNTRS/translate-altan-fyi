@@ -1,10 +1,10 @@
 /**
  * A signed-out `GET /?q=Haus` is sent to the sign-in page (M184 spec 03).
  *
- * WHY THE INDEX AND NOT `/search`
+ * WHY THE INDEX AND NOT `/translate`
  *   `/?q=<word>` is the PRIMARY search URL of this product, confirmed live at
- *   `https://translate.altan.fyi/?q=Kummerspeck&from=en&to=de`. `/search` is
- *   the alias, and `app/routes.ts` names it `search-alias` in as many words.
+ *   `https://translate.altan.fyi/?q=Kummerspeck&from=en&to=de`. `/translate` is
+ *   the alias, and `app/routes.ts` names it `translate-alias` in as many words.
  *   The first draft of this milestone gated the alias and left this URL open,
  *   which would have shipped the whole thing and changed nothing. This case is
  *   the one that would have caught that, so it is the one that matters most in
@@ -29,7 +29,7 @@ import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
 import { SIGN_IN_PATH } from '../../app/lib/auth/paths';
-import { loader as searchLoader } from '../../app/routes/search';
+import { loader as translateLoader } from '../../app/routes/translate';
 import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
@@ -44,13 +44,13 @@ let session: TestUserSession | null = null;
  *
  * `pattern: '/'` is the INDEX route id's pattern. Both ids run this same
  * loader, which is the property the gate depends on, and the sibling file
- * `anonymous-search-alias-query-redirects.test.ts` drives the other one.
+ * `anonymous-translate-alias-query-redirects.test.ts` drives the other one.
  */
 async function loadIndexQuery(cookie: string | null) {
   const request = new Request(`https://translate.altan.fyi/?q=${WORD}&from=de&to=en`, {
     headers: cookie === null ? {} : { cookie },
   });
-  return searchLoader({
+  return translateLoader({
     request,
     url: new URL(request.url),
     params: {},

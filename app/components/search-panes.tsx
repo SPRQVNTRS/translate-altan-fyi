@@ -1,14 +1,15 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Check, Copy, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation } from 'react-router';
-import { DirectionChip } from '#app/components/direction-chip';
 import { EnrichmentSection } from '#app/components/enrichment-section';
+import { LanguageBar } from '#app/components/language-bar';
 import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
 import { Button } from '#app/components/ui/button';
 import { Textarea } from '#app/components/ui/textarea';
 import { VoiceInput } from '#app/components/voice-input';
 import type { Direction } from '#app/lib/dictionary/detect-language';
+import type { LanguagePair } from '#app/lib/dictionary/language-pair';
 import type { PhraseSearchResult, SearchHit } from '#app/lib/dictionary/search.server';
 import type { EnrichmentPanel } from '#app/lib/enrichment/state.server';
 
@@ -16,6 +17,8 @@ import type { EnrichmentPanel } from '#app/lib/enrichment/state.server';
 export interface SearchPanesProps {
   q: string;
   direction: Direction;
+  /** The language pair the bar is set to, resolved from the URL, then the cookie, then the default. */
+  pair: LanguagePair;
   hits: SearchHit[];
   phrase: PhraseSearchResult | null;
   didYouMean: string | null;
@@ -23,40 +26,188 @@ export interface SearchPanesProps {
   phraseWordsOmitted: number;
   panel: EnrichmentPanel | null;
   /**
-   * What the output pane holds while nothing has been searched for.
+   * What the result region holds while nothing has been searched for.
    *
-   * The pane would otherwise be a hole beside the input box on every desktop
-   * first visit. The caller decides what goes there; this component only
-   * decides that it goes THERE rather than under both panes.
+   * There is no hole to fill any more, since the column is one card under
+   * another, but the worked example is still the only thing on an untouched
+   * home screen that shows the dictionary answering. It renders where the
+   * result card would be, so a first visit shows the question and an answer in
+   * the order a reader will meet them. The caller decides what goes there; this
+   * component only decides that it goes THERE rather than under everything.
    */
   emptyPane?: ReactNode;
 }
 
 /**
- * The translator surface itself: something to type into on one side, what came
- * back on the other.
+ * The translation of a single word, as one line.
  *
- * TWO PANES, ONE FORM. The input pane is the `<textarea>` and its controls; the
- * output pane is the region the answer renders in. They are two cells of one
- * grid, side by side from `md` up and stacked below it, which is the SAME
- * breakpoint `AppWrapper` switches the sidebar and the drawer on. A second
- * breakpoint scheme would let the panes split while the chrome had not, which
- * is the one arrangement neither layout was designed for.
+ * THE TOP HIT ONLY. The cards below the field carry every hit; this line is
+ * the answer to "what does this word mean", and a field holding four words'
+ * worth of readings is a list, not an answer.
  *
- * THE INPUT PANE CARRIES `.surface-brand`, and it is the only thing on this
- * screen allowed to. That is a design rule, and it is inherited from the hero
- * card the input pane replaces: the output pane must not carry it, and nor may
- * anything else here.
+ * DEDUPLICATED, because two sources naming the same lemma is a fact about the
+ * dictionary and not about the word. The gloss is the fallback: a headword can
+ * be matched with no translation row at all, and the gloss is what the entry
+ * page shows in that case.
  *
- * THE OUTPUT PANE HAS NO CARD OF ITS OWN. `SearchResults` and `PhraseResults`
- * already render cards, and a card holding cards is a frame around a frame. The
- * pane is a plain column, so it never becomes an empty box explaining its own
- * emptiness.
+ * Pure, and exported, so a test can drive it without a browser.
+ */
+export function singleWordResult(hit: SearchHit | undefined): string {
+  if (hit === undefined) return '';
+  const lemmas = [...new Set(hit.translations.map((translation) => translation.lemma))];
+  if (lemmas.length > 0) return lemmas.join(', ');
+  return hit.gloss ?? '';
+}
+
+/**
+ * A phrase, word by word: each word's first translation, in the order typed.
  *
- * WITH NOTHING SEARCHED THE PANE HOLDS `emptyPane`. An empty right-hand column
- * beside a filled left one is a hole the width of half the page, and the home
- * screen's worked example used to sit below both panes where it left that hole
- * open. The caller supplies the example; this component only places it.
+ * IT IS NOT A SENTENCE, AND THE SCREEN SAYS SO. This dictionary has no
+ * grammar, no word order and no agreement: it can say what each word means and
+ * nothing more. A field shaped like a translator's that silently returned this
+ * as prose would be a lie about the product, so the note beside it is
+ * compulsory rather than decorative.
+ *
+ * A WORD WITH NO ENTRY KEEPS ITS OWN SPELLING. Dropping it would quietly
+ * shorten the reader's sentence and leave nothing on screen saying which word
+ * went missing.
+ *
+ * Pure, and exported, so a test can drive it without a browser.
+ */
+export function phraseResult(phrase: PhraseSearchResult): string {
+  return phrase.tokens
+    .map((token) => {
+      const hit = token.hits[0];
+      if (hit === undefined) return token.token;
+      return hit.translations[0]?.lemma ?? hit.gloss ?? token.token;
+    })
+    .join(' ');
+}
+
+/** What the read-only answer field renders. */
+interface ResultFieldProps {
+  /** The answer itself. Empty when the search produced nothing to show. */
+  text: string;
+  /** What to say instead when `text` is empty. Already worded for the branch that produced it. */
+  emptyMessage: string;
+  /** The word-by-word caveat, on the phrase branch only. */
+  note: string | null;
+}
+
+/**
+ * The answer, as a read-only card directly under the box it was typed in.
+ *
+ * IT IS THE HEADLINE, AND THE CARDS BELOW IT ARE THE DETAIL. A translator puts
+ * the answer where the eye lands, at the size the question was asked in, and
+ * everything the dictionary knows beyond that keeps its place underneath.
+ *
+ * IT MATCHES THE INPUT CARD EXACTLY. Same rounding, same border, same padding,
+ * and neither card carries `.surface-brand` any more. That is the rule now, and
+ * it is deliberate rather than an omission: a control and its answer that look
+ * alike read as one thing, and tinting only the box a reader types into split
+ * the pair into a bright half and a plain half stacked under it.
+ *
+ * COPYING IS GUARDED, NOT ASSUMED. `navigator.clipboard` is undefined on an
+ * insecure origin, which local development over plain HTTP on a phone is, so
+ * the button disables itself rather than throwing inside a click handler.
+ *
+ * THE "COPIED" STATE RESETS BY REMOUNTING. The caller keys this component on
+ * the answer, so a new answer is a new component with a fresh state rather
+ * than an effect that watches a prop and corrects itself afterwards.
+ */
+function ResultField({ text, emptyMessage, note }: ResultFieldProps) {
+  const { t } = useTranslation();
+  const [isCopied, setIsCopied] = useState(false);
+  const canCopy = text !== '' && globalThis.navigator?.clipboard !== undefined;
+
+  // An inner async function rather than a then-chain: the lint gate's
+  // `promise(always-return)` rule refuses a `.then` whose body returns nothing,
+  // and a copy button's callback has nothing to return.
+  const handleCopy = (): void => {
+    if (!canCopy) return;
+    const copy = async (): Promise<void> => {
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+    };
+    // A refused clipboard, which a browser permission prompt can produce,
+    // leaves the answer on screen and the button unchanged. There is nothing to
+    // tell the reader that they could not act on themselves.
+    void copy().catch(() => undefined);
+  };
+
+  return (
+    <div className="rounded-2xl border p-5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium">{t('search.resultLabel')}</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleCopy}
+          disabled={!canCopy}
+          aria-label={isCopied ? t('search.copied') : t('search.copy')}
+        >
+          {isCopied ?
+            <Check className="size-4" aria-hidden="true" />
+          : <Copy className="size-4" aria-hidden="true" />}
+        </Button>
+      </div>
+
+      {/* Selectable, at reading size. The answer is the one thing on this
+          screen a reader takes away with them, by copy button or by hand. */}
+      {text !== '' && <p className="mt-2 text-xl">{text}</p>}
+      {text === '' && <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>}
+      {note !== null && <p className="mt-3 text-xs text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * The translator surface itself: something to type into, and what came back
+ * directly underneath it.
+ *
+ * ONE COLUMN AT EVERY WIDTH. The language bar, the input card and the result
+ * card are three blocks of one flex column, all exactly as wide as each other.
+ * This replaced a two-cell grid that was side by side from `md` up, and the
+ * reason is measured rather than aesthetic: the bar was a wrapping flex row
+ * over a CSS grid, two layout systems that cannot align their vertical edges,
+ * and at 1280px each select sat 14px off the card it belonged to. One column
+ * means one layout to get right instead of two, and it is the shape a phone
+ * gets anyway.
+ *
+ * THE LANGUAGE BAR IS INSIDE THE FORM, AND SO IS THE INPUT CARD. The form is an
+ * ordinary flex column now: with no grid to span, the `display: contents` trick
+ * that used to let the form's children be cells of an outer grid buys nothing
+ * and is gone. What matters is unchanged, that the bar's two hidden inputs,
+ * `from` and `to`, ride every submission this screen makes, including the voice
+ * control's.
+ *
+ * THE RESULT REGION STAYS OUTSIDE THE FORM. It holds the enrichment panel,
+ * whose vote buttons are their own controls; inside a GET form they would
+ * submit the search.
+ *
+ * THE PAIR IS STATED, NEVER PINNED BY A SIDE EFFECT. This surface used to write
+ * `from` and `to` into hidden inputs whenever the direction had NOT been
+ * detected, which meant one tap on the flip chip pinned that direction into
+ * every later submission: a German word typed afterwards was searched on the
+ * English side and returned nothing, with nothing on screen saying why. The
+ * bar replaces both the chip and that rule.
+ *
+ * THE TWO CARDS MATCH ON PURPOSE, AND NEITHER CARRIES `.surface-brand`. The
+ * input card used to be the one element on this screen allowed that class,
+ * inherited from the hero card it replaced. That rule is dead. Both cards are a
+ * plain `rounded-2xl border p-5`, because the box and the answer are one
+ * control and its reply: a tint on the first of two stacked cards makes them
+ * read as two unrelated panels rather than as a question and its answer.
+ *
+ * THE RESULT REGION IS ONE CARD AND THEN THE DETAIL. The read-only answer card
+ * is the headline; `SearchResults`, `PhraseResults`, the enrichment panel and
+ * the correction keep their place under it, each already a card of its own. The
+ * region itself is a plain column, so a card holding cards never happens.
+ *
+ * WITH NOTHING SEARCHED THE REGION HOLDS `emptyPane`. The caller supplies the
+ * worked example; this component only places it, where the answer card would
+ * be, so an untouched home screen still shows the dictionary answering.
  *
  * IT IS PURE OVER ITS PROPS, AND IT IS A COMPONENT RATHER THAN ROUTE MARKUP FOR
  * ONE REASON. The search route is gated: any non-empty `q` needs an account, so
@@ -70,6 +221,7 @@ export interface SearchPanesProps {
 export function SearchPanes({
   q,
   direction,
+  pair,
   hits,
   phrase,
   didYouMean,
@@ -90,10 +242,6 @@ export function SearchPanes({
   // `VoiceInput` takes a sink rather than an `HTMLInputElement`: see its props.
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  // A detected direction is a guess, so it is NOT pinned into the next
-  // submission: retyping should let the guess change. A direction the reader
-  // chose by flipping the chip IS pinned, because they asked for it.
-  const isDirectionPinned = !direction.detected;
 
   // ENTER STILL SEARCHES. A `<textarea>` takes Enter as a newline, so the box
   // that used to submit on Enter would silently stop doing it. Shift keeps the
@@ -106,14 +254,41 @@ export function SearchPanes({
     formRef.current?.requestSubmit();
   };
 
+  // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE. The two branches
+  // answer different questions, so they get different empty sentences: no
+  // dictionary entry at all is a different fact from an entry with nothing to
+  // translate it to, and one message for both would tell half the readers
+  // something untrue.
+  const resultText = phrase === null ? singleWordResult(topHit) : phraseResult(phrase);
+  const emptyMessage =
+    hits.length === 0 && phrase === null ? t('search.noResults', { query: q }) : t('search.resultEmpty');
+
   return (
-    <div className="grid items-start gap-6 md:grid-cols-2">
-      <div className="surface-brand rounded-2xl border p-5">
-        {/* GET, so the query lands in the URL and the results page is a place
-            rather than the outcome of a POST nobody can link to. A textarea
-            submits through GET exactly as the single-line box did: its whole
-            value, newlines included, goes into `?q=`. */}
-        <Form method="get" ref={formRef}>
+    <div className="flex flex-col gap-4">
+      {/* GET, so the query lands in the URL and the results page is a place
+          rather than the outcome of a POST nobody can link to. A textarea
+          submits through GET exactly as the single-line box did: its whole
+          value, newlines included, goes into `?q=`.
+
+          An ordinary flex column, with the same gap as the column it sits in,
+          so the bar, the input card and the result card below the form are
+          three evenly spaced blocks and the form itself is invisible to the
+          layout without needing `display: contents` to be. */}
+      <Form method="get" ref={formRef} className="flex flex-col gap-4">
+        {/* Keyed on the pair, so a navigation re-seeds the two selects. The
+            URL is the source of truth across navigations; the bar's own state
+            only exists so both sides can be edited before a submit. */}
+        <LanguageBar
+          key={`${pair.source}:${pair.target}`}
+          pair={pair}
+          direction={direction}
+          q={q}
+          formRef={formRef}
+        />
+
+        {/* Identical to the result card below, deliberately: see this
+            component's own comment on why neither is tinted. */}
+        <div className="rounded-2xl border p-5">
           <label htmlFor="search-word" className="text-sm font-medium">
             {t('search.fieldLabel')}
           </label>
@@ -128,47 +303,56 @@ export function SearchPanes({
             className="mt-2"
             onKeyDown={handleKeyDown}
           />
-          {isDirectionPinned && (
-            <>
-              <input type="hidden" name="from" value={direction.from} />
-              <input type="hidden" name="to" value={direction.to} />
-            </>
-          )}
-          {/* The button sits under the box rather than beside it, because
-              beside it is where the box now goes: a pane-wide textarea has no
-              room for a control on the same line at mobile widths. The label
-              changes with the state, it does not just gain a spinner. A
-              button that still reads "Search" while a search runs is telling
-              the reader nothing happened. */}
-          <div className="mt-3 flex justify-end">
-            <Button type="submit" disabled={isSearching}>
+          {/* THE MIC AND THE SUBMIT SHARE ONE ROW, microphone on the left and
+              the primary action on the right. They used to stack, submit
+              above `Listen`, which put a secondary control under the primary
+              one and made the card taller than the two controls need. The
+              label still changes with the state, it does not just gain a
+              spinner: a button that still reads "Translate" while a search
+              runs is telling the reader nothing happened.
+
+              THE BUTTON STAYS PROMINENT WITHOUT CLAIMING THE WHOLE ROW. It
+              used to be full width below `sm` because it had the row to
+              itself; sharing the row with the mic control means a full-width
+              button would push the mic beneath it, the exact stacking this
+              tidy removes. Both controls keep the shared 44px tap height. */}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <VoiceInput inputRef={inputRef} formRef={formRef} sourceLanguage={direction.from} />
+            <Button type="submit" disabled={isSearching} className="h-11">
               {isSearching && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               {isSearching ? t('search.submitting') : t('search.submit')}
             </Button>
           </div>
-          <VoiceInput className="mt-3" inputRef={inputRef} formRef={formRef} sourceLanguage={direction.from} />
-        </Form>
-        <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
-      </div>
+          <p className="mt-3 text-sm text-muted-foreground">{t('search.note')}</p>
+        </div>
+      </Form>
 
-      {/* THE OUTPUT PANE. The same results and the same correction a search
-          renders, and with nothing searched whatever the caller passed as
-          `emptyPane`. `aria-live` stays on the section: the example is static
-          and server rendered, so it is announced by nothing, and moving the
-          attribute inward would leave a real answer unannounced. */}
+      {/* THE RESULT REGION, DIRECTLY UNDER THE INPUT CARD. The answer card,
+          then the same results and the same correction a search always
+          rendered, and with nothing searched whatever the caller passed as
+          `emptyPane`. It sits OUTSIDE the form above on purpose: the enrichment
+          panel's vote buttons are controls, and a control inside a GET form
+          submits the search. `aria-live` stays on the
+          section: the example is static and server rendered, so it is
+          announced by nothing, and moving the attribute inward would leave a
+          real answer unannounced. */}
       <section aria-live="polite" className="flex flex-col gap-4">
         {q === '' && emptyPane}
         {q !== '' && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
-              <DirectionChip direction={direction} query={q} />
-            </div>
+            {/* Keyed on the answer, so a new answer arrives with a fresh copy
+                button rather than one still reading "Copied". */}
+            <ResultField
+              key={resultText}
+              text={resultText}
+              emptyMessage={emptyMessage}
+              note={phrase === null ? null : t('search.wordByWordNote')}
+            />
             {/* WHAT THE SEARCH ACTUALLY READ, WHEN IT WAS NOT ALL OF IT.
                 `searchPhrase` looks up at most `PHRASE_TOKEN_LIMIT` words, and
                 a translator-shaped textarea invites a whole pasted paragraph,
                 so the cap that was unreachable under a one-line box is now
-                ordinary. Without this line the pane answers seven words of a
+                ordinary. Without this line the screen answers seven words of a
                 thirty word paste with the confident shape of a full answer,
                 and nothing on screen says the other twenty three were never
                 looked at. It renders above the word list rather than below it,
@@ -179,12 +363,13 @@ export function SearchPanes({
                 {t('search.phraseTruncatedNote', { lookedUp: phrase.tokens.length })}
               </p>
             )}
+            <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
             {phrase !== null && <PhraseResults phrase={phrase} from={direction.from} to={direction.to} />}
             {phrase === null && hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
             {phrase === null && hits.length === 0 && (
               <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>
             )}
-            {/* THE ANSWER, IN THE OUTPUT PANE, FOR THE WORD AT THE TOP.
+            {/* THE ANSWER, IN THE RESULT REGION, FOR THE WORD AT THE TOP.
                 A translator's output area is where the interesting part
                 belongs, so the top hit's enrichment panel renders here rather
                 than only behind a click through to `/entry/:headwordId`. That
@@ -196,7 +381,7 @@ export function SearchPanes({
                 same shared state machine. So the honest idle line, which
                 distinguishes "no model is connected to this server" from
                 "nothing has been asked for yet", is inherited rather than
-                rewritten here. Writing a second idle sentence in this pane is
+                rewritten here. Writing a second idle sentence here is
                 how a healthy provider key comes to read like a dead one.
 
                 IT BLOCKS NOTHING ABOVE IT. The results, the truncation note

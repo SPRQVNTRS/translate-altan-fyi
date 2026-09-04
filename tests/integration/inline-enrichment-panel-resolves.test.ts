@@ -18,7 +18,7 @@
  *   down. Asserting them here is asserting that the spinner ends.
  *
  * THE SEARCH LOADER IS THE SUBJECT, NOT A HELPER BENEATH IT
- *   Every case calls `app/routes/search.tsx`'s own loader, because the claim is
+ *   Every case calls `app/routes/translate.tsx`'s own loader, because the claim is
  *   about the output pane and not about the shared module underneath it. A test
  *   against `resolveTriggeredPanel` alone would stay green if the search route
  *   stopped returning a panel at all.
@@ -58,7 +58,7 @@ import type { JsonValue } from '../../app/lib/json';
 import { registry } from '../../app/lib/llm/registry.server';
 import { PROMPT_VERSION } from '../../app/prompts/enrichment/version';
 import { loader as pollEnrichment } from '../../app/routes/api.enrichment.$headwordId';
-import { loader as searchLoader } from '../../app/routes/search';
+import { loader as translateLoader } from '../../app/routes/translate';
 import { runEnrichHeadword } from '../../app/workflows/operations/enrichment/enrich-headword';
 import { createFakeLlmPort, llmError, llmValue, type FakeLlmPort } from '../fixtures/fake-llm-port';
 import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
@@ -112,7 +112,7 @@ function octet(): number {
 function searchRequest(q: string): Request {
   const ip = `198.51.${octet()}.${octet()}`;
   createdCounterKeys.push(counterKey('ip', ip));
-  const url = `https://translate.altan.fyi/search?q=${encodeURIComponent(q)}&from=${FROM}&to=${TO}`;
+  const url = `https://translate.altan.fyi/translate?q=${encodeURIComponent(q)}&from=${FROM}&to=${TO}`;
   // SIGNED IN, SINCE M184. A typed search requires an account: the loader
   // redirects a signed-out caller to `/sign-in` before it reads the
   // dictionary, so an anonymous request here would assert nothing about the
@@ -133,11 +133,11 @@ function searchRequest(q: string): Request {
  */
 async function panelForSearch(q: string): Promise<EnrichmentPanel | null> {
   const request = searchRequest(q);
-  const data = await searchLoader({
+  const data = await translateLoader({
     request,
     url: new URL(request.url),
     params: {},
-    pattern: '/search',
+    pattern: '/translate',
     context: new RouterContextProvider(),
   });
   return data.panel;
