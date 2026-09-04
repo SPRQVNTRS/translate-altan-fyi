@@ -114,6 +114,7 @@ The boundary helpers that exist so you rarely need an assertion:
 
 | Topic | Location |
 |-------|----------|
+| Design language and UI recipes | [DESIGN.md](DESIGN.md) |
 | TypeScript | [.claude/typescript-rules.md](.claude/typescript-rules.md) |
 | React | [.claude/react-rules.md](.claude/react-rules.md) |
 | React Router v8 | [.claude/react-router-rules.md](.claude/react-router-rules.md), [skill](.claude/skills/react-router-framework-mode/SKILL.md) |
@@ -121,6 +122,13 @@ The boundary helpers that exist so you rarely need an assertion:
 | Workflows | [.claude/workflows.md](.claude/workflows.md) |
 | CLI | [.claude/cli.md](.claude/cli.md) |
 | Architecture Decisions | [.adr/README.md](.adr/README.md) |
+
+**Read [DESIGN.md](DESIGN.md) before writing any UI.** It is the normative
+source for surfaces, colour tokens, typography and layout, and the code cites it
+by section and rule number, so a comment saying "DESIGN.md rule 3" is pointing
+at a real, checkable statement. Two of its rules are enforced by
+`tests/unit/design-rules.test.ts` rather than by review: no thick left border
+accents, and no em dashes.
 
 ## Accounts
 
@@ -138,11 +146,11 @@ minted a way in. The contract, in full:
 - Everything past it needs an account: a typed search, entry pages, lists,
   history, review, attribution, settings, and `POST /api/v1/transcribe`. That
   last one was ungated on purpose before M184, and the reversal is deliberate.
-- `/` and `/search` are two route ids over ONE file, and the product's real URL
-  is `/?q=<word>`. So the rule for that file lives at the top of its loader and
-  reads the REQUEST: an empty `q` is the landing page, any other `q` needs an
-  account. A path-keyed rule gated `/search` and left `/?q=` wide open once
-  already. Do not write another one.
+- `/` and `/translate` are two route ids over ONE file, and the product's real
+  URL is `/?q=<word>`. So the rule for that file lives at the top of its loader
+  and reads the REQUEST: an empty `q` is the landing page, any other `q` needs
+  an account. A path-keyed rule gated `/search` (this route's old name) and
+  left `/?q=` wide open once already. Do not write another one.
 - The screens with no public half are gated by nesting under
   `app/routes/_app.gated.tsx`, which carries `accountMiddleware`. That is the
   only app-screen gate. `authMiddleware` also demanded a linked `users` row,

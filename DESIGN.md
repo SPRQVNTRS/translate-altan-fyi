@@ -40,7 +40,8 @@ build.
 1. **Neutrals carry the chrome, blue carries the brand.** Most elements use
    neutral colors. Reserve the brand blue for elements that need user focus: the
    primary button, the active nav item, the focus ring, links, and the single
-   hero card on a screen.
+   hero card on a screen where one exists. Not every screen has one: the
+   translator surface in section 3 deliberately has no brand wash at all.
 2. **The word is the subject.** Treat a search result as writing, not as a data
    row. Format text with care: set a readable line width, add generous line
    spacing, and maintain clear contrast between the translation, the
@@ -54,6 +55,14 @@ build.
    new component.
 5. **Soft but dense.** Combine generous corner curves, subtle shadows, and
    compact data density.
+6. **A control that names the data must name the data that was USED.** Where the
+   server resolves, repairs or detects a value, the control shows the resolved
+   value, never the one the reader asked for. The language bar rendered the
+   requested target `Deutsch` over results the server had already redirected
+   into English, and every result link on the same page said `to=en`. Nothing on
+   screen looked broken, which is what makes this class of bug expensive. If a
+   label and a query can be taken from two different values, they eventually
+   will be, so take both from one.
 
 ---
 
@@ -102,10 +111,11 @@ Each uses an `hsl(var(--primary) / ...)` gradient, never a raw literal value:
 Other components use `bg-card`. Standard cards, list rows, and inputs never take
 a brand fill.
 
-**One hero per screen, named:** The Search view uses the search hero card. The
-Lists view uses its empty state panel, and once lists exist, it uses no hero at
-all. History also uses no hero. Placing a second `.surface-brand` on any screen
-is a bug.
+**One hero per screen, named:** The translator screen uses no hero at all, and
+carries no `.surface-brand` element: its two cards match each other, which
+section 3 explains. The Lists view uses its empty state panel, and once lists
+exist, it uses no hero either. History also uses no hero. Placing a second
+`.surface-brand` on any screen is a bug.
 
 **Where the brand shows up outside a hero**, use only these token-based
 treatments:
@@ -125,11 +135,34 @@ treatments:
 Build all UI from these four v1 surfaces. To introduce a fifth surface, define
 it here first.
 
-**Search hero card.** This is the only `.surface-brand` element on the Search
-screen. Style it with `rounded-2xl`, a large `Input`, a primary `Button`, and
-one muted line explaining the search. It sits at the top of the page as the main
-app entry point. Because of this role, it receives the brand wash while all
-other elements on the screen stay plain.
+**Translator surface.** The `/translate` screen, which the index `/` also
+renders. It replaced the old search hero card, and the three rules below are the
+whole recipe. Read them before changing anything on this screen.
+
+*One column, at every width.* The language bar, then the input card, then the
+answer card, stacked, all exactly the same width inside `mx-auto max-w-2xl`.
+There is no second column at any breakpoint. A two-column grid stood here until
+the relayout and it must not come back. It left half of a desktop first visit
+empty, and it asked the language bar to line its edges up with a grid the bar
+was not a cell of, which is not a thing a layout can do.
+
+*The two cards are identical.* Both are `rounded-2xl border p-5`, and neither
+carries a brand wash. The input card used to carry `.surface-brand` while the
+answer card did not, which on a phone made a question and its answer read as two
+different kinds of object. They match on purpose, so the pair reads as one
+control and the reply it produced. This screen has no `.surface-brand` element
+at all, and it is not a hero.
+
+*The language bar is a three-cell grid,* `grid-cols-[1fr_auto_1fr]`: source
+select, swap button, target select, with each select at `w-full`. It is not a
+flex row, and `flex-wrap` is banned here. A wrapping flex row made the two
+halves equal only by coincidence, sat each select 14px out of line with the card
+beneath it, and dropped the target select onto its own line as the viewport
+narrowed. A grid makes the halves equal by construction and can never wrap.
+
+Both selects and the swap button carry a 44px minimum tap height, and the submit
+button is full width below `sm`. This screen is used one-handed on a phone more
+than anywhere else in the product.
 
 **Entry card** (a word or phrase and its translation). Use `rounded-lg border
 bg-card shadow-sm` and `hover:shadow-md hover:border-primary/40 transition-all
@@ -213,8 +246,14 @@ container and shadow, and render simple rows on the page.
 - Interactive-card hover recipe: Apply `transition-all duration-200
   hover:shadow-md hover:border-primary/40`. Omit `dark:` prefixes because
   `primary` colors adapt to the active theme automatically.
-- Page container: Use `mx-auto max-w-3xl px-4 sm:px-6`. Keep the single-column
-  layout narrow. Full-width translation text is hard to read.
+- Page container: Use `mx-auto max-w-3xl px-4 sm:px-6`. The translator surface
+  is narrower still at `max-w-2xl`, see section 3. Keep the single-column layout
+  narrow. Full-width translation text is hard to read.
+- Single column is the default and the burden of proof sits on a second one. A
+  screen here holds a short question and a short answer, so a second column
+  mostly buys empty space plus a second set of edges to keep aligned. The
+  translator carried a `md:grid-cols-2` grid and gained nothing from it but the
+  misalignment described in section 3.
 - Vertical rhythm: Use `space-y-6` between page sections, `space-y-4` inside
   cards, and `gap-2` between form labels and inputs.
 
@@ -332,4 +371,12 @@ true.** Apply these priority rules:
   triggering element.
 - No Google Fonts and no CDN assets. Self-host all resources.
 - No custom card or badge utility combinations when an existing recipe applies.
-- No second `.surface-brand` on a screen that already uses one.
+- No second `.surface-brand` on a screen that already uses one, and none at all
+  on the translator surface.
+- No two-column layout on the translator surface, at any breakpoint. See
+  section 3.
+- No `flex-wrap` on a row whose cells have to line up with something below
+  them. Use a grid, so the alignment is a property of the layout rather than of
+  the current viewport width.
+- No label, chip or select rendered from the value the reader REQUESTED when the
+  server resolved a different one. See principle 6.
