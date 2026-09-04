@@ -24,25 +24,14 @@ export default [
   route('/api/v1/admin/db/query', 'routes/api.v1.admin.db.query.ts'),
 
   // =============================================================================
-  // Accounts and the encrypted personal layer (M172)
+  // The synced personal document (M191)
   // =============================================================================
-  // Resource routes: no default export, no UI. The browser derives its keys
-  // locally and posts only the derived hash, so nothing here ever receives a
-  // passphrase, a recovery code or a data key.
-  route('/api/v1/auth/kdf', 'routes/api.v1.auth.kdf.ts'),
-  route('/api/v1/auth/signup', 'routes/api.v1.auth.signup.ts'),
-  route('/api/v1/auth/login', 'routes/api.v1.auth.login.ts'),
-  route('/api/v1/auth/refresh', 'routes/api.v1.auth.refresh.ts'),
-  route('/api/v1/auth/logout', 'routes/api.v1.auth.logout.ts'),
-  route('/api/v1/auth/recover', 'routes/api.v1.auth.recover.ts'),
-  route('/api/v1/auth/recover-rotate', 'routes/api.v1.auth.recover-rotate.ts'),
-  route('/api/v1/auth/account', 'routes/api.v1.auth.account.ts'),
-  // The signed-in devices of one account, and the revoke that ends one of
-  // them. A device here is a TOKEN FAMILY, which is what `logout` already
-  // revokes: there is no device registry to keep in step, and no new column.
-  route('/api/v1/auth/devices', 'routes/api.v1.auth.devices.ts'),
+  // One resource route, no UI. Sign-up, sign-in and the two mailed links are
+  // ordinary page routes with server actions now: the browser derives nothing
+  // and posts a form, so there is no client-side ceremony for a JSON endpoint
+  // to serve. The endpoints that served it, `/api/v1/auth/*` and
+  // `/api/v1/sync/key-records`, went with the encrypted layer.
   route('/api/v1/sync/blob', 'routes/api.v1.sync.blob.ts'),
-  route('/api/v1/sync/key-records', 'routes/api.v1.sync.key-records.ts'),
 
   // Voice input's server half: a recorded clip in, a line of text out. It sits
   // under `/api/v1/` for the flat naming, NOT for the bearer token: the caller
@@ -90,20 +79,18 @@ export default [
     route('/search', 'routes/search.tsx', { id: 'search-alias' }),
     // The two doors, inside the app shell rather than in `_public`, because a
     // visitor arriving at one is already looking at the product. Both stay
-    // PUBLIC: they are the front door an invited person walks through, and a
+    // PUBLIC: they are the front door a stranger walks through, and a
     // gate in front of the sign-in page is a gate nobody can ever pass.
     //
     // THE PATHS NAME THE ACCOUNT, NOT THE SYNC. They were `/sync/setup` and
     // `/sync/login` until M189, which asked a newcomer to configure a feature
     // before they had an account for it to apply to. Sync is a consequence of
-    // holding an account, never a thing a reader sets up.
+    // holding an account, never a thing a reader sets up. The two redirect hops
+    // that kept the old paths alive went with the invite links they preserved
+    // (M191): an invite token was the only reason a query string had to survive
+    // a hop, and there are no invites now.
     route('/sign-up', 'routes/sign-up.tsx'),
     route('/sign-in', 'routes/sign-in.tsx'),
-    // The old paths, kept forever. They are in bookmarks, in histories and in
-    // invites already sent, and each hop preserves the query string so an
-    // `?invite=` survives it. Loader only: a hop is not a screen.
-    route('/sync/setup', 'routes/sync.setup-redirect.ts'),
-    route('/sync/login', 'routes/sync.login-redirect.ts'),
     // Public, and it reports the signed-out state rather than ending it. Its
     // loader already answers `null` for an anonymous visitor and never
     // redirects, which is the contract a public account screen needs.

@@ -11,7 +11,7 @@
  *   implicit here.
  *
  * WHAT IT ACTUALLY DRIVES, AND WHY NOT THE LOADER
- *   The refusal is not in `entry.$headwordId.tsx`. It is `accountMiddleware`,
+ *   The refusal is not in `entry.$headwordId.tsx`. It is `authMiddleware`,
  *   carried by the pathless `_app.gated` layout the route is nested under, and
  *   middleware runs before any loader. Calling the entry loader directly would
  *   therefore prove nothing at all: it would answer happily, exactly as it does
@@ -38,9 +38,9 @@ import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import routes from '../../app/routes';
 import { closePool, poolInitialized } from '../../drizzle/db';
-import { accountMiddleware } from '../../app/middleware/auth';
-import { ACCOUNT_LOGIN_PATH } from '../../app/services/account-session.server';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { authMiddleware } from '../../app/middleware/auth';
+import { SIGN_IN_PATH } from '../../app/lib/auth/paths';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -48,7 +48,7 @@ const DB_HOST = process.env.DB_HOST;
 const GATED_LAYOUT_FILE = 'routes/_app.gated.tsx';
 const ENTRY_ROUTE_FILE = 'routes/entry.$headwordId.tsx';
 
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 
 /** One route entry of the real config, as `@react-router/dev/routes` builds it. */
 /**
@@ -83,7 +83,7 @@ async function runGate(cookie: string | null): Promise<'admitted' | Response> {
   const request = new Request('https://translate.altan.fyi/entry/00000000-0000-0000-0000-000000000000', {
     headers: cookie === null ? {} : { cookie },
   });
-  const middleware: MiddlewareFunction = accountMiddleware;
+  const middleware: MiddlewareFunction = authMiddleware;
   try {
     await middleware(
       {
@@ -107,7 +107,7 @@ async function runGate(cookie: string | null): Promise<'admitted' | Response> {
 
 before(async () => {
   if (!DB_HOST) return;
-  session = await createTestAccountSession('entry-gate');
+  session = await createTestUserSession('entry-gate');
 });
 
 after(async () => {
@@ -137,7 +137,10 @@ describe('the entry page is gated', () => {
 
     assert.ok(outcome instanceof Response, 'the gate admitted a request carrying no session at all');
     assert.equal(outcome.status, 302);
-    assert.equal(outcome.headers.get('location'), ACCOUNT_LOGIN_PATH);
+    // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
+    // the reader lands back where they were refused, and an assertion on the
+    // full string would read as a broken gate the first time that changed.
+    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
   });
 
   it('admits a real invited session', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {

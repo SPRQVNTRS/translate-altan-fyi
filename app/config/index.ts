@@ -104,29 +104,16 @@ export const CONFIG = {
   },
 
   /**
-   * End-to-end-encrypted personal layer
+   * Transactional mail (M191)
+   *
+   * Two mails exist: the address confirmation and the password reset. The
+   * transport is a plain `fetch` to pigeon's REST endpoint; without a key and a
+   * base URL, development logs the mail to the console instead of sending it.
    */
-  e2ee: {
-    /**
-     * The single root secret behind the personal layer. Two domain-separated
-     * subkeys are derived from it in `app/lib/e2ee/server-secrets.ts`: the
-     * VERIFIER PEPPER mixed into every stored `HMAC(pepper, authHash)`, and the
-     * ENUMERATION SECRET behind the deterministic dummy KDF descriptor served
-     * for an unknown handle.
-     *
-     * It can NOT decrypt anything. The data-encryption key is wrapped
-     * client-side under a passphrase-derived KEK the server never sees.
-     *
-     * Required in production, and a fixed development constant otherwise —
-     * same shape as `session.secret` above, and for the same reason: a
-     * deployed instance must not fall back to a value that is in the
-     * repository, and a developer must not have to set one to run the app.
-     * Rotating it is a breaking operational change: every stored verifier is
-     * invalidated and every dummy salt moves. See `.env.example`.
-     */
-    get serverSecret() {
-      return CONFIG.app.isProduction ? requireEnv('SERVER_SECRET') : 'dev-server-secret-not-for-deployment';
-    },
+  email: {
+    from: optionalEnv('EMAIL_FROM', 'no-reply@translate.altan.fyi'),
+    pigeonApiKey: optionalEnv('PIGEON_API_KEY', ''),
+    pigeonBaseUrl: optionalEnv('PIGEON_BASE_URL', ''),
   },
 
   /**

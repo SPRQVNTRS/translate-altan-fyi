@@ -326,5 +326,23 @@
     "privacyPlaintext": "The typed word is sent to the server dictionary.",
     "privacyLink": "Privacy policy",
     "exampleHeading": "Translation for {{word}}"
+  },
+  "email": {
+    "verify": {
+      "subject": "Confirm your email address",
+      "greeting": "Hello,",
+      "body": "You created an account with this email address. Confirm your address to finish setup.",
+      "action": "Open this link:",
+      "ignore": "If you did not create an account, ignore this message.",
+      "signoff": "Thank you."
+    },
+    "reset": {
+      "subject": "Reset your password",
+      "greeting": "Hello,",
+      "body": "A request was made to reset the password for this account. Set a new password now.",
+      "action": "Open this link:",
+      "ignore": "If you did not request this, ignore this message. Your password will not change.",
+      "signoff": "Thank you."
+    }
   }
 }

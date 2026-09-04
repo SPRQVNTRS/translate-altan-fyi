@@ -21,7 +21,7 @@ import { OPERATOR } from './operator';
  * EVERY CLAIM HERE WAS READ OUT OF THE CODE, NOT INFERRED FROM THE PLAN:
  *   - no account, and no email column: `drizzle/schema/accounts.ts` holds a
  *     handle, an optional display name and two HMAC verifiers, nothing else.
- *   - the encrypted zone: `app/lib/e2ee/`, `app/lib/local-store/`.
+ *   - the device's own store: `app/lib/local-store/`.
  *   - history capped on the device: `HISTORY_MAX_ENTRIES` (500) and
  *     `HISTORY_MAX_AGE_DAYS` (90) in `app/lib/local-store/schema.ts`.
  *   - the provider: `app/lib/llm/catalog.ts`, Gemini routed over OpenRouter.

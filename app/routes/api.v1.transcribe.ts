@@ -6,7 +6,7 @@ import { registry } from '#app/lib/llm/registry.server';
 import { createComponentLogger } from '#app/lib/logger';
 import { audioFormatForMimeType, TRANSCRIBE_LANGUAGE_PARAM } from '#app/lib/voice/limits';
 import { getActiveModel } from '#app/models/app-settings.server';
-import { getAccountSession } from '#app/services/account-session.server';
+import { resolveUser } from '#app/middleware/auth';
 import {
   MAX_AUDIO_BYTES,
   TRANSCRIPTION_RESERVE_USD,
@@ -37,9 +37,9 @@ import {
  *   ended it: this is the cheapest way in the product to spend the operator's
  *   money, one provider call per request, and the milestone exists to stop
  *   anonymous strangers spending it. A caller now needs an account, and the
- *   account now needs an invite.
+ *   account needs a confirmed address (M191).
  *
- *   THE OLD GUARDS ALL STAY, as defence in depth. An invited account is still
+ *   THE OLD GUARDS ALL STAY, as defence in depth. A signed-in account is still
  *   one browser session behind the SAME per-IP and per-session hourly limits as
  *   the enrichment trigger, and it still reserves against the SAME daily cap
  *   before the provider is called. An installation-wide circuit breaker has
@@ -153,7 +153,7 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
   //    The coarsest question this route asks is whether the caller may spend
   //    anything at all, so it is answered before the request is examined in any
   //    other way. It costs one cookie unseal and one indexed token lookup, and
-  //    it never throws: `getAccountSession` folds every way of being signed out
+  //    it never throws: `resolveUser` folds every way of being signed out
   //    into one `null`, which is exactly the shape a refusal needs here.
   //
   //    IT REFUSES, IT DOES NOT REDIRECT. Every other gated surface in this app
@@ -169,7 +169,7 @@ export async function action({ request }: Route.ActionArgs): Promise<Response> {
   //    keyed on the caller's address, so putting it first would let an
   //    anonymous flood fill a table on requests that were never going to be
   //    served.
-  const session = await getAccountSession(request);
+  const session = await resolveUser(request);
   if (session === null) {
     return refuse({
       status: 401,

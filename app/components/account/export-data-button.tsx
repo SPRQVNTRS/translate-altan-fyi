@@ -19,7 +19,7 @@
  * WHAT IT WRITES DOWN is decided by `app/lib/local-store/backup.ts`: all four
  * collections including search history, because a backup that quietly drops a
  * collection is a backup that lies. That is a different question from what
- * goes into a sync blob, which is answered in `app/lib/e2ee/BLOB-CONTENTS.md`.
+ * goes into a sync blob, which is answered in `app/lib/local-store/BLOB-CONTENTS.md`.
  *
  * CLIENT ONLY. Every import here is browser-safe, and nothing from a `.server`
  * module is reachable from this file.

@@ -326,5 +326,23 @@
     "privacyPlaintext": "Das eingegebene Wort wird an das Server-Wörterbuch gesendet.",
     "privacyLink": "Datenschutzerklärung",
     "exampleHeading": "Übersetzung für {{word}}"
+  },
+  "email": {
+    "verify": {
+      "subject": "Bestätige deine Mailadresse",
+      "greeting": "Hallo,",
+      "body": "Du hast mit dieser Mailadresse ein Konto erstellt. Bestätige deine Adresse, um die Einrichtung abzuschließen.",
+      "action": "Öffne diesen Link:",
+      "ignore": "Wenn du kein Konto erstellt hast, ignoriere diese Nachricht.",
+      "signoff": "Vielen Dank."
+    },
+    "reset": {
+      "subject": "Setze dein Passwort zurück",
+      "greeting": "Hallo,",
+      "body": "Für dieses Konto wurde das Zurücksetzen des Passworts angefordert. Lege jetzt ein neues Passwort fest.",
+      "action": "Öffne diesen Link:",
+      "ignore": "Wenn du dies nicht angefordert hast, ignoriere diese Nachricht. Dein Passwort wird nicht geändert.",
+      "signoff": "Vielen Dank."
+    }
   }
 }

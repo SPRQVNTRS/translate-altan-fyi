@@ -46,7 +46,7 @@ import { getRawDb } from '../../drizzle/db';
 import { abuseCounters } from '../../drizzle/schema';
 import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import { action as transcribe } from '../../app/routes/api.v1.transcribe';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -65,7 +65,7 @@ const refusalSchema = z.object({
   messageKey: z.string(),
 });
 
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 const createdCounterKeys: string[] = [];
 
 /** One octet of a documentation-range address. */
@@ -98,7 +98,7 @@ async function post(cookie: string | null): Promise<Response> {
 
 before(async () => {
   if (!DB_HOST) return;
-  session = await createTestAccountSession('transcribe');
+  session = await createTestUserSession('transcribe');
 });
 
 after(async () => {

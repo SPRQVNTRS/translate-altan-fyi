@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '#app/components/ui/table';
-import { getAccount } from '#app/middleware/helpers';
+import { getUser } from '#app/middleware/helpers';
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -149,7 +149,7 @@ export async function loader() {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const account = getAccount(context);
+  const user = getUser(context);
   const formData = await request.formData();
   const submission = parseWithZod(formData, { schema: switchModelSchema });
 
@@ -189,15 +189,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     if (!(cause instanceof LlmNotConfiguredError)) throw cause;
   }
 
-  // THE ACTOR IS AN ACCOUNT, and an account has no email address: this service
-  // identifies a person by `handle`, the sign-in name, and holds no mailbox for
-  // anybody (ADR-0009). The audit columns keep the names they were created
-  // with, so the handle rides in `actorEmail`, which is what the audit table
-  // renders. Renaming the column is a schema change, not this one.
+  // THE ACTOR IS A USER, and since M191 a user has a real address, so
+  // `actorEmail` holds one again. It held a sign-in name while the account
+  // model was an opaque handle with no mailbox behind it.
   await setActiveModel({
     next: candidate,
-    actorUserId: String(account.id),
-    actorEmail: account.handle,
+    actorUserId: String(user.id),
+    actorEmail: user.email,
   });
 
   return { result: submission.reply(), switchedTo: candidate.model };

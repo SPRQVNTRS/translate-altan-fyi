@@ -16,7 +16,7 @@
  * own device, and the whole point of it is that they own everything — a backup
  * that quietly dropped a collection would be a backup that lies. The blob is a
  * thing SENT TO A SERVER, so what goes in it is decided by a different
- * question, answered in `app/lib/e2ee/BLOB-CONTENTS.md`.
+ * question, answered in `app/lib/local-store/BLOB-CONTENTS.md`.
  *
  * Split: `serializeBackup`/`parseBackupEnvelope`/`migrateEnvelopeForward` are
  * pure (no store, no browser) so they unit-test directly; `exportBackup`/
@@ -54,7 +54,7 @@ export interface BackupEnvelope {
 // Validation schema (mirrors the entity shapes in `schema.ts`)
 // ---------------------------------------------------------------------------
 
-/** The ordering stamp every synced entity carries — PROTOCOL.md section 3.3. */
+/** The ordering stamp every synced entity carries. */
 const syncStampFields = {
   lamport: z.number().int().nonnegative(),
   deviceId: z.string().min(1),

@@ -58,7 +58,7 @@ import { ENRICHMENT_QUEUE } from '../../app/lib/enrichment/limits';
 import { PROMPT_VERSION } from '../../app/prompts/enrichment/version';
 import { loader as searchLoader } from '../../app/routes/search';
 import { initializeWorkflows, stopOrchestrator } from '../../app/services/workflows.server';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -84,7 +84,7 @@ const savedKeys = new Map<string, string | undefined>();
  */
 const SETTLE_MS = 2_000;
 
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 let sourceId = '';
 let headwordId = '';
 let lemma = '';
@@ -178,7 +178,7 @@ before(async () => {
   });
 
   singletonKey = enrichmentSingletonKey({ headwordId, from: FROM, to: TO, promptVersion: PROMPT_VERSION });
-  session = await createTestAccountSession('wallet');
+  session = await createTestUserSession('wallet');
 });
 
 after(async () => {

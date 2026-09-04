@@ -4,61 +4,49 @@
  * then here. Do not let the two drift.
  */
 /**
- * The sync cycle: snapshot → wire meta → pull → decrypt → merge → encrypt →
- * push, with the mandatory compare-and-swap retry loop around it.
+ * The sync cycle: snapshot, wire meta, pull, merge, push, with the mandatory
+ * compare-and-swap retry loop around it.
  *
- * This is the imperative shell (`functional-core`). Every decision it makes —
- * who wins a conflict, whether a push is even needed — is a call into the pure
- * `snapshot-sync.ts`; what lives here is ordering, I/O and the retry policy.
- * Both halves are injected (`SyncCycleDeps`), so a test drives the real
- * algorithm against a protocol-faithful fake service without a browser or a
- * database.
+ * THE DECRYPT AND ENCRYPT STEPS ARE GONE (M191). Upstream the cycle reads
+ * "snapshot, pull, decrypt, merge, encrypt, push"; this deployment stores the
+ * document as plain JSON, so the two crypto steps are ordinary framing
+ * (`engine/envelope/build-envelope.ts`) and the schema-probe loop that walked
+ * `payloadSchemaVersion` down until a GCM tag verified went with them: the
+ * version is a field on the envelope now and is read rather than guessed.
+ *
+ * This is the imperative shell (`functional-core`). Every decision it makes,
+ * who wins a conflict and whether a push is even needed, is a call into the
+ * pure `snapshot-sync.ts`; what lives here is ordering, I/O and the retry
+ * policy. Both halves are injected (`SyncCycleDeps`), so a test drives the real
+ * algorithm against a fake service without a browser or a database.
  *
  * ── The 409 loop is mandatory, not an optimization ─────────────────────────
  *
- * `PROTOCOL.md` section 5.1 is explicit: a client that treats `409` as fatal
- * strands the device permanently out of sync. Losing the CAS means another
- * device wrote first, which is a NORMAL outcome — pull it, merge it,
- * re-encrypt with the AAD bound to the NEW blob version, push again. Bounded
- * by `maxAttempts` so a pathologically busy account fails loudly instead of
- * spinning.
+ * A client that treats `409` as fatal strands the device permanently out of
+ * sync. Losing the CAS means another device wrote first, which is a NORMAL
+ * outcome: pull it, merge it, push again. Bounded by `maxAttempts` so a
+ * pathologically busy account fails loudly instead of spinning.
  *
  * ── Offline is a no-op, deliberately ──────────────────────────────────────
  *
- * The local store IS the source of truth, so an offline edit is already
- * durable and the next successful cycle carries it up whole. The outbox
- * (`app/lib/local-store/outbox.ts`) queues the INTENT to run a cycle, never
- * the data: a second representation of the same pending work is a second thing
- * that can disagree with the store.
+ * The local store IS the source of truth, so an offline edit is already durable
+ * and the next successful cycle carries it up whole. The outbox
+ * (`app/lib/local-store/outbox.ts`) queues the INTENT to run a cycle, never the
+ * data: a second representation of the same pending work is a second thing that
+ * can disagree with the store.
  *
- * ── The AAD, and why schema versions are probed ───────────────────────────
- *
- * Decryption binds `{accountId, blobVersion, payloadSchemaVersion}`. The first
- * two travel on the wire; the third does not — so a device pulling a blob
- * written by a peer on an OLDER `SCHEMA_VERSION` has to know which value to
- * present before it can decrypt. It cannot, so it tries the current version
- * and then walks down. With `SCHEMA_VERSION` at 1 that loop runs exactly once,
- * and the code stays because the loop is what makes the NEXT bump
- * forward-compatible rather than a flag day. A blob from a NEWER schema fails
- * every attempt, which is the correct refusal — this build genuinely cannot
- * read it, and guessing would corrupt it.
- *
- * ── TWO DEPENDENCIES THE SOURCE HAS AND THIS DOES NOT ─────────────────────
+ * ── ONE DEPENDENCY THE SOURCE HAS AND THIS DOES NOT ───────────────────────
  *
  * `assertPulledSnapshot` is gone. It was the veto that refused a pulled
  * owner-private compartment before the cycle wrote anything, and this product
  * has no counterpart for it: there is no sharing and no research enrolment
- * here, so there is no third party whose account a device could push a whole
- * store into by mistake. Removed on purpose, not forgotten.
- *
- * `deviceId` is gone too. Upstream the cycle STAMPED entities as it went, so
- * it needed this device's identity; here the stamp is applied at the write by
- * `primary-store.ts`, and nothing in a cycle mints one.
+ * here. `deviceId` is gone too, because here the stamp is applied at the write
+ * by `primary-store.ts` and nothing in a cycle mints one.
  */
 import { buildEnvelope, parseEnvelope } from '#app/lib/sync/engine/envelope/build-envelope';
-import type { SyncPayload } from '#app/lib/sync/engine/envelope/types';
-import { ENVELOPE_VERSION, MAX_BLOB_BYTES } from '#app/lib/e2ee/protocol';
-import { SyncRequestError } from '#app/lib/e2ee/client/sync-error';
+import type { DataEnvelope, SyncPayload } from '#app/lib/sync/engine/envelope/types';
+import { jsonValueSchema, type JsonValue } from '#app/lib/json';
+import { SyncRequestError } from '#app/lib/sync/sync-error';
 import { SCHEMA_VERSION, type SyncedSnapshot } from '#app/lib/local-store';
 import { mergeSnapshots, payloadsEqual, toWireMeta, type StampedSnapshot } from './snapshot-sync';
 import { applyMergedSnapshot, parseRemoteSnapshot, readLocalSnapshot } from './local-store-bridge';
@@ -70,17 +58,22 @@ import { withSyncOrchestratorLock } from './sync-lock';
 /** How many CAS rounds a single cycle will fight for before giving up. */
 export const DEFAULT_MAX_PUSH_ATTEMPTS = 5;
 
+/**
+ * The largest document this client will try to push, in bytes of its JSON
+ * encoding. It mirrors the server's own cap so the failure names the real
+ * problem instead of arriving as an opaque 413.
+ */
+export const MAX_BLOB_BYTES = 2 * 1024 * 1024;
+
 export interface SyncCycleDeps {
-  /** Binds the envelope's AAD — a blob cannot be replayed into another account. */
-  accountId: number;
-  /** The unwrapped data-encryption key. Held in memory for the session only, never persisted anywhere. */
-  dek: Uint8Array;
+  /** Whose document this is. It keys the device's own sync state, nothing more. */
+  userId: number;
   http: SyncHttpClient;
   state: SyncStateStore;
   /** The device's synced rows, tombstones included. */
   readSnapshot: () => Promise<SyncedSnapshot>;
   applySnapshot: (input: { merged: SyncedSnapshot }) => Promise<void>;
-  parseRemoteSnapshot: (input: { snapshot: unknown; schemaVersion: number }) => SyncedSnapshot;
+  parseRemoteSnapshot: (input: { snapshot: JsonValue; schemaVersion: number }) => SyncedSnapshot;
   now?: () => number;
   maxAttempts?: number;
 }
@@ -88,7 +81,7 @@ export interface SyncCycleDeps {
 export interface SyncCycleResult {
   /** The blob version this device now agrees with. */
   blobVersion: number;
-  /** Whether this cycle actually wrote a new blob (false when the merge contributed nothing). */
+  /** Whether this cycle actually wrote a new document (false when the merge contributed nothing). */
   pushed: boolean;
   /** How many CAS rounds it took. `1` is the uncontended case. */
   attempts: number;
@@ -100,13 +93,13 @@ export interface SyncCycleResult {
  *
  * The lock wraps the WHOLE cycle rather than just the push: read-then-write
  * across two tabs is exactly the interleaving that produces a lost update, and
- * the CAS on the server only protects the blob, not this device's state.
+ * the CAS on the server only protects the document, not this device's state.
  */
 export async function runSyncCycle(deps: SyncCycleDeps): Promise<SyncCycleResult> {
   return withSyncOrchestratorLock(() => runSyncCycleUnlocked(deps));
 }
 
-/** The cycle itself, lock-free — exported for tests that supply their own serialization. */
+/** The cycle itself, lock-free, exported for tests that supply their own serialization. */
 export async function runSyncCycleUnlocked(deps: SyncCycleDeps): Promise<SyncCycleResult> {
   const now = deps.now ?? Date.now;
   const maxAttempts = deps.maxAttempts ?? DEFAULT_MAX_PUSH_ATTEMPTS;
@@ -119,9 +112,9 @@ export async function runSyncCycleUnlocked(deps: SyncCycleDeps): Promise<SyncCyc
     const baseVersion = remote?.blobVersion ?? 0;
     const merged = remote === null ? localPayload : mergeSnapshots({ local: localPayload, remote: remote.payload });
 
-    // Nothing local to contribute: adopt the remote blob as-is and stop. This
-    // is the common case on every boot, and skipping the push is what keeps
-    // "open the app" from consuming a blob version.
+    // Nothing local to contribute: adopt the remote document as-is and stop.
+    // This is the common case on every boot, and skipping the push is what
+    // keeps "open the app" from consuming a version.
     if (remote !== null && payloadsEqual(merged, remote.payload)) {
       await deps.applySnapshot({ merged: merged.snapshot });
       const at = now();
@@ -130,26 +123,21 @@ export async function runSyncCycleUnlocked(deps: SyncCycleDeps): Promise<SyncCyc
     }
 
     const targetVersion = baseVersion + 1;
-    const envelope = await buildEnvelope({
+    const envelope = buildEnvelope({
       payload: toWirePayload(merged),
-      dek: deps.dek,
-      aadFields: { accountId: deps.accountId, blobVersion: targetVersion, payloadSchemaVersion: SCHEMA_VERSION },
+      blobVersion: targetVersion,
+      payloadSchemaVersion: SCHEMA_VERSION,
     });
 
-    // Mirror the service's cap client-side (`PROTOCOL.md` section 8) so the
-    // failure names the real problem instead of arriving as an opaque 413.
-    if (envelope.ciphertext.byteLength > MAX_BLOB_BYTES) {
+    const sizeBytes = new TextEncoder().encode(JSON.stringify(envelope)).byteLength;
+    if (sizeBytes > MAX_BLOB_BYTES) {
       throw new SyncRequestError({
         kind: 'too-large',
-        message: `This device's encrypted lists are ${envelope.ciphertext.byteLength} bytes, over the ${MAX_BLOB_BYTES}-byte sync limit.`,
+        message: `This device's lists are ${sizeBytes} bytes, over the ${MAX_BLOB_BYTES}-byte sync limit.`,
       });
     }
 
-    const result = await deps.http.pushBlob({
-      baseVersion,
-      envelopeVersion: ENVELOPE_VERSION,
-      ciphertext: envelope.ciphertext,
-    });
+    const result = await deps.http.pushBlob({ baseVersion, payload: toStoredPayload(envelope) });
     if (result.status === 'conflict') continue;
 
     await deps.applySnapshot({ merged: merged.snapshot });
@@ -160,7 +148,7 @@ export async function runSyncCycleUnlocked(deps: SyncCycleDeps): Promise<SyncCyc
 
   throw new SyncRequestError({
     kind: 'conflict',
-    message: `Sync could not settle after ${maxAttempts} attempts — another device is writing continuously.`,
+    message: `Sync could not settle after ${maxAttempts} attempts: another device is writing continuously.`,
   });
 }
 
@@ -171,10 +159,9 @@ export async function runSyncCycleForCurrentSession(
   const session = getSyncSession();
   if (session === null) return null;
   return runSyncCycle({
-    accountId: session.accountId,
-    dek: session.dek,
+    userId: session.userId,
     http: createBrowserSyncHttpClient(),
-    state: createSyncStateStore({ storage: deviceStorage(), accountId: session.accountId }),
+    state: createSyncStateStore({ storage: deviceStorage(), userId: session.userId }),
     readSnapshot: readLocalSnapshot,
     applySnapshot: applyMergedSnapshot,
     parseRemoteSnapshot,
@@ -189,73 +176,39 @@ interface RemotePayload {
 
 async function pullRemotePayload(deps: SyncCycleDeps): Promise<RemotePayload | null> {
   const pulled = await deps.http.pullBlob();
-  // A 404 is how a fresh account looks, not an error (`PROTOCOL.md` section 5.2).
+  // A 404 is how a fresh account looks, not an error.
   if (pulled === null) return null;
 
-  const decrypted = await decryptWithSchemaProbe({
-    ciphertext: pulled.ciphertext,
-    envelopeVersion: pulled.envelopeVersion,
-    blobVersion: pulled.blobVersion,
-    accountId: deps.accountId,
-    dek: deps.dek,
-  });
-
+  const envelope = parseEnvelope(pulled.payload);
   return {
     blobVersion: pulled.blobVersion,
     payload: {
       snapshot: deps.parseRemoteSnapshot({
-        snapshot: decrypted.payload.snapshot,
-        schemaVersion: decrypted.schemaVersion,
+        snapshot: envelope.payload.snapshot,
+        schemaVersion: envelope.payloadSchemaVersion,
       }),
-      meta: decrypted.payload.syncMeta,
+      meta: envelope.payload.syncMeta,
     },
   };
 }
 
 /**
- * Decrypts a pulled blob, walking `payloadSchemaVersion` down from this
- * build's current value until the GCM tag verifies (see the module header for
- * why the value cannot simply be read off the wire).
+ * The payload as the envelope carries it.
  *
- * Every attempt failing is reported as ONE clear error rather than the last
- * cipher exception: "wrong key or a newer app wrote this" is actionable;
- * "OperationError" is not.
+ * THE PARSE IS THE WIDENING, and it is deliberate rather than a cast. The
+ * envelope does not know the snapshot's real shape, which is what lets the
+ * local-store schema evolve without touching this module; proving the snapshot
+ * IS JSON at that boundary is cheaper to read than an assertion chain, and it
+ * catches the one thing a cast would hide: a store row that quietly grew a
+ * value JSON cannot carry.
  */
-export async function decryptWithSchemaProbe({
-  ciphertext,
-  envelopeVersion,
-  blobVersion,
-  accountId,
-  dek,
-}: {
-  ciphertext: Uint8Array;
-  envelopeVersion: number;
-  blobVersion: number;
-  accountId: number;
-  dek: Uint8Array;
-}): Promise<{ payload: SyncPayload; schemaVersion: number }> {
-  for (let schemaVersion = SCHEMA_VERSION; schemaVersion >= 1; schemaVersion -= 1) {
-    try {
-      const payload = await parseEnvelope({
-        envelope: { envelopeVersion, ciphertext },
-        dek,
-        aadFields: { accountId, blobVersion, payloadSchemaVersion: schemaVersion },
-      });
-      return { payload, schemaVersion };
-    } catch {
-      // Wrong AAD guess, or genuinely undecryptable. Keep walking down; the
-      // loop's exhaustion below is the only place this becomes an error.
-    }
-  }
-  throw new SyncRequestError({
-    kind: 'invalid',
-    message:
-      'This account’s synced data could not be decrypted on this device. Either the passphrase is wrong, or it was written by a newer version of the app.',
-  });
+function toWirePayload(payload: StampedSnapshot): SyncPayload {
+  return { snapshot: jsonValueSchema.parse(payload.snapshot), syncMeta: payload.meta };
 }
 
-function toWirePayload(payload: StampedSnapshot): SyncPayload {
-  return { snapshot: payload.snapshot, syncMeta: payload.meta };
+/** The envelope as the wire carries it: an ordinary JSON value the server stores whole. */
+function toStoredPayload(envelope: DataEnvelope): JsonValue {
+  return jsonValueSchema.parse(envelope);
 }
 
 /** Persists the version this device now agrees with, and when it agreed. */

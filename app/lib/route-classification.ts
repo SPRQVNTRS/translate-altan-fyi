@@ -95,7 +95,7 @@ export const ROUTE_CLASSIFICATION = {
   },
   '_app.gated.tsx': {
     access: 'gated-layout',
-    reason: 'The pathless layout that carries `accountMiddleware`. Everything nested under it inherits the gate.',
+    reason: 'The pathless layout that carries `authMiddleware`. Everything nested under it inherits the gate.',
   },
   'search.tsx': {
     access: 'landing-loader-split',
@@ -108,20 +108,12 @@ export const ROUTE_CLASSIFICATION = {
   'sign-up.tsx': {
     access: 'public',
     reason:
-      'Account creation. A gate here would be a gate nobody could ever pass. Its loader reads `?invite=` from the URL, and sends a reader who ALREADY has a resolvable session on to `/account`: it refuses nobody, it answers a finished question.',
+      'Account creation, open to anybody since M191. A gate here would be a gate nobody could ever pass. Its loader sends a reader who ALREADY holds a session on to `/account`: it refuses nobody, it answers a finished question.',
   },
   'sign-in.tsx': {
     access: 'public',
     reason:
       'Where every gated redirect lands, and where the link to account creation lives. Its loader sends an already signed-in reader to `/account` and turns no signed-out caller away.',
-  },
-  'sync.setup-redirect.ts': {
-    access: 'public',
-    reason: 'A permanent redirect from the old `/sync/setup` to `/sign-up`. It reads no session and answers every caller the same way.',
-  },
-  'sync.login-redirect.ts': {
-    access: 'public',
-    reason: 'A permanent redirect from the old `/sync/login` to `/sign-in`. It reads no session and answers every caller the same way.',
   },
   'offline.tsx': {
     access: 'public',
@@ -167,24 +159,8 @@ export const ROUTE_CLASSIFICATION = {
     reason: 'Its action reads the session first and answers a 401 refusal in JSON. A redirect would be unusable to the `fetch` that calls it.',
   },
 
-  // ── The end-to-end-encrypted account and sync endpoints ────────────────
-  'api.v1.auth.kdf.ts': {
-    access: 'public',
-    reason: 'Pre-login by definition, and it always answers 200: branching on whether the account exists would make it an enumeration oracle.',
-  },
-  'api.v1.auth.signup.ts': {
-    access: 'gated-inline',
-    reason: 'Public transport, gated by the INVITE rather than by a session (ADR-0009). `handleSignup` refuses 403 without an admitted token.',
-  },
-  'api.v1.auth.login.ts': { access: 'public', reason: 'Presents a credential. It is how a session is obtained, so it cannot require one.' },
-  'api.v1.auth.recover.ts': { access: 'public', reason: 'Presents the recovery code, the second authenticator. Same reason as login.' },
-  'api.v1.auth.recover-rotate.ts': { access: 'public', reason: 'Presents a recovery credential. Same reason as login.' },
-  'api.v1.auth.refresh.ts': { access: 'gated-inline', reason: 'Authenticated by the refresh token in the session cookie, which it rotates.' },
-  'api.v1.auth.logout.ts': { access: 'gated-inline', reason: 'Resolves the access token itself and revokes its family.' },
-  'api.v1.auth.account.ts': { access: 'gated-inline', reason: 'Reads the session, and requires the `authHash` again before it will delete anything.' },
-  'api.v1.auth.devices.ts': { access: 'gated-inline', reason: 'Reads the session and answers only about the account that holds it.' },
-  'api.v1.sync.blob.ts': { access: 'gated-inline', reason: 'Reads the session. The blob is the encrypted vault of one account.' },
-  'api.v1.sync.key-records.ts': { access: 'gated-inline', reason: 'Reads the session. The wrapped data keys belong to one account.' },
+  // ── The synced personal document ───────────────────────────────────────
+  'api.v1.sync.blob.ts': { access: 'gated-inline', reason: 'Reads the session and answers 401 in JSON. The document belongs to one user.' },
 
   // ── The bearer-token REST surface, inherited from ts-factory-stack ─────
   'api.v1.api-keys.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
@@ -201,7 +177,7 @@ export const ROUTE_CLASSIFICATION = {
   // by M189 with their tables (ADR-0010), and `_auth.tsx` went with them.
   '_super.tsx': {
     access: 'gated-layout',
-    reason: 'Carries `accountMiddleware` then `superadminMiddleware`. A top-level layout since M189: it no longer nests under `_auth`.',
+    reason: 'Carries `authMiddleware` then `superadminMiddleware`. A top-level layout since M189: it no longer nests under `_auth`.',
   },
   'super/index-redirect.ts': { access: 'gated-layout', reason: 'Under `_super`. A hop from `/super` to `/super/llm`, refused before it runs for anyone who is not a superadmin.' },
   'super/llm.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },

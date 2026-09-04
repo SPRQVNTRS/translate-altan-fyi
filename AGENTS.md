@@ -160,14 +160,13 @@ move a route or a gate. The contract, in full:
   `/sign-up` is the primary action and `/sign-in` the secondary one on both
   screens, and the shell header carries the same pair.
 - **An account is an account, and sync is a consequence of holding one.** No
-  user-facing screen presents sync as something to set up. In the interface the
-  `handle` is a "sign-in name" and the passphrase is a "password"; the code, the
-  schema and `PROTOCOL.md` keep their own names for both.
-- Creating an account needs an invite. `ACCOUNT_BOOTSTRAP_TOKEN` stands in for
-  one while `accounts` is empty, and it dies with the first account. Every
-  cause of refusal answers with one `403` and one message, so signup is not an
-  enumeration oracle. `pnpm cli account invite` mints an invite and prints the
-  token once; `pnpm cli account list-invites` never prints one.
+  user-facing screen presents sync as something to set up.
+- **An account is an email address and a password** (M191). Signup is open, and
+  the address has to be confirmed by a mailed link before the first sign-in. A
+  forgotten password is replaced by a second mailed link, which also signs every
+  other device out. Sign-up, sign-in and forgot-password all answer the same way
+  for a known and an unknown address, so none of them is an enumeration oracle.
+  `pnpm cli account grant-superadmin <email>` is the only out-of-band grant.
 - The gate blocks the SCREEN, never the device's own store. Lists and history
   are still written locally and were never uploaded, and a redirect must not be
   the thing that deletes them.
@@ -175,44 +174,44 @@ move a route or a gate. The contract, in full:
   decides who may reach it. A new route file that nobody classified fails a
   unit test.
 
-**2. There is no email address and no reset link.** Accounts are identified by a
-`handle`, a short opaque name the CLIENT generates, which the interface calls a
-sign-in name. Authentication is a passphrase, which the interface calls a
-password, and from which the browser derives an Argon2id key and then two separate
-HKDF branches: one becomes the key-encryption key that wraps the data key, the
-other becomes an auth hash. The server stores only `HMAC(pepper, authHash)` and
-never sees the passphrase, the KEK or the data key. Recovery is a recovery code,
-which is a SECOND authenticator, not a mailed link. A mailed link was removed
-upstream on purpose: it restored a login to data that stays sealed anyway, so it
-bought no recovery and opened an account-takeover path.
+**2. The account is an address and a password (M191).** `users` holds the
+address, a bcrypt hash at cost 10, the confirmation instant, the password-change
+instant and the superadmin flag; `user_tokens` holds the digests of the two
+mailed links. Nothing here is encrypted material, and the synced document in
+`sync_blobs.payload` is plain JSON the operator can read.
 
-Consequences you cannot design around:
+Rules you cannot design around:
 
-- **Nobody can let a user back in.** If the passphrase and the recovery code are
-  both lost, that account's synced data is gone. Say so plainly in copy at the
-  moment it matters. Do not soften it and do not imply support can help.
-- **The passphrase, the recovery code, the KEK and the DEK exist only in the
-  browser.** They must never reach a loader, an action, a form post, a URL, a
-  cookie or a log line. Client code derives, then posts the derived hash.
-- **The pre-login KDF endpoint always answers 200**, with a deterministic dummy
-  descriptor for an unknown handle. Making it 404 would turn it into an
-  account-enumeration oracle. Never branch its response on whether the account
-  exists.
-- **The domain-separation labels still say `openplate-sync`.** That is correct
-  and deliberate. They are the wire contract, and renaming them would re-key
-  every account.
+- **Nothing says which half of a credential was wrong.** `signIn` answers `null`
+  for an unknown address, a wrong password and an unconfirmed address alike, and
+  sign-up and forgot-password answer the same sentence whether or not the
+  address is on file. Those decisions live in `app/services/auth.server.ts`, not
+  in a screen, because the one caller that forgets is what builds the oracle.
+- **A mailed link is consumed in one statement.** `UPDATE user_tokens SET
+  used_at = now() WHERE token_hash = ... AND used_at IS NULL AND expires_at >
+  now() RETURNING user_id`. A read-then-write pair lets two clicks on one reset
+  link both be accepted.
+- **`users.password_changed_at` is the session epoch.** The cookie carries
+  `{ userId, issuedAt }` and nothing else; `authMiddleware` refuses a cookie
+  older than that column. That is how a reset signs the other devices out with
+  no session table. The tab that made the change is handed a fresh cookie by
+  `auth.server.ts` and must set it.
+- **The rate limiter reads `x-client-ip`, which `server.ts` writes** from
+  `req.ip` after Express resolves `trust proxy`, deleting any incoming value
+  first. Reading `x-forwarded-for` in a middleware would count a header the
+  client can write.
+- **The encrypted layer is gone.** `app/lib/e2ee/`, the protocol document, the
+  `accounts`, `account_tokens`, `sync_key_records` and `invites` tables, and the
+  root secret they were peppered with, were all removed by M191. The copied sync ENGINE stays: `app/lib/sync/` still carries
+  the Lamport merge and the compare-and-swap loop, under
+  [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md), with the encrypt and
+  decrypt steps replaced by JSON framing.
 
-The code is COPIED from `openplate-sync` and `openplate` rather than shared, and
-every file names its source path and commit in a header. Fixes go upstream
-first, then here. See [ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md)
-for why, and what that costs. `PROTOCOL.md` at the repo root is the normative
-specification; the TypeScript is its transcription, not the other way round.
-
-`accounts` is the only identity in this app. The `users` and organization
-tables are gone (M189, [ADR-0010](.adr/0010-drop-the-inherited-tenancy.md)):
-they held zero rows and nothing read them. `apiKeys` stands alone, carrying its
-own `isSuperadmin` flag rather than joining through a user row to an
-organization, and screen-level superadmin is `accounts.is_superadmin`.
+`users` is the only identity in this app. The organization tables are gone
+(M189, [ADR-0010](.adr/0010-drop-the-inherited-tenancy.md)): they held zero rows
+and nothing read them. `apiKeys` stands alone, carrying its own `isSuperadmin`
+flag rather than joining through a user row to an organization, and
+screen-level superadmin is `users.is_superadmin`.
 
 `/super/*` holds two screens and nothing else: `llm`, which edits the model
 selection enrichment reads out of `app_settings`, and `whoami-ip`, which echoes

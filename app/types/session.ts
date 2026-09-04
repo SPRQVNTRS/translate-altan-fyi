@@ -3,28 +3,28 @@
  */
 
 /**
- * The signed-in account, as the cookie carries it. The only identity there is:
- * the starter base's `user` key went with the `users` table in M189.
+ * The signed-in user, as the cookie carries it.
+ *
+ * TWO FIELDS, AND NO CREDENTIAL. The old cookie held a pair of opaque bearer
+ * tokens, because authentication was a token family the client rotated. M191
+ * replaced that with an ordinary server-side check: the cookie names WHO, the
+ * middleware re-reads the row on every request, and there is nothing here that
+ * could be replayed if the cookie leaked past its signature.
  */
-export interface SessionAccount {
+export interface SessionUser {
   id: number;
-  /** The opaque per-server identifier. Cosmetic here — the token beside it is the credential. */
-  handle: string;
   /**
-   * The raw opaque `access` token (`app/lib/e2ee/tokens.ts`), 15-minute TTL.
+   * When this session was issued, ISO-8601.
    *
-   * IT IS SAFE HERE AND NOWHERE ELSE. This cookie is `httpOnly`, signed and
-   * `sameSite: 'lax'`, so injected script cannot read it; the same string in
-   * `localStorage` would be exfiltrable by one XSS. Only its SHA-256 digest is
-   * persisted server-side, so a dumped `account_tokens` table replays nothing.
-   * See `app/services/account-session.server.ts` for the full argument.
+   * IT IS THE SESSION'S AGE, AND IT IS LOAD-BEARING. `users.password_changed_at`
+   * is the epoch every session is measured against: a cookie issued before the
+   * current password was set is refused on its next request. That is how a
+   * password change signs the other devices out with no session table to sweep.
    */
-  accessToken: string;
-  /** The raw opaque `refresh` token, 30-day TTL and rotating. Spent only by `POST /api/v1/auth/refresh`. */
-  refreshToken: string;
+  issuedAt: string;
 }
 
 export interface SessionData {
-  /** The signed-in account. A session without it is signed out. */
-  account: SessionAccount;
+  /** The signed-in user. A session without it is signed out. */
+  user: SessionUser;
 }

@@ -4,7 +4,7 @@
  *
  * THE SELECTION IS CLIENT WORK, AND IT COULD NOT BE ANYTHING ELSE. Lists,
  * entries and review state live in this browser's store and ride the encrypted
- * blob (`app/lib/e2ee/BLOB-CONTENTS.md`); the server cannot read any of it. So
+ * blob (`app/lib/local-store/BLOB-CONTENTS.md`); the server cannot read any of it. So
  * there is no route data to ask for, no endpoint to call, and nothing here
  * reaches the network. A device that has been offline all day still gets its
  * three words, because nothing about the decision needed a connection.

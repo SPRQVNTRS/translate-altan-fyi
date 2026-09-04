@@ -1,5 +1,5 @@
 import type { Route } from './+types/search';
-import type { MetaFunction } from 'react-router';
+import { redirect, type MetaFunction } from 'react-router';
 import { DailyNudge } from '#app/components/daily-nudge';
 import { LandingDoors, LandingExampleCard, LandingPrivacyNote } from '#app/components/landing';
 import { RecordSearch } from '#app/components/personal/record-search';
@@ -14,7 +14,9 @@ import { normalizeQuery } from '#app/lib/dictionary/normalize';
 import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
-import { readAccountHandleForDisplay, requireAccountSession } from '#app/services/account-session.server';
+import { resolveUser } from '#app/middleware/auth';
+import type { AuthenticatedUser } from '#app/middleware/helpers';
+import { SIGN_IN_PATH } from '#app/lib/auth/paths';
 import { getRawDb } from '#drizzle/db';
 
 // `meta()` runs outside the React tree, so it has no `t`. It goes through the
@@ -50,6 +52,24 @@ export const handle = { titleKey: 'nav.search' } satisfies TitleHandle;
  * through `getRawDb()`. There is one shared corpus and no organisation to
  * scope it to (ADR-0010).
  */
+/**
+ * The signed-in user, or a redirect to the sign-in page carrying `?next=`.
+ *
+ * IT THROWS RATHER THAN RETURNING A FLAG, so a caller cannot forget to act on
+ * the answer, and the throw is a `Response` the router turns into an ordinary
+ * 302.
+ *
+ * @param request the incoming request.
+ * @returns the signed-in user.
+ * @throws a `redirect` Response when nobody is signed in.
+ */
+async function requireSignedIn(request: Request): Promise<AuthenticatedUser> {
+  const user = await resolveUser(request);
+  if (user !== null) return user;
+  const url = new URL(request.url);
+  throw redirect(`${SIGN_IN_PATH}?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim();
@@ -76,12 +96,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   below. A rule inside the one loader both ids share can do neither, and a
   //   third alias inherits it for free.
   //
-  //   `requireAccountSession` THROWS A REDIRECT to `/sign-in`. It does not
-  //   return a flag, so there is no way to forget to act on the answer, and the
+  //   IT THROWS A REDIRECT to `/sign-in`, carrying `?next=` so the reader lands
+  //   back on the search they asked for. It does not return a flag, so there is
+  //   no way to forget to act on the answer, and the
   //   throw is a `Response` the router turns into an ordinary 302. Nothing here
   //   touches the device's own store: the gate blocks the screen, and a
   //   visitor's local lists and history are untouched by the redirect.
-  const account = q === '' ? null : await requireAccountSession(request);
+  const user = q === '' ? null : await requireSignedIn(request);
 
   // WHO IS READING, ASKED SEPARATELY AND ONLY ON THE OPEN BRANCH.
   //   The gate above answers "may this request search", and on the landing
@@ -89,18 +110,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   whether somebody is signed in, for one reason: the doors above the pane
   //   invite a reader to create an account they already hold.
   //
-  //   IT IS A DISPLAY QUESTION, SO IT IS ANSWERED BY THE DISPLAY READ.
-  //   `readAccountHandleForDisplay` unseals the signed cookie and resolves no
-  //   token, so the public landing page costs no extra query, and the answer
-  //   here is the same one the chrome's header already renders from the ROOT
-  //   loader. A stale cookie therefore hides the doors and keeps the name in
-  //   the header, which is one wrong answer rather than two disagreeing ones,
-  //   and the first search still redirects to `/sign-in` as it always did.
+  //   IT IS THE SAME READ THE ROOT LOADER ALREADY MADE, so the two cannot
+  //   disagree about whether the header shows an address while the pane shows
+  //   the doors.
   //
   //   IT GATES NOTHING. Nothing below reads it, and nothing may: the moment a
   //   decision that costs money is taken from this boolean, an unvalidated
   //   cookie has become a credential.
-  const signedIn = account !== null || (await readAccountHandleForDisplay(request)) !== null;
+  const signedIn = user !== null || (await resolveUser(request)) !== null;
 
   const db = getRawDb();
   // The UI language comes from the request cookie, not from the i18next
@@ -214,9 +231,9 @@ export async function loader({ request }: Route.LoaderArgs) {
         // The reader's own votes on the rows the panel renders. It comes from
         // the session the gate above already resolved and validated, rather
         // than from a second read of the same cookie: this branch is only
-        // reachable with `q !== ''`, so `account` is never null here, and
+        // reachable with `q !== ''`, so `user` is never null here, and
         // re-reading would risk two answers to one question in one request.
-        accountId: account?.accountId ?? null,
+        accountId: user?.id ?? null,
       });
 
   return { q, direction, signedIn, hits, phrase: null, didYouMean, example: null, phraseWordsOmitted: 0, panel };

@@ -11,7 +11,7 @@
  * re-push — burning the 5-version retention window in seconds — and, worse,
  * any of them may spend the single-use refresh token that another is about to
  * spend, which the service reads as token THEFT and answers by revoking the
- * whole family (`PROTOCOL.md` section 4.2). Two honest tabs racing look
+ * whole token family. Two honest tabs racing look
  * exactly like an attacker. One writer at a time removes both problems.
  *
  * ── The lock-ordering rule (read this before adding a second lock) ─────────

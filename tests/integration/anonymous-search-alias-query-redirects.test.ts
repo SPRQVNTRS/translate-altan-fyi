@@ -26,16 +26,16 @@ import assert from 'node:assert/strict';
 import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
-import { ACCOUNT_LOGIN_PATH } from '../../app/services/account-session.server';
+import { SIGN_IN_PATH } from '../../app/lib/auth/paths';
 import { loader as searchLoader } from '../../app/routes/search';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
 /** The word searched. A seeded dictionary entry, so a signed-in run has something to answer with. */
 const WORD = 'Haus';
 
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 
 /** `GET /search?q=Haus`, on the `search-alias` route id's own pattern. */
 async function loadAliasQuery(cookie: string | null) {
@@ -53,7 +53,7 @@ async function loadAliasQuery(cookie: string | null) {
 
 before(async () => {
   if (!DB_HOST) return;
-  session = await createTestAccountSession('alias-query');
+  session = await createTestUserSession('alias-query');
 });
 
 after(async () => {
@@ -79,7 +79,10 @@ describe('an anonymous query on the /search alias', () => {
         'index case must always agree: if only one of them is red, the rule has been moved onto a path.',
     );
     assert.equal(thrown.status, 302);
-    assert.equal(thrown.headers.get('location'), ACCOUNT_LOGIN_PATH);
+    // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
+    // the reader lands back where they were refused, and an assertion on the
+    // full string would read as a broken gate the first time that changed.
+    assert.equal(new URL(thrown.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
   });
 
   it('answers the same URL with results once signed in', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {

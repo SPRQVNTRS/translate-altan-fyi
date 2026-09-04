@@ -4,7 +4,7 @@
  *
  * WHAT THIS PROTECTS
  *   The search log is the most sensitive thing on the device and the one
- *   collection that is never synced (`app/lib/e2ee/BLOB-CONTENTS.md`). The cap
+ *   collection that is never synced (`app/lib/local-store/BLOB-CONTENTS.md`). The cap
  *   is the only thing that bounds how much of it a device keeps, and it is
  *   applied on every write rather than on a schedule — so a defect here is not
  *   a tidiness problem, it is a device quietly holding years of somebody's

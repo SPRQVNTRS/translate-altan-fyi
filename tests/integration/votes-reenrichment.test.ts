@@ -56,13 +56,13 @@ import { RouterContextProvider } from 'react-router';
 import { pool } from '../../drizzle/db';
 import { getRawDb } from '../../drizzle/db';
 import {
-  accounts,
   enrichmentVotes,
   enrichments,
   headwords,
   reenrichmentLog,
   senses,
   sources,
+  users,
   workflows,
 } from '../../drizzle/schema';
 import { action } from '../../app/routes/api.enrichment-vote';
@@ -97,21 +97,15 @@ const TO = 'en';
 /**
  * The two signed-in readers whose votes drive the route.
  *
- * REAL ROWS NOW, NOT ARBITRARY IDS. `enrichment_votes.accountId` carries a
- * foreign key to `accounts` since M172, so a vote by an account that does not
- * exist is refused by Postgres. These are seeded in `before` and their ids are
- * whatever `serial` hands out.
+ * REAL ROWS, NOT ARBITRARY IDS. `enrichment_votes.accountId` carries a foreign
+ * key to `users` since M191, so a vote by a user that does not exist is refused
+ * by Postgres. These are seeded in `before` and their ids are whatever `serial`
+ * hands out.
  */
-const VOTER_HANDLE = `zz-voter-${randomUUID()}`;
-const SECOND_VOTER_HANDLE = `zz-voter-${randomUUID()}`;
+const VOTER_HANDLE = `zz-voter-${randomUUID()}@example.invalid`;
+const SECOND_VOTER_HANDLE = `zz-voter-${randomUUID()}@example.invalid`;
 let voterAccountId = 0;
 let secondVoterAccountId = 0;
-
-/** A structurally valid Argon2id descriptor. Nothing in this file derives anything from it. */
-const FIXTURE_KDF_DESCRIPTOR = {
-  salt: Buffer.alloc(16, 1).toString('base64'),
-  params: { memorySizeKib: 65536, iterations: 3, parallelism: 1 },
-};
 
 /** The model on the stale row. Deliberately not a real model id: nothing may resolve or call it. */
 const STALE_MODEL = 'stale-model-under-test';
@@ -137,39 +131,30 @@ const voteResponseSchema = z.object({
 });
 
 /**
- * A `Cookie` header holding a real signed session for one account id.
+ * A `Cookie` header holding a real signed session for one user id.
  *
- * The tokens are placeholders. This file drives the vote route, which reads the
- * account id and nothing else; a request that needed a live bearer token would
- * be exercising `/api/v1/auth/*` and belongs in that file, not this one.
+ * This file drives the vote route, which reads the user id and nothing else.
  */
 async function signedCookieFor(accountId: number): Promise<string> {
   const session = await sessionStorage.getSession();
-  session.set('account', {
-    id: accountId,
-    handle: `zz-session-${accountId}`,
-    accessToken: `unused-access-${accountId}`,
-    refreshToken: `unused-refresh-${accountId}`,
-  });
+  session.set('user', { id: accountId, issuedAt: new Date().toISOString() });
   const setCookie = await sessionStorage.commitSession(session);
   return setCookie.split(';')[0] ?? '';
 }
 
-/** One throwaway account, so a vote has something to point its foreign key at. */
+/** One throwaway user, so a vote has something to point its foreign key at. */
 async function seedAccount(handle: string): Promise<number> {
   const [row] = await db
-    .insert(accounts)
+    .insert(users)
     .values({
-      handle,
-      displayName: null,
-      // A fixed non-secret string. This file never authenticates; it only needs
-      // a row the foreign key can resolve.
-      verifier: '0'.repeat(64),
-      recoveryVerifier: null,
-      kdfDescriptor: FIXTURE_KDF_DESCRIPTOR,
+      email: handle,
+      // A fixed non-secret string of the right shape. This file never
+      // authenticates; it only needs a row the foreign key can resolve.
+      passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyz012345678901234567890123456789',
+      emailVerifiedAt: new Date(),
     })
-    .returning({ id: accounts.id });
-  if (!row) throw new Error(`failed to seed the fixture account ${handle}`);
+    .returning({ id: users.id });
+  if (!row) throw new Error(`failed to seed the fixture user ${handle}`);
   return row.id;
 }
 
@@ -336,7 +321,7 @@ after(async () => {
   // Last, and after the votes: the vote foreign key cascades, but deleting the
   // accounts first would silently take rows this file wanted to assert on.
   for (const accountId of [voterAccountId, secondVoterAccountId, ...preseededAccountIds]) {
-    if (accountId !== 0) await db.delete(accounts).where(eq(accounts.id, accountId));
+    if (accountId !== 0) await db.delete(users).where(eq(users.id, accountId));
   }
 
   await db.delete(workflows).where(sql`${workflows.context}->>'headwordId' = ${HEADWORD_ID}`);

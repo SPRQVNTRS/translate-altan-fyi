@@ -20,7 +20,7 @@
  *
  * FOUR OF THE FIVE ENTITIES ARE SYNCED, AND ONE IS NOT. Lists, list items,
  * notes and review state carry a {@link SyncStamp} and are what the encrypted
- * blob transports (`app/lib/e2ee/BLOB-CONTENTS.md`). Search entries are
+ * blob transports (`app/lib/local-store/BLOB-CONTENTS.md`). Search entries are
  * device-only: they carry no stamp, are hard-deleted rather than tombstoned,
  * and are capped on the device. A reader who assumes the search table behaves
  * like the other four will get both the deletion semantics and the blob
@@ -79,7 +79,7 @@ export const MIGRATION_GATE_CLEARED_FOR_VALUE = 'migrationGateClearedFor';
  */
 export const NUDGE_SHOWN_ON_VALUE = 'nudgeShownOn';
 
-/** The per-entity ordering stamp, PROTOCOL.md section 3.3. Higher lamport wins; ties break on lexicographic deviceId. */
+/** The per-entity ordering stamp. Higher lamport wins; ties break on lexicographic deviceId. */
 export interface SyncStamp {
   lamport: number;
   deviceId: string;

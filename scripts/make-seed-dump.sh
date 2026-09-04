@@ -52,12 +52,10 @@ TABLES="sources headwords senses sense_versions translations headword_links exam
 # with drizzle/schema/*.ts: a new table belongs in one of these two lists, and
 # if you are unsure, it belongs in this one.
 EXCLUDE_FLAGS="
---exclude-table=public.accounts
---exclude-table=public.account_tokens
 --exclude-table=public.sync_blobs
---exclude-table=public.sync_key_records
 --exclude-table=public.api_keys
 --exclude-table=public.users
+--exclude-table=public.user_tokens
 --exclude-table=public.organizations
 --exclude-table=public.organization_members
 --exclude-table=public.enrichments

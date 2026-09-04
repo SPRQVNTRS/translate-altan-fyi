@@ -1,6 +1,6 @@
 import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { pgTable, text, smallint, timestamp, uuid, integer, index, check, primaryKey } from 'drizzle-orm/pg-core';
-import { accounts } from './accounts';
+import { users } from './users';
 import { headwords, languages } from './dictionary';
 import { enrichments } from './enrichment';
 
@@ -34,21 +34,20 @@ export const enrichmentVotes = pgTable(
     enrichmentId: uuid('enrichment_id')
       .notNull()
       .references(() => enrichments.id, { onDelete: 'cascade' }),
-    // THE REAL ACCOUNT, WITH A REAL FOREIGN KEY.
+    // THE REAL USER, WITH A REAL FOREIGN KEY.
     //
-    // This column used to be a `uuid` holding a UUIDv5 derived from the stack's
-    // session `users.id`, because `users.id` is a `serial` and there was no
-    // account table to point at. The account model landed in M172, so the
-    // bridge and its frozen namespace UUID are deleted and the column is the
-    // account id itself.
+    // The column keeps its `account_id` name and points at `users` since M191,
+    // when the encrypted account model was replaced by a plain one. Renaming it
+    // would be churn: nothing outside this file spells the column, and the row
+    // still means "one reader's judgement".
     //
-    // `cascade` for the same reason the enrichment link cascades: a vote by an
-    // account that no longer exists scores an answer on behalf of nobody. It is
+    // `cascade` for the same reason the enrichment link cascades: a vote by a
+    // user who no longer exists scores an answer on behalf of nobody. It is
     // also what makes account deletion a single DELETE that leaves nothing
     // behind, which is the self-serve erasure path.
     accountId: integer('account_id')
       .notNull()
-      .references(() => accounts.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** `-1` or `1`, pinned by the check constraint below. There is no neutral vote: not voting is the neutral case. */
     value: smallint('value').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

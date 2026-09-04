@@ -1,5 +1,5 @@
 /**
- * The conflict rule, PROTOCOL.md §3.3: higher `lamport` wins, ties break on
+ * The conflict rule: higher `lamport` wins, ties break on
  * lexicographic `deviceId`, and a tombstone participates in the same
  * comparison as a live value.
  *
@@ -19,7 +19,7 @@
  *     direction) makes two devices choose different winners for the same
  *     entity, so neither ever converges.
  *   - An asymmetric merge makes "push, lose the CAS, pull, merge, re-push"
- *     (PROTOCOL.md §5.1) ping-pong forever instead of terminating: each device
+ *     ping-pong forever instead of terminating: each device
  *     keeps producing a payload the other disagrees with.
  *   - A tombstone winner rebuilt as meta ONLY, with no `deleted: true` row,
  *     is written onto the device with the row simply gone — and the next cycle
@@ -128,7 +128,7 @@ function mergeBothDirections(a: StampedSnapshot, b: StampedSnapshot): StampedSna
   return forward;
 }
 
-describe('merge conflict resolution (PROTOCOL.md §3.3)', () => {
+describe('merge conflict resolution', () => {
   it('resolves a two-device edit to the higher lamport, whichever side it arrives on', () => {
     const deviceA = payload({ ...emptySnapshot(), lists: [list({ id: 'l1', name: 'Reise', lamport: 2, deviceId: 'device-a' })] });
     const deviceB = payload({ ...emptySnapshot(), lists: [list({ id: 'l1', name: 'Urlaub', lamport: 3, deviceId: 'device-b' })] });

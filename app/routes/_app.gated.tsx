@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router';
-import { accountMiddleware } from '#app/middleware/auth';
+import { authMiddleware } from '#app/middleware/auth';
 
 /**
  * The half of the app shell that requires an account (M184, ADR-0009).
@@ -34,7 +34,7 @@ import { accountMiddleware } from '#app/middleware/auth';
  * store: a visitor's lists and history are theirs, they were never uploaded,
  * and a redirect must not be the thing that deletes them.
  */
-export const middleware = [accountMiddleware];
+export const middleware = [authMiddleware];
 
 export default function GatedAppLayout() {
   return <Outlet />;

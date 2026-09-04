@@ -64,12 +64,11 @@ make hooks   # or: pnpm install, whose `prepare` script sets core.hooksPath
 docker compose up -d
 
 cp .env.example .env
-# Edit .env. At minimum set the DB_* variables. SESSION_SECRET and SERVER_SECRET
-# are required in production and have development defaults otherwise.
-
-# Set ACCOUNT_BOOTSTRAP_TOKEN in .env as well. It admits your first account,
-# and the next section explains how you use it.
-openssl rand -hex 32   # paste this value into ACCOUNT_BOOTSTRAP_TOKEN
+# Edit .env. At minimum set the DB_* variables. SESSION_SECRET is required in
+# production and has a development default otherwise.
+#
+# Mail is optional in development: with no PIGEON_API_KEY the confirmation and
+# reset mails are logged to the console instead of being sent.
 
 pnpm drizzle:migrate   # create the schema
 pnpm dev               # dev server and worker together
@@ -79,52 +78,25 @@ The app runs at `http://localhost:${PORT}`, which defaults to `3000`.
 
 ### Your first account
 
-Account creation needs an invite, and on a new instance nobody exists yet to
-mint one. `ACCOUNT_BOOTSTRAP_TOKEN` is the way in. Signup accepts it in place of
-an invite, and only while the `accounts` table is still empty. It therefore
-invalidates itself as soon as your first account exists.
+Signup is open. Create an account at `/sign-up`, or from the "Create account"
+button on the front page, then click the link in the confirmation mail. In
+development with no mail configured, that link is printed to the console the
+dev server is running in.
 
-The server can never create an account for you. Identity here is a password,
-called a passphrase in the code, that your browser turns into keys. The server
-never learns it, so no
-environment variable and no CLI command can seed an account. A real browser has
-to do the signup. [ADR-0009](.adr/0009-invite-only-accounts.md) explains the
-consequences.
+Then grant yourself the two operator screens under `/super/`, which are the
+language-model configuration and an IP echo for checking `TRUST_PROXY`:
 
-Do these steps in this order. The first three are the block above.
+```bash
+pnpm cli account grant-superadmin <your-email>
+pnpm cli account list
+```
 
-1. Set `ACCOUNT_BOOTSTRAP_TOKEN` in `.env`, before the first boot.
-2. Run `pnpm drizzle:migrate`, which creates the `accounts` and `invites`
-   tables.
-3. Start the app with `pnpm dev`, or with `pnpm start` and `pnpm worker`.
-4. Open `/sign-up` in a browser. The front page carries a "Create account"
-   button that goes to the same screen.
-5. Paste the bootstrap token into the invite field, choose a password, and
-   finish creating the account. Write down the sign-in name and the recovery
-   code that the app shows you. Nobody can recover them for you.
-6. Grant yourself the two operator screens under `/super/`, which are the
-   language-model configuration and an IP echo for checking `TRUST_PROXY`:
+Both commands read the database directly, so run them where `.env` is readable.
+They do not need a superadmin account, which is what makes the first grant
+possible at all.
 
-   ```bash
-   pnpm cli account grant-superadmin <your-handle>
-   ```
-
-7. Mint invites for everybody else. Each token is printed once, and only the
-   hash of it is stored:
-
-   ```bash
-   pnpm cli account invite --minted-by=<your-handle>
-   pnpm cli account invite --expires-in=never
-   pnpm cli account list-invites
-   ```
-
-Both invite commands read the database directly, so run them where `.env` is
-readable. They do not need a superadmin account, which is why step 7 also works
-if you skip step 6.
-
-Losing the bootstrap token before step 5 is an environment problem, not a
-database problem: set a new value and restart. After step 5 the token is dead,
-and further accounts need invites from step 7.
+A forgotten password is recoverable: `/forgot-password` mails a link that sets a
+new one, and doing so signs every other device out.
 
 The `pnpm dev` command starts two processes: `dev:server` (Express running React
 Router SSR) and `dev:worker` (the pg-boss job processor). You can run each
@@ -251,11 +223,11 @@ const dbUrl = CONFIG.database.url;
 
 Review two important secrets before deploying:
 
-- `SESSION_SECRET` encrypts and signs the user session cookie.
-- `SERVER_SECRET` forms the root key for the encrypted personal storage layer.
-  It cannot decrypt stored content. However, changing this value invalidates all
-  stored authentication verifiers, forcing all users to run account recovery.
-  The `.env.example` file describes this behavior.
+- `SESSION_SECRET` encrypts and signs the user session cookie. Rotating it signs
+  everybody out; nothing else depends on it.
+- `PIGEON_API_KEY` and `PIGEON_BASE_URL` are what let the confirmation and reset
+  mails leave the instance. Production refuses to send without them rather than
+  dropping a link silently.
 
 ### Database connection pooling
 
@@ -280,48 +252,37 @@ The `drizzle:*` npm scripts execute `drizzle-kit` via `tsx`. Node does not strip
 TypeScript inside `node_modules`, and the database schema imports types from
 TypeScript packages.
 
-## Accounts and the encrypted personal layer
+## Accounts and the synced personal document
 
-The application is **invite-only**. The front page is public and carries a
-worked example. Everything past it needs an account: a typed search, entry
-pages, lists, history, review, and voice input. A signed-out visitor who
-searches is sent to `/sign-in`, and the front page, `/account` and the app
-header all carry a "Create account" button beside a "Sign in" link. The old
-paths `/sync/login` and `/sync/setup` still answer, with a permanent redirect
-that keeps the query string.
-Signup refuses any request without a valid invite. It answers every cause of
-refusal with the same message, so it tells a caller nothing about which invites
-exist. [ADR-0009](.adr/0009-invite-only-accounts.md) records the decision, and
-[Your first account](#your-first-account) is the way into your own instance.
+Signup is open. The front page is public and carries a worked example.
+Everything past it needs an account: a typed search, entry pages, lists,
+history, review, and voice input. A signed-out visitor who searches is sent to
+`/sign-in`, and the front page, `/account` and the app header all carry a
+"Create account" button beside a "Sign in" link.
 
-An account is also the sync account, and it is what carries state between a
-person's devices. Word lists and history are still written on the device that
-made them. They reach the server only after the browser has encrypted them with
-**end-to-end encryption**:
+An account is an email address and a password. The address has to be confirmed
+by a mailed link before the first sign-in, a forgotten password is replaced by a
+second mailed link, and replacing it signs every other device out. Sign-up,
+sign-in and forgot-password answer the same way for an address that is on file
+and one that is not, so none of them can be used to find out who has an account
+here.
 
-- The browser derives an Argon2id key from the password. It splits this key into
-  two separate branches using HKDF, a key derivation function. One branch acts
-  as a key-encryption key to wrap the user data key. The other branch serves as
-  an authentication hash.
-- The server stores only `HMAC(pepper, authHash)`. The pepper resides outside
-  the database in `SERVER_SECRET`. The server never receives the passphrase, the
-  key-encryption key, or the raw data key. The server cannot read decrypted user
-  data by cryptographic design.
-- The system identifies accounts using an opaque **handle**, shown in the
-  interface as a sign-in name, rather than an email address. The database stores no email records, so the app provides no
-  verification emails or password reset links.
-- Users recover accounts with a **recovery code**. This code serves as an
-  alternate authenticator that encrypts the same underlying data key. The UI
-  displays this code once. The user must re-enter the code before finishing
-  setup, ensuring they have saved it.
+An account is also what carries state between a person's devices. Word lists,
+notes, review state and history are written on the device that made them. All of
+them except the search history are pushed to the server as one JSON document,
+under a compare-and-swap version that stops two devices overwriting each other.
 
-**Lost credentials cannot be restored.** If a user loses both their passphrase
-and their recovery code, their synced data is permanently inaccessible.
-Operators cannot restore access because the server holds no recovery keys.
+**The operator can read that document.** It is stored as ordinary JSON in
+`sync_blobs.payload`. The search history is the one collection that never
+leaves the device
+([`app/lib/local-store/BLOB-CONTENTS.md`](app/lib/local-store/BLOB-CONTENTS.md)
+says what travels and what does not).
 
-[`PROTOCOL.md`](PROTOCOL.md) documents the complete sync protocol. The system
-imports this implementation directly from `openplate-sync`, as documented in
-[ADR-0008](.adr/0008-e2ee-sync-copied-not-extracted.md).
+Until M191 the document was encrypted with a key the server could not derive,
+and accounts were opaque handles with a recovery code instead of an address.
+That bar cost the only thing it was protecting: a reader had no way to be told
+who they were signed in as and no way to reset a password. The claim in this
+README and on the privacy page is what is true now, not what used to be.
 
 ## CLI
 

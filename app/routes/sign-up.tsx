@@ -1,96 +1,54 @@
-import { redirect } from 'react-router';
-import type { MetaFunction } from 'react-router';
+import { Form, redirect, type MetaFunction } from 'react-router';
+import { useTranslation } from 'react-i18next';
+
 import type { Route } from './+types/sign-up';
-import { CreateAccountFlow } from '#app/components/account/create-account-flow';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
+import { requestT } from '#app/i18n/request-t';
 import type { TitleHandle } from '#app/lib/route-title';
-import { getAccountSession } from '#app/services/account-session.server';
+import { registerUser } from '#app/services/auth.server';
+import { resolveUser } from '#app/middleware/auth';
 
-export const meta: MetaFunction = ({ matches }) => {
-  const language = metaLanguage(matches);
-  return [
-    { title: metaTitle(language, 'account.createMetaTitle') },
-    { name: 'description', content: metaTitle(language, 'account.createMetaDescription') },
-  ];
-};
+export const meta: MetaFunction = ({ matches }) => [
+  { title: metaTitle(metaLanguage(matches), 'account.createMetaTitle') },
+];
 
-/**
- * The name of this screen, for the chrome's `h1`.
- *
- * The header reads the nav catalog by default, and account creation is
- * deliberately not in the nav: it is reached from the home page, from
- * `/account` and from `/sign-in`. Without a handle the `h1` falls back to the
- * app name, so the mobile header renders "translate" twice, once as the logo
- * and once as the title. The key is the one the `<title>` already uses, so the
- * tab and the header can never disagree.
- */
 export const handle = { titleKey: 'account.createMetaTitle' } satisfies TitleHandle;
 
-/**
- * A reader who already has an account, sent to it; otherwise the invite token
- * from the URL, and nothing else.
- *
- * THE REDIRECT IS NOT A GATE, IT IS THE ANSWER TO A FINISHED QUESTION. This
- * screen creates an account, and somebody signed in has one: rendering the form
- * to them offers a second account they cannot want and, worse, a fresh sign-in
- * name and recovery code that would replace the session they are holding. It
- * costs one indexed lookup, `getAccountSession`, which resolves the access
- * token and NEVER throws. A cookie whose token is expired or revoked therefore
- * gets the form, which is the only safe way round: a check that trusted the
- * cookie alone would lock a stale session out of the two screens that could
- * end it.
- *
- * `/sign-up` STAYS CLASSIFIED PUBLIC in `app/lib/route-classification.ts`, and
- * that is not an oversight. Nobody is refused here. A signed-out stranger, the
- * one caller this screen exists for, reaches it exactly as before.
- *
- * An invite arrives out of band as a link, so `/sign-up?invite=<token>` is the
- * shape a reader is handed. Reading it here rather than in client code keeps
- * one answer to "which token is this visit carrying", and the value is a
- * one-time admission ticket the server checks again at signup: it is not a
- * credential and nothing is decided from it on this screen.
- *
- * An absent or empty parameter is `null`, so the form has one case to handle
- * rather than two.
- *
- * @param request the incoming request, read for its session cookie and its
- *   query string.
- * @returns a redirect to `/account` for a signed-in reader, otherwise the
- *   invite token, or `null` when the visit carries none.
- */
-export async function loader({ request }: Route.LoaderArgs): Promise<Response | { invite: string | null }> {
-  const account = await getAccountSession(request);
-  if (account !== null) throw redirect('/account');
-
-  const invite = new URL(request.url).searchParams.get('invite');
-  return { invite: invite === null || invite === '' ? null : invite };
+/** A reader who already holds an account is answering a finished question, so they go to it. */
+export async function loader({ request }: Route.LoaderArgs): Promise<null> {
+  if ((await resolveUser(request)) !== null) throw redirect('/account');
+  return null;
 }
 
 /**
- * Creating an account, at `/sign-up`.
+ * Creates the account and mails the confirmation link.
  *
- * THE PATH AND THE WORDS BOTH SAY "ACCOUNT". This screen used to be
- * `/sync/setup`, titled "Set up sync", which asked a newcomer to configure a
- * feature before they had the thing that feature applies to. `/sync/setup`
- * still answers, with a permanent redirect from `sync.setup-redirect.ts`.
- *
- * No action, on purpose. Every value this screen handles is a secret that must
- * not leave the browser, so the work happens in client code and reaches the
- * service through `fetch`. A route action would run on the server, which is
- * precisely where none of this may go. The loader above is the one exception,
- * and it reads nothing secret either: an invite token the reader was sent in
- * the open, plus the session cookie, which it uses to send a reader who already
- * holds an account to `/account` rather than to a form that would mint them a
- * second one. It reads no password, no recovery code and no key, and it writes
- * nothing.
+ * IT SAYS THE SAME SENTENCE FOR A KNOWN AND AN UNKNOWN ADDRESS.
+ * `registerUser` decides that; this action only renders what it returns.
  */
-export default function SignUpRoute({ loaderData }: Route.ComponentProps) {
+export async function action({ request }: Route.ActionArgs): Promise<{ status: string }> {
+  const form = await request.formData();
+  const result = await registerUser({
+    email: String(form.get('email') ?? ''),
+    password: String(form.get('password') ?? ''),
+    mail: { t: requestT(request), origin: new URL(request.url).origin },
+  });
+  return { status: result.status };
+}
+
+/** Minimal by design: spec 03 replaces this screen with the real one. */
+export default function SignUpRoute({ actionData }: Route.ComponentProps) {
+  const { t } = useTranslation();
+  if (actionData?.status === 'mailed') return <p>Check your inbox for the confirmation link.</p>;
+
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      {/* The loader's answer, handed down. The flow falls back to reading
-          `?invite=` itself when this is null, so a link opened without the
-          loader's answer still fills the field. */}
-      <CreateAccountFlow invite={loaderData.invite} />
-    </div>
+    <Form method="post" className="mx-auto flex w-full max-w-md flex-col gap-3">
+      <label htmlFor="email">Email</label>
+      <input id="email" name="email" type="email" required autoComplete="email" />
+      <label htmlFor="password">{t('account.passwordLabel')}</label>
+      <input id="password" name="password" type="password" required autoComplete="new-password" />
+      {actionData?.status === 'invalid-password' && <p>{t('account.passwordTooShort', { min: 10 })}</p>}
+      <button type="submit">{t('account.createAction')}</button>
+    </Form>
   );
 }

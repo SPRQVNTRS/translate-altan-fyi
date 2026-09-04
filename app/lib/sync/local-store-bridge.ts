@@ -18,6 +18,7 @@
  * local-store refactor exactly one import list.
  */
 import type { Store } from 'tinybase';
+import type { JsonValue } from '#app/lib/json';
 import {
   listLocalListItemsIncludingDeleted,
   listLocalListsIncludingDeleted,
@@ -29,7 +30,7 @@ import {
   SCHEMA_VERSION,
   type SyncedSnapshot,
 } from '#app/lib/local-store';
-import { SyncRequestError } from '#app/lib/e2ee/client/sync-error';
+import { SyncRequestError } from '#app/lib/sync/sync-error';
 
 /** Options accepted by the reads here, the same shape every `local-store` function takes — the store defaults to the browser singleton. */
 interface StoreOption {
@@ -46,7 +47,7 @@ interface StoreOption {
  * building the payload itself, so there is one list of synced collection names
  * in the codebase instead of two that can drift. The collection this store
  * holds and the blob deliberately does not carry is named in
- * `app/lib/e2ee/BLOB-CONTENTS.md`; it is never read here, and could not survive
+ * `app/lib/local-store/BLOB-CONTENTS.md`; it is never read here, and could not survive
  * the projection if it were.
  *
  * `store` defaults to the browser IndexedDB singleton. It is injectable for one
@@ -87,20 +88,20 @@ export function parseRemoteSnapshot({
   snapshot,
   schemaVersion,
 }: {
-  snapshot: unknown;
+  snapshot: JsonValue;
   schemaVersion: number;
 }): SyncedSnapshot {
   if (schemaVersion > SCHEMA_VERSION) {
     throw new SyncRequestError({
       kind: 'invalid',
-      message: 'This account’s synced data was written by a newer version of the app than this device is running.',
+      message: "This account's synced data was written by a newer version of the app than this device is running.",
     });
   }
   const parsed = syncedSnapshotSchema.safeParse(snapshot);
   if (!parsed.success) {
     throw new SyncRequestError({
       kind: 'invalid',
-      message: 'This account’s synced data is not in a shape this device can read.',
+      message: "This account's synced data is not in a shape this device can read.",
     });
   }
   return parsed.data;

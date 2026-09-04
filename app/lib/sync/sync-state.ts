@@ -83,12 +83,12 @@ export function emptySyncState(): PersistedSyncState {
  */
 export function createSyncStateStore({
   storage,
-  accountId,
+  userId,
 }: {
   storage: KeyValueStorage;
-  accountId: number;
+  userId: number;
 }): SyncStateStore {
-  const key = `${STATE_KEY_PREFIX}:${accountId}`;
+  const key = `${STATE_KEY_PREFIX}:${userId}`;
   return {
     load(): PersistedSyncState {
       const raw = storage.getItem(key);

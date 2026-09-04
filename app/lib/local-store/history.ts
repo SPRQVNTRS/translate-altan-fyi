@@ -5,7 +5,7 @@
  * This module has NO upstream counterpart, so it carries no provenance header.
  * It is also the one table in the local layer that is not synced. It carries no
  * `SyncStamp`, it is HARD-deleted rather than tombstoned, and it never enters
- * the encrypted blob — the reasoning is in `app/lib/e2ee/BLOB-CONTENTS.md`, and
+ * the encrypted blob — the reasoning is in `app/lib/local-store/BLOB-CONTENTS.md`, and
  * the consequence here is that there is nothing to converge with, so a deleted
  * entry needs no marker to say so.
  *

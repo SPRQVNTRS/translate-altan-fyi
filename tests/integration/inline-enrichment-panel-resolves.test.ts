@@ -61,7 +61,7 @@ import { loader as pollEnrichment } from '../../app/routes/api.enrichment.$headw
 import { loader as searchLoader } from '../../app/routes/search';
 import { runEnrichHeadword } from '../../app/workflows/operations/enrichment/enrich-headword';
 import { createFakeLlmPort, llmError, llmValue, type FakeLlmPort } from '../fixtures/fake-llm-port';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -88,7 +88,7 @@ interface SeededWord {
 let sourceId = '';
 let fake: FakeLlmPort = createFakeLlmPort();
 /** The signed-in reader every case in this file searches as. */
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 
 /** Every headword this run created, so `after()` deletes exactly those rows. */
 const createdHeadwordIds: string[] = [];
@@ -231,7 +231,7 @@ let failing: SeededWord = { lemma: '', headwordId: '', senseId: '' };
 before(async () => {
   if (!DB_HOST) return;
 
-  session = await createTestAccountSession('inline-panel');
+  session = await createTestUserSession('inline-panel');
 
   for (const name of KEY_VARS) {
     savedKeys.set(name, process.env[name]);

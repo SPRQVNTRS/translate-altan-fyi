@@ -36,8 +36,8 @@ import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import routes from '../../app/routes';
 import { closePool, poolInitialized } from '../../drizzle/db';
-import { accountMiddleware } from '../../app/middleware/auth';
-import { ACCOUNT_LOGIN_PATH } from '../../app/services/account-session.server';
+import { authMiddleware } from '../../app/middleware/auth';
+import { SIGN_IN_PATH } from '../../app/lib/auth/paths';
 import { loader as healthcheckLoader } from '../../app/routes/healthcheck';
 
 const DB_HOST = process.env.DB_HOST;
@@ -71,7 +71,7 @@ function ancestorsOf(entries: readonly RouteConfigEntry[], file: string): string
  */
 async function runGateAnonymously(): Promise<'admitted' | Response> {
   const request = new Request('https://translate.altan.fyi/history');
-  const middleware: MiddlewareFunction = accountMiddleware;
+  const middleware: MiddlewareFunction = authMiddleware;
   try {
     await middleware(
       {
@@ -132,6 +132,9 @@ describe('the healthcheck stays public', () => {
 
     assert.ok(outcome instanceof Response, 'the account gate admitted a request carrying no session, so it is not gating anything');
     assert.equal(outcome.status, 302);
-    assert.equal(outcome.headers.get('location'), ACCOUNT_LOGIN_PATH);
+    // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
+    // the reader lands back where they were refused, and an assertion on the
+    // full string would read as a broken gate the first time that changed.
+    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
   });
 });

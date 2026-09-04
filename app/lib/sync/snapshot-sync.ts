@@ -26,7 +26,7 @@
  * ── What is deliberately NOT here ─────────────────────────────────────────
  *
  * Conflict resolution is whole-record last-writer-wins per entity, ordered by
- * `(lamport, deviceId)` — `PROTOCOL.md` section 3.3's accepted v1 trade-off.
+ * `(lamport, deviceId)`, the accepted v1 trade-off.
  * Two devices editing the SAME entry offline means the lower stamp is dropped
  * silently. No field-level merge, no conflict UI. Wall-clock time is never an
  * ordering authority: it drifts, and across devices it is routinely wrong.
@@ -95,7 +95,7 @@ function toFlat(entityType: string, entityId: string, value: SyncEntityValue): F
  * hashes against a persisted baseline. Here the stamp already exists: every
  * write helper in `primary-store.ts` sets `(lamport, deviceId)` at the moment
  * of the edit. So this function reads rather than derives, and the wire shape
- * `PROTOCOL.md` section 3.2 specifies is unchanged: a live row contributes a
+ * the payload shape specifies is unchanged: a live row contributes a
  * `perEntity` entry, a `deleted` row contributes a tombstone.
  *
  * The stamps are ALSO carried on the rows inside `snapshot`, which is

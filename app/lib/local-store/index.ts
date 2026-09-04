@@ -11,13 +11,13 @@
  *
  * SEARCH HISTORY IS CAPPED ON THE DEVICE AND STAYS THERE. It is the one
  * collection that never enters the blob. Two independent reasons, either
- * sufficient, are in `app/lib/e2ee/BLOB-CONTENTS.md`; the cap itself is in
+ * sufficient, are in `app/lib/local-store/BLOB-CONTENTS.md`; the cap itself is in
  * `history.ts`, applied on every write rather than on a schedule.
  *
  * CONFLICT STANCE: LAST-WRITE-WINS, per entity, on `(lamport, deviceId)`.
- * `PROTOCOL.md` at the repo root is the normative specification of the envelope
- * those entities travel in; the stamp they carry is section 3.3. Wall-clock
- * time is never the ordering authority — `updatedAt` exists for the UI and for
+ * `app/lib/sync/engine/envelope/` frames the entities for the wire and
+ * `snapshot-sync.ts` owns the merge. Wall-clock time is never the ordering
+ * authority — `updatedAt` exists for the UI and for
  * local housekeeping, and nothing else.
  *
  * DEVICE SCOPE. The store is DEVICE-scoped, not account-scoped: one flat

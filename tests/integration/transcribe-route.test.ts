@@ -52,7 +52,7 @@ import {
 import { DAILY_BUDGET_USD, utcDay } from '../../app/lib/abuse/budget.server';
 import { registry, type AudioPort } from '../../app/lib/llm/registry.server';
 import { MAX_AUDIO_BYTES } from '../../app/services/transcribe.server';
-import { createTestAccountSession, type TestAccountSession } from '../fixtures/account-session';
+import { createTestUserSession, type TestUserSession } from '../fixtures/user-session';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -108,10 +108,10 @@ const keySnapshot = new Map<string, string | undefined>();
  * answered 401 and would assert nothing about the guard it is named after.
  * `anonymous-transcribe-refused.test.ts` owns the anonymous half.
  */
-let session: TestAccountSession | null = null;
+let session: TestUserSession | null = null;
 
 /** Every account this file created, so `after()` removes exactly those. */
-const createdSessions: TestAccountSession[] = [];
+const createdSessions: TestUserSession[] = [];
 
 /**
  * A brand new account, and every request after this call is made as that one.
@@ -123,7 +123,7 @@ const createdSessions: TestAccountSession[] = [];
  * every request now carries a session bucket too.
  */
 async function freshSession(label: string): Promise<void> {
-  const created = await createTestAccountSession(label);
+  const created = await createTestUserSession(label);
   createdSessions.push(created);
   session = created;
 }

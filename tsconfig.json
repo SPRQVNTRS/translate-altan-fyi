@@ -19,6 +19,14 @@
       "#drizzle/*": ["./drizzle/*"],
       "#types/*": ["./types/*"]
     },
+    // `tests/unit/auth/*` are run BOTH by `pnpm test:unit` (through tsx) and by
+    // a bare `node --experimental-strip-types`, which is the milestone's own
+    // verification command. Strip-only Node resolves neither the `#app/*` path
+    // aliases nor an extensionless relative specifier, so those files import
+    // `../../../app/lib/auth/tokens.ts` with the extension written out. This
+    // flag is what stops `tsc` refusing that form; it is safe because `noEmit`
+    // is on, so nothing here ever writes a `.js` next to a source file.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,

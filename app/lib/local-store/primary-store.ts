@@ -446,7 +446,7 @@ export async function purgeDeletedBefore(cutoffMs: number, { store }: StoreOptio
  * the whole adoption costs one autosave rather than one per row.
  *
  * The device-only search log is untouched: it is not in the snapshot, and it
- * never will be (`app/lib/e2ee/BLOB-CONTENTS.md`).
+ * never will be (`app/lib/local-store/BLOB-CONTENTS.md`).
  */
 export async function writeMergedSnapshot(snapshot: SyncedSnapshot, { store }: StoreOption = {}): Promise<void> {
   const resolved = await resolveStore(store);

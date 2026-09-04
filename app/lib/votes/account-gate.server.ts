@@ -1,14 +1,9 @@
 /**
  * Who is allowed to vote, and what identifier their vote is stored under.
  *
- * THE BRIDGE IS GONE. This module used to derive a stable UUIDv5 from the
- * stack's session `users.id`, because `enrichment_votes.accountId` was a
- * `uuid` and there was no account table to point at. Its own header said the
- * replacement would be a real account lookup with the column staying put. That
- * is what happened, except that the column moved too: accounts arrived in M172
- * with `serial` ids, so `accountId` is now an `integer` with a real foreign key
- * and there is nothing left to derive. The frozen namespace UUID and the
- * derivation went with it.
+ * THE COLUMN IS A REAL FOREIGN KEY. `enrichment_votes.account_id` points at
+ * `users.id` since M191, and it keeps its name because nothing outside the
+ * schema file spells it; the row still means "one reader's judgement".
  *
  * IT NEVER THROWS AND IT NEVER REDIRECTS.
  *   A refusal has a different shape in every caller: the vote route answers 401
@@ -32,10 +27,9 @@ const log = createComponentLogger('VoterAccountGate');
 export async function requireVoterAccount(request: Request): Promise<number | null> {
   try {
     const session = await sessionStorage.getSession(request.headers.get('cookie'));
-    // The account session, written by the sign-in bridge. A session that still
-    // carries only the old `user` key resolves to `null` here: no vote is
-    // attributed to a reader whose account this cookie cannot name.
-    return session.get('account')?.id ?? null;
+    // A cookie with no `user` key resolves to `null` here: no vote is
+    // attributed to a reader this cookie cannot name.
+    return session.get('user')?.id ?? null;
   } catch (cause) {
     // A cookie that fails to unseal is an unsigned-in visitor, not an outage.
     // The usual causes are a rotated `SESSION_SECRET` and a truncated cookie,

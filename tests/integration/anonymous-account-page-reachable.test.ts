@@ -95,8 +95,6 @@ describe('the front door stays open', () => {
       context: new RouterContextProvider(),
     });
 
-    assert.equal(data.handle, null, 'the anonymous account screen claimed a handle');
-    assert.equal(data.vaultSizeBytes, null, 'a signed-out visitor was queried for a vault that cannot exist');
-    assert.deepEqual(data.devices, []);
+    assert.equal(data.email, null, 'the anonymous account screen claimed an address');
   });
 });

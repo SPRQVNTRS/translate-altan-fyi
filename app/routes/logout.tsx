@@ -1,18 +1,15 @@
 /**
- * `/logout`, the org-surface sign-out.
+ * `/logout`, the sign-out.
  *
- * IT DESTROYS THE COOKIE BUT DOES NOT REVOKE THE TOKENS. Revocation is
- * `POST /api/v1/auth/logout`, which revokes the caller's token family
- * server-side; this route is the browser-navigation twin, kept because the
- * admin and org screens link to it and because a `GET` that leaves nothing
- * behind in the browser is worth having even when the API call fails.
- *
- * It redirects to the ACCOUNT sign-in page. `/login` was the bcrypt form and
- * is not the way in any more.
+ * IT DESTROYS THE COOKIE, AND THAT IS THE WHOLE OF SIGNING OUT since M191:
+ * there is no token family to revoke and no server-side session row, because
+ * the cookie IS the session and the middleware re-reads the user from it on
+ * every request.
  */
 import type { Route } from './+types/logout';
 import { redirect } from 'react-router';
-import { ACCOUNT_LOGIN_PATH, destroyAccountSession } from '#app/services/account-session.server';
+import { SIGN_IN_PATH } from '#app/lib/auth/paths';
+import { destroyUserSession } from '#app/services/session.server';
 
 export async function action({ request }: Route.ActionArgs): Promise<Response> {
   return signOut(request);
@@ -23,7 +20,7 @@ export async function loader({ request }: Route.LoaderArgs): Promise<Response> {
 }
 
 async function signOut(request: Request): Promise<Response> {
-  return redirect(ACCOUNT_LOGIN_PATH, {
-    headers: { 'Set-Cookie': await destroyAccountSession(request) },
+  return redirect(SIGN_IN_PATH, {
+    headers: { 'Set-Cookie': await destroyUserSession(request) },
   });
 }

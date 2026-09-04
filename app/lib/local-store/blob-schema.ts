@@ -5,17 +5,17 @@
  * This module has no upstream counterpart, so it carries no provenance header.
  *
  * WHAT THE BLOB CARRIES, AND WHAT IT DELIBERATELY LEAVES BEHIND, IS STATED IN
- * `app/lib/e2ee/BLOB-CONTENTS.md`. Read the reasoning there. It is not repeated
+ * `app/lib/local-store/BLOB-CONTENTS.md`. Read the reasoning there. It is not repeated
  * here, on purpose: two statements of one policy are two things to keep in step,
  * and the document is the one that is normative.
  *
- * `PROTOCOL.md` specifies the envelope around these bytes. It says nothing about
+ * `app/lib/sync/engine/envelope/` frames these rows for the wire. It says nothing about
  * this shape, because the server cannot read it.
  */
 import { z } from 'zod';
 import type { LocalList, LocalListItem, LocalNote, LocalReviewState } from './schema';
 
-/** The four collections that ride the encrypted blob. See app/lib/e2ee/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
+/** The four collections that ride the encrypted blob. See app/lib/local-store/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
 export interface SyncedSnapshot {
   lists: LocalList[];
   listItems: LocalListItem[];
@@ -37,7 +37,7 @@ export interface SyncedSnapshot {
  * leaves a device is whatever this returns and nothing else.
  *
  * The collections the blob carries, and the one it deliberately leaves behind,
- * are stated in `app/lib/e2ee/BLOB-CONTENTS.md`.
+ * are stated in `app/lib/local-store/BLOB-CONTENTS.md`.
  */
 export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
   return {
@@ -48,7 +48,7 @@ export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
   };
 }
 
-/** The ordering stamp every synced entity carries — PROTOCOL.md section 3.3. */
+/** The ordering stamp every synced entity carries. */
 const syncStampFields = {
   lamport: z.number().int().nonnegative(),
   deviceId: z.string().min(1),

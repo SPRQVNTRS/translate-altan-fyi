@@ -9,6 +9,7 @@ import { closePool, poolInitialized } from '#drizzle/db';
 import { reportError } from '#app/lib/report-error.server';
 import { apiJsonMiddleware } from '#app/lib/api-middleware.server';
 import { CONFIG } from '#app/config';
+import { CLIENT_IP_HEADER } from '#app/middleware/rate-limit';
 
 const { logger, logServerStart, logShutdown, logServerClosed } = createServerLogger({
   serviceName: 'translate-altan-fyi',
@@ -49,6 +50,26 @@ const app = express();
 app.set('trust proxy', CONFIG.server.trustProxy);
 app.use(compression());
 app.disable('x-powered-by');
+
+/**
+ * THE CLIENT ADDRESS, RESOLVED ONCE AND HANDED ON AS A HEADER.
+ *
+ * `app/middleware/rate-limit.ts` needs the address a limit counts against, and
+ * a React Router middleware only ever sees a `Request`: it has no `req.ip` and
+ * no view of `trust proxy`. Reading `x-forwarded-for` there would count a
+ * header the client itself can write, so one forged line would open a fresh
+ * bucket for every attempt.
+ *
+ * So Express, which is the only layer that knows the configured hop count,
+ * resolves the address and writes it into `x-client-ip`. ANY INCOMING VALUE OF
+ * THAT HEADER IS DELETED FIRST, on every request, so the field can only ever
+ * carry what this line put there.
+ */
+app.use((req, _res, next) => {
+  delete req.headers[CLIENT_IP_HEADER];
+  if (req.ip) req.headers[CLIENT_IP_HEADER] = req.ip;
+  next();
+});
 
 // handle asset requests
 if (viteDevServer) {

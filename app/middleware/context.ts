@@ -1,15 +1,16 @@
-import type { SelectAccount } from '#drizzle/schema';
+import type { SelectUser } from '#drizzle/schema';
 import { createContext } from 'react-router';
 
 /**
- * The authenticated ACCOUNT — who the caller is, and the only identity this
+ * The authenticated USER: who the caller is, and the only identity this
  * application has.
  *
- * Trimmed to what an authorization decision needs. Notably `isSuperadmin`,
- * which lives on `accounts` because authentication does: a flag on any other
- * row would authorise a caller against something they did not authenticate as.
+ * Trimmed to what a screen or an authorization decision needs. Notably
+ * `isSuperadmin`, which lives on `users` because authentication does: a flag on
+ * any other row would authorise a caller against something they did not
+ * authenticate as.
  */
-export type AuthenticatedAccount = Pick<SelectAccount, 'id' | 'handle' | 'displayName' | 'isSuperadmin'>;
+export type AuthenticatedUser = Pick<SelectUser, 'id' | 'email' | 'isSuperadmin'>;
 
-/** Account context — set by `accountMiddleware` from the session cookie. */
-export const accountContext = createContext<AuthenticatedAccount | null>(null);
+/** User context, set by `authMiddleware` from the session cookie. */
+export const userContext = createContext<AuthenticatedUser | null>(null);

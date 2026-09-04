@@ -23,7 +23,7 @@ export const meta: MetaFunction = ({ matches }) => {
  *
  * A CLIENT LOADER, AND IT COULD NOT BE ANYTHING ELSE. Search history is the one
  * personal entity that never leaves the device: it has no server table, no sync
- * blob and no endpoint (`app/lib/e2ee/BLOB-CONTENTS.md`). A server loader here
+ * blob and no endpoint (`app/lib/local-store/BLOB-CONTENTS.md`). A server loader here
  * would have nothing to read, and asking for one would mean telling the server
  * what somebody looked up.
  *

@@ -50,7 +50,7 @@ import {
   setOutboxRunner,
   type OutboxRunner,
 } from '#app/lib/local-store';
-import { isSyncRequestError } from '#app/lib/e2ee/client/sync-error';
+import { isSyncRequestError } from '#app/lib/sync/sync-error';
 import { runSyncCycleForCurrentSession } from './orchestrator';
 import { getSyncSession, setSyncSessionListener } from './sync-session';
 

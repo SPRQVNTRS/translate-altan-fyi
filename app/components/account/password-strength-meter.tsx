@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { passphraseStrengthKey, ratePassphrase } from '#app/lib/e2ee/flows/password-strength';
+import { passphraseStrengthKey, ratePassphrase } from '#app/lib/auth/password-strength';
 import { cn } from '#app/lib/utils';
 
 /**

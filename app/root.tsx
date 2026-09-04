@@ -14,7 +14,7 @@ import {
 } from 'react-router';
 import type { Route } from './+types/root';
 import { getToast } from '#app/utils/toast.server';
-import { readAccountHandleForDisplay } from '#app/services/account-session.server';
+import { readUserForDisplay } from '#app/middleware/auth';
 import stylesheet from './app.css?url';
 import { combineHeaders } from '#app/utils/misc';
 import { Toaster } from '#app/components/ui/toaster';
@@ -69,17 +69,16 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Stage and localhost fall through both and render no tag at all.
   const isAnalyticsEnabled = isAnalyticsHost(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
 
-  // THE NAME IN THE HEADER, AND NOTHING MORE. The app shell shows either the
-  // reader's sign-in name or a way in, so it needs one bit of account state on
-  // every screen. It is read straight off the signed cookie: no token is
-  // resolved and no row is read, so this hot path costs no round trip and
-  // keeps answering while the database is down. Nothing gates on it, see
-  // `readAccountHandleForDisplay`.
-  const accountHandle = await readAccountHandleForDisplay(request);
+  // THE ADDRESS IN THE HEADER, AND NOTHING MORE. The app shell shows either the
+  // reader's address or a way in, so it needs one bit of account state on every
+  // screen. It costs the signed cookie plus one indexed row read, which is the
+  // same read every gated route performs. Nothing gates on it: see
+  // `readUserForDisplay`.
+  const userEmail = await readUserForDisplay(request);
 
   return {
     toast,
-    accountHandle,
+    userEmail,
     language,
     isAnalyticsEnabled,
     headers: combineHeaders(toastHeaders),
@@ -155,10 +154,10 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs): Pr
     // with a localStorage mirror.
     return {
       toast: null,
-      // The cookie is httpOnly, so client code cannot read the name out of it.
-      // The header falls back to offering a way in, which is the harmless
+      // The cookie is httpOnly, so client code cannot read the address out of
+      // it. The header falls back to offering a way in, which is the harmless
       // direction to be wrong in: nothing gates on this value.
-      accountHandle: null,
+      userEmail: null,
       language: readLanguageCookie() ?? readStoredLanguage() ?? DEFAULT_LANGUAGE,
       // Offline there is nothing to report and no tracker to report it to.
       isAnalyticsEnabled: false,

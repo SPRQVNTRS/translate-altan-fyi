@@ -29,14 +29,13 @@ export * from './schema/enrichment';
 // Both describe the shared dictionary, and both are reached through `getRawDb()`.
 export * from './schema/votes';
 
-// The end-to-end-encrypted personal layer: accounts, their opaque session
-// tokens, and the wrapped-DEK key records. An account is a person's own
+// The account model: `users` and `user_tokens`. A user is a person's own
 // identity on this installation, reached through `getRawDb()`.
-export * from './schema/accounts';
+export * from './schema/users';
 
-// Signup invites, the gate in front of account creation (.adr/0009). An invite
-// admits a person to this installation. Reached through `getRawDb()`.
-export * from './schema/invites';
+// The one synced document per user: the device's own store, pushed as plain
+// JSON under a compare-and-swap version. Reached through `getRawDb()`.
+export * from './schema/sync';
 
 // Rate-limit counters, the daily spend cap and its operator alerts. They are
 // deliberately anonymous: they protect the installation, and nothing in them

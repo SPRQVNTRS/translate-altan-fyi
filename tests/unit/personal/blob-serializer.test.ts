@@ -3,7 +3,7 @@
  * on the actual bytes, not on the projection alone.
  *
  * WHAT THIS PROTECTS
- *   `app/lib/e2ee/BLOB-CONTENTS.md` says the encrypted blob carries lists,
+ *   `app/lib/local-store/BLOB-CONTENTS.md` says the encrypted blob carries lists,
  *   list items, notes and review state, and deliberately not the search log. That is a
  *   privacy promise made in copy on `/settings`, and the only thing that keeps
  *   it true is `toSyncedSnapshot` dropping the collection plus nothing
@@ -27,7 +27,7 @@
  *     flashcard record stranded on one device while every other test stayed
  *     green, so the `review` cases below drive the projection, the encrypted
  *     round trip AND the live read.
- *   - Drift from PROTOCOL.md §3.2's payload shape, whose keys are transcribed
+ *   - Drift from the payload shape, whose keys are transcribed
  *     below as a literal and compared against what the client actually builds.
  *   - A projection that quietly drops soft-deleted rows. A delete that is
  *     filtered out of the read never reaches the peer, so the other device
@@ -54,6 +54,7 @@ import type { Store } from 'tinybase';
 import { buildEnvelope, parseEnvelope } from '#app/lib/sync/engine/envelope/build-envelope';
 import type { SyncPayload } from '#app/lib/sync/engine/envelope/types';
 import { toWireMeta } from '#app/lib/sync/snapshot-sync';
+import { jsonValueSchema } from '#app/lib/json';
 import {
   createPrimaryStore,
   deleteLocalNote,
@@ -69,15 +70,6 @@ import {
   type LocalStoreSnapshot,
 } from '#app/lib/local-store';
 import { readLocalSnapshot } from '#app/lib/sync/local-store-bridge';
-
-/**
- * A fixed, throwaway DEK. Not derived from anything and not a secret: this
- * file encrypts a fixture and immediately decrypts it again.
- */
-const DEK = Uint8Array.from({ length: 32 }, (_, index) => (index * 37 + 11) % 256);
-
-/** The AAD triple PROTOCOL.md §3.2 binds. The same triple is presented on the way back in. */
-const AAD_FIELDS = { accountId: 4242, blobVersion: 7, payloadSchemaVersion: SCHEMA_VERSION };
 
 /**
  * Queries chosen to be unmistakable in a byte-level search AND to be the kind
@@ -137,10 +129,28 @@ function deviceSnapshot(): LocalStoreSnapshot {
   };
 }
 
+/**
+ * One full trip through the wire framing: build the envelope, serialize it as
+ * the transport does, and read it back through the decoder.
+ *
+ * THE `JSON.parse(JSON.stringify(...))` IS THE POINT, not ceremony. The
+ * envelope is stored as `jsonb` and returned over HTTP, so anything that does
+ * not survive JSON is not actually being carried; asserting against the object
+ * this file just built would prove nothing about the wire.
+ */
+function roundTrip(): SyncPayload {
+  const envelope = buildEnvelope({ payload: wirePayload(), blobVersion: 1, payloadSchemaVersion: SCHEMA_VERSION });
+  const decoded = jsonValueSchema.parse(JSON.parse(JSON.stringify(envelope)));
+  return parseEnvelope(decoded).payload;
+}
+
 /** The payload the orchestrator sends: the projection plus the meta projected from it. */
 function wirePayload(): SyncPayload {
   const synced = toSyncedSnapshot(deviceSnapshot());
-  return { snapshot: synced, syncMeta: toWireMeta(synced) };
+  // SAFETY: `SyncedSnapshot` is a tree of plain JSON values, which is what
+  // `JsonValue` names. The envelope deliberately does not know the snapshot's
+  // real shape, so the widening happens at every call site that builds one.
+  return { snapshot: jsonValueSchema.parse(synced), syncMeta: toWireMeta(synced) };
 }
 
 describe('the sync projection drops the search log', () => {
@@ -197,11 +207,10 @@ describe('the sync projection carries review state', () => {
   });
 });
 
-describe('the payload shape (PROTOCOL.md §3.2)', () => {
+describe('the payload shape', () => {
   /**
-   * Transcribed from §3.2's payload block. The document's own key names, so a
-   * rename on either side shows up here instead of at a peer that cannot read
-   * the blob.
+   * The payload's key names, transcribed as a literal, so a rename on either
+   * side shows up here instead of at a peer that cannot read the document.
    */
   const DOCUMENTED_PAYLOAD_KEYS = ['snapshot', 'syncMeta'];
   const DOCUMENTED_SYNC_META_KEYS = ['perEntity', 'tombstones'];
@@ -219,43 +228,40 @@ describe('the payload shape (PROTOCOL.md §3.2)', () => {
   });
 });
 
-describe('the encrypted round trip', () => {
-  it('carries the four synced collections through intact, stamps included', async () => {
-    const envelope = await buildEnvelope({ payload: wirePayload(), dek: DEK, aadFields: AAD_FIELDS });
-    const parsed = await parseEnvelope({ envelope, dek: DEK, aadFields: AAD_FIELDS });
+describe('the envelope round trip', () => {
+  it('carries the four synced collections through intact, stamps included', () => {
+    const parsed = roundTrip();
 
     const snapshot = syncedSnapshotSchema.parse(parsed.snapshot);
     assert.deepEqual(snapshot, toSyncedSnapshot(deviceSnapshot()), 'the synced collections did not survive the round trip');
     assert.deepEqual(parsed.syncMeta, toWireMeta(toSyncedSnapshot(deviceSnapshot())), 'the wire meta did not survive');
   });
 
-  it('carries none of the search log, structurally or as bytes', async () => {
-    const envelope = await buildEnvelope({ payload: wirePayload(), dek: DEK, aadFields: AAD_FIELDS });
-    const parsed = await parseEnvelope({ envelope, dek: DEK, aadFields: AAD_FIELDS });
+  it('carries none of the search log, structurally or as bytes', () => {
+    const parsed = roundTrip();
 
     const serialized = JSON.stringify(parsed);
 
     // The substring check is the one that survives a refactor: a structural
     // assertion passes if the queries are smuggled in under another key.
     for (const query of PRIVATE_QUERIES) {
-      assert.ok(!serialized.includes(query), 'a recorded search reached the encrypted payload');
+      assert.ok(!serialized.includes(query), 'a recorded search reached the synced payload');
     }
-    assert.ok(!serialized.includes('history'), 'the word history reached the encrypted payload');
+    assert.ok(!serialized.includes('history'), 'the word history reached the synced payload');
 
     // And the check is not vacuous: the lists DID make the trip through the
     // same serialization.
     assert.ok(serialized.includes('Fahrkarte'), 'the round trip carried no list items, so the checks above prove nothing');
   });
 
-  it('carries the review tally through the ciphertext, read back off the parsed bytes', async () => {
-    const envelope = await buildEnvelope({ payload: wirePayload(), dek: DEK, aadFields: AAD_FIELDS });
-    const parsed = await parseEnvelope({ envelope, dek: DEK, aadFields: AAD_FIELDS });
+  it('carries the review tally through the round trip, read back off the parsed payload', () => {
+    const parsed = roundTrip();
 
     const snapshot = syncedSnapshotSchema.parse(parsed.snapshot);
     assert.deepEqual(
       snapshot.reviewState,
       deviceSnapshot().reviewState,
-      'the review state did not survive the encrypted round trip',
+      'the review state did not survive the round trip',
     );
     // And it is addressable in the wire meta under its own namespace, so a
     // review state and the list entry that shares its id cannot collide.

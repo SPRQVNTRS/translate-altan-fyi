@@ -1,63 +1,39 @@
 /**
- * COPIED, NOT SHARED. Source: openplate/app/lib/sync/engine/envelope/types.ts @ 68e893ac71d25ad7ff42280773ea0ec94f4f700e.
- * See .adr/0008-e2ee-sync-copied-not-extracted.md. Fixes belong upstream first,
- * then here. Do not let the two drift.
+ * The envelope and the payload inside it.
+ *
+ * TWO INDEPENDENT SHAPES, and it is worth keeping them apart. The ENVELOPE is
+ * what the wire and the `sync_blobs.payload` column carry; the PAYLOAD is the
+ * local store's own snapshot plus the sync metadata that decides merges. The
+ * envelope only carries the payload's schema version through as a number and
+ * never interprets it.
+ *
+ * THERE IS NO CRYPTO HERE ANY MORE (M191). The envelope used to be
+ * `{ envelopeVersion, ciphertext }` with the schema version bound into the
+ * AES-GCM additional data, because the server could not be shown the document.
+ * It can now, so the schema version travels as an ordinary field and the
+ * "probe every version until the tag verifies" loop the orchestrator needed is
+ * gone with it.
  */
-/**
- * Data envelope + payload shapes (M117 design spec D2). The envelope is the
- * on-wire/on-disk encrypted blob; the payload is what's INSIDE it once
- * decrypted. Two independent version numbers, per D2 — do not conflate:
- * `envelopeVersion` is this crypto/wire format; `payloadSchemaVersion` is the
- * local store's own `SCHEMA_VERSION` (`app/lib/local-store/schema.ts`), which
- * the envelope only carries through as a number bound into the AAD and never
- * interprets.
- */
-import { ENVELOPE_VERSION } from '#app/lib/e2ee/protocol';
+import type { JsonValue } from '#app/lib/json';
 
-/**
- * Re-exported from `../protocol` so this module's own callers don't need to
- * know where the constant lives, while `protocol.ts` stays the single
- * in-repo source of truth for every version number on the wire (M128 spec
- * 01 — it is the file kept in lockstep with `openplate-sync`).
- */
-export { ENVELOPE_VERSION };
-
+/** The framed document, exactly as it is stored and sent. */
 export interface DataEnvelope {
-  envelopeVersion: number;
-  /**
-   * A single opaque blob: the 12-byte AES-GCM IV PACKED as its first bytes,
-   * followed by the ciphertext with the authentication tag appended
-   * (`packIvAndCiphertext`/`splitIvAndCiphertext` in `crypto/aes-gcm.ts` —
-   * the one canonical place the engine packs/unpacks it). This is what
-   * actually travels over the wire (base64-encoded as
-   * `protocol.ts`'s `PushBlobRequest.ciphertext`) and lands in the service's
-   * single `sync_blobs.ciphertext` bytea column — there is no separate `iv`
-   * field anywhere downstream of `buildEnvelope`.
-   */
-  ciphertext: Uint8Array;
-}
-
-/**
- * The AAD binding D2 requires — accountId + blobVersion + payloadSchemaVersion
- * — defeats cut-and-paste (a blob from a different account) and rollback (an
- * old blob version, or a payload from an incompatible schema version) attacks.
- */
-export interface EnvelopeAadFields {
-  accountId: number;
-  blobVersion: number;
+  /** The local store's `SCHEMA_VERSION` at the time of writing. Read, never guessed. */
   payloadSchemaVersion: number;
+  /** The version this document will be stored as. Diagnostic: the CAS is decided by the request's `baseVersion`. */
+  blobVersion: number;
+  payload: SyncPayload;
 }
 
 /**
- * The plaintext payload once an envelope is decrypted: a sync-metadata layer
- * wrapped around the UNTOUCHED backup snapshot (D2). `snapshot` stays
- * `unknown` on purpose — its real shape is `LocalStoreSnapshot`
- * (`app/lib/local-store/schema.ts`), and keeping the engine ignorant of it is
- * what lets the local-store schema evolve (its own `payloadSchemaVersion`)
- * without touching a line of crypto. Only local-store code parses it.
+ * The plaintext payload: a sync-metadata layer wrapped around the UNTOUCHED
+ * store snapshot. `snapshot` stays unnamed here on purpose: its real shape is
+ * `LocalStoreSnapshot` (`app/lib/local-store/schema.ts`), and keeping the
+ * engine ignorant of it is what lets the local-store schema evolve without
+ * touching a line of this module. Only local-store code parses it.
  */
 export interface SyncPayload {
-  snapshot: unknown;
+  snapshot: JsonValue;
   syncMeta: SyncMetaPayload;
 }
 

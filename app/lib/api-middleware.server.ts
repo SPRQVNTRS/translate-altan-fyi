@@ -33,7 +33,7 @@ const API_V1_PREFIX = '/api/v1/';
  *
  * The exempted routes are not unauthenticated. They resolve an opaque access
  * token out of the httpOnly session cookie
- * (`app/services/account-session.server.ts`) and answer their own `401` in the
+ * (`app/middleware/auth.ts`'s `resolveUser`) and answer their own `401` in the
  * same JSON envelope this middleware uses. What they do not carry is an
  * `Authorization` header, which is the only thing this guard knows how to
  * check.

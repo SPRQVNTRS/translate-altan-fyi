@@ -38,8 +38,9 @@
  *
  * THE PRECONDITION IS A REACHABLE DATABASE. `DB_HOST`, nothing else: the
  * landing case drives the real loader, which queries the dictionary for its
- * worked example. The two redirect cases need nothing, and declare the same
- * guard so `tests/unit/integration-tests-self-skip.test.ts` counts them.
+ * worked example. The two cases that covered the `/sync/login` and
+ * `/sync/setup` hops went with those routes in M191: the hops existed to carry
+ * an `?invite=` token, and there are no invites now.
  */
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,8 +54,6 @@ import { createRoutesStub, RouterContextProvider } from 'react-router';
 import enCommon from '#app/locales/en/common.json';
 import { closePool, poolInitialized } from '../../drizzle/db';
 import SearchRoute, { loader as searchLoader } from '../../app/routes/search';
-import { loader as signInRedirectLoader } from '../../app/routes/sync.login-redirect';
-import { loader as signUpRedirectLoader } from '../../app/routes/sync.setup-redirect';
 
 const DB_HOST = process.env.DB_HOST;
 
@@ -71,23 +70,6 @@ function englishInstance() {
   return instance;
 }
 
-/**
- * The arguments the router hands a loader, for one URL.
- *
- * The two hops have generated argument types that are nominally different, one
- * per route id, so a shared helper taking "a loader" would not typecheck. This
- * builds the ARGUMENT instead, which both accept.
- */
-function loaderArgs(input: { url: string; pattern: string }) {
-  const request = new Request(input.url);
-  return {
-    request,
-    url: new URL(request.url),
-    params: {},
-    pattern: input.pattern,
-    context: new RouterContextProvider(),
-  };
-}
 
 /**
  * The home screen as a browser would receive it, for one loader answer.
@@ -251,34 +233,4 @@ describe('the front door an anonymous visitor is shown', () => {
     },
   );
 
-  it(
-    'sends /sync/login on to /sign-in, permanently',
-    { skip: !DB_HOST ? 'DB_HOST not set' : false },
-    async () => {
-      const response = await signInRedirectLoader(
-        loaderArgs({ url: 'https://translate.altan.fyi/sync/login', pattern: '/sync/login' }),
-      );
-
-      assert.equal(response.status, 301);
-      assert.equal(response.headers.get('location'), '/sign-in');
-    },
-  );
-
-  it(
-    'sends /sync/setup on to /sign-up and keeps the query string',
-    { skip: !DB_HOST ? 'DB_HOST not set' : false },
-    async () => {
-      const response = await signUpRedirectLoader(
-        loaderArgs({ url: 'https://translate.altan.fyi/sync/setup?x=1', pattern: '/sync/setup' }),
-      );
-
-      assert.equal(response.status, 301);
-      assert.equal(
-        response.headers.get('location'),
-        '/sign-up?x=1',
-        'The hop dropped the query string. An invite travels as `?invite=<token>`, so a reader following one ' +
-          'would land on a signup form with nothing to admit them, which reads as a dead invite.',
-      );
-    },
-  );
 });

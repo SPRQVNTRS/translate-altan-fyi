@@ -119,7 +119,7 @@ fi
 
 if [ "$MODE" = "--assert-no-personal-data" ]; then
   leaked=0
-  for table in accounts sync_blobs sync_key_records; do
+  for table in users user_tokens sync_blobs; do
     n="$(psql_db -tAc "SELECT count(*) FROM $table;")"
     echo "$table: $n"
     [ "$n" = "0" ] || leaked=1
