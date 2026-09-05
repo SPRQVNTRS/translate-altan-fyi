@@ -77,3 +77,5 @@
 - [One row is the answer, the rest are alternatives](project_translate_primary_answer_and_alternatives.md) — `translationPaneText` takes a chosenId and returns ONE lemma; the tap is ephemeral and posts nothing
 - [A candidate carries an optional usage note](project_translate_candidate_note_prompt_v2.md) — prompt v2 renames v1.md away, and note is refreshed to null on a re-run
 - [A browser probe read during render ships the server's answer](project_translate_env_probe_needs_a_mount_effect.md) — SSR emits `disabled=""`, React never repairs the mismatch; probe in a mount effect
+- [The CLI boundary schema strips fields](project_cli_boundary_schema_strips_fields.md) — a field absent from cli/lib/schemas.ts is DISCARDED, not missing; layers 1 and 2 pass the panel through untouched
+- [A sentence goes under the CLI table](project_cli_note_renders_under_the_table.md) — never a fifth column; a null value prints nothing

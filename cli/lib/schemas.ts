@@ -110,6 +110,23 @@ const translationRowSchema = z.object({
   lemma: z.string(),
   pos: z.string().nullable(),
   confidence: z.number().nullable(),
+  /**
+   * One short sentence, in the SOURCE language, saying when this word is used
+   * rather than the others, or `null`.
+   *
+   * THE FIELD IS REQUIRED HERE AND ONLY ITS VALUE IS NULLABLE. `z.object` strips
+   * whatever it was not told about, so a field missing from this schema is a
+   * field the CLI throws away even when the server sent it. That is exactly how
+   * the API answer came to be poorer than the screen, and requiring the key is
+   * what turns a server that stops sending it into a loud parse failure instead
+   * of a silently thinner answer.
+   *
+   * `null` IS THE ORDINARY CASE, not a gap: every imported edge carries none,
+   * every edge generated before prompt v2 carries none, and the phrase branch
+   * sets it to null by construction, because a lone translated sentence has
+   * nothing to be disambiguated from.
+   */
+  note: z.string().nullable(),
   generated: z.boolean(),
   up: z.number(),
   down: z.number(),

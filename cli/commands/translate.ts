@@ -19,7 +19,7 @@
 import { Command } from 'commander';
 
 import { SERVED_LANGUAGES } from '#app/lib/dictionary/detect-language';
-import { createTable, outputJson, printError, printInfo, printSection } from '../lib/output';
+import { createTable, outputJson, printError, printField, printInfo, printSection } from '../lib/output';
 import { translateAnswerSchema, type TranslateAnswerResponse } from '../lib/schemas';
 import { transport } from '../lib/transport';
 import type { OutputFormat, TableColumn } from '../lib/types';
@@ -128,6 +128,7 @@ function printAnswer(answer: TranslateAnswerResponse): void {
       }),
     );
     console.log(createTable(ANSWER_COLUMNS, rows).toString());
+    printNotes(answer.panel.translations);
     return;
   }
 
@@ -143,4 +144,35 @@ function printAnswer(answer: TranslateAnswerResponse): void {
   }
 
   printInfo(STATE_NOTES[answer.panel.state]);
+}
+
+/**
+ * Print the usage notes under the table, one line per word that carries one.
+ *
+ * NOT A TABLE COLUMN, AND THAT IS THE WHOLE DECISION. A note is a whole
+ * sentence. A fifth column of sentences would either wrap every cell over
+ * several lines, which destroys the row alignment the table exists for, or be
+ * truncated to a terminal width, which turns a usage rule into a fragment the
+ * operator cannot act on. Under the table each note gets a full line and the
+ * word beside it names which row it belongs to, so nothing is lost and the
+ * table keeps reading as a table.
+ *
+ * LEAVING IT TO `-f json` WAS THE OTHER CANDIDATE AND WAS REJECTED. The default
+ * format is what an operator actually reads, and a note that only appears when
+ * someone remembers to ask for JSON is a field the screen has and the terminal
+ * does not, which is the same drift this change exists to close.
+ *
+ * A ROW WITH NO NOTE PRINTS NOTHING. `null` is the ordinary case, so an empty
+ * or `(none)` line would promise an explanation that was never written.
+ *
+ * @param rows The answered rows, in the order the table printed them.
+ */
+function printNotes(rows: readonly { lemma: string; note: string | null }[]): void {
+  const noted = rows.filter((row) => row.note !== null);
+  if (noted.length === 0) return;
+
+  console.log('');
+  for (const row of noted) {
+    printField(row.lemma, row.note);
+  }
 }
