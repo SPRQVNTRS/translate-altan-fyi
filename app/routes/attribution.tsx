@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
-import { GENERATED_SOURCE_SLUG } from '#app/lib/dictionary/generated-source';
+import { isGeneratedSource } from '#app/lib/dictionary/generated-source';
 import { listSources } from '#app/lib/dictionary/sources.server';
 import { getRawDb } from '#drizzle/db';
 
@@ -94,15 +94,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function SourceCardView({ source }: { source: SourceCard }) {
   const { t } = useTranslation();
   const licenceUrl = LICENCE_URLS.get(source.licence);
-  // THE GENERATED SOURCE IS FOUND BY ITS SLUG, NOT BY ITS LICENCE.
-  //
-  // It used to be found by `licence === 'LLM-GENERATED'`, and that broke the
-  // moment the row's licence became `CC0-1.0`: the test matched nothing, the
-  // block stopped rendering, and the generated source fell in beside Wikidata as
-  // though it were an import. A licence is a property this row shares with other
-  // rows; the slug is its identity, and it is the same value every generated
-  // dictionary row attributes to.
-  const isGenerated = source.slug === GENERATED_SOURCE_SLUG;
+  // THE GENERATED SOURCE IS FOUND BY ITS SLUG, NOT BY ITS LICENCE -- see
+  // isGeneratedSource in #app/lib/dictionary/generated-source, tested there
+  // without a database.
+  const isGenerated = isGeneratedSource(source);
 
   return (
     // `scroll-mt-24` clears the sticky app header, so a `#slug` jump lands on

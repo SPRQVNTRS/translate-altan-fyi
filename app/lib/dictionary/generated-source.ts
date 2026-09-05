@@ -17,3 +17,18 @@
 
 /** `sources.slug` of the row every generated headword, sense and translation carries. */
 export const GENERATED_SOURCE_SLUG = 'llm-generated';
+
+/**
+ * THE GENERATED SOURCE IS FOUND BY ITS SLUG, NOT BY ITS LICENCE.
+ *
+ * It used to be found by `licence === 'LLM-GENERATED'`, and that broke the
+ * moment the row's licence became `CC0-1.0`: the check matched nothing, the
+ * attribution block stopped rendering, and the generated source fell in
+ * beside Wikidata as though it were an import. A licence is a property this
+ * row shares with other rows; the slug is its identity, and it is the same
+ * value every generated dictionary row attributes to, whatever its licence
+ * string says.
+ */
+export function isGeneratedSource(source: { slug: string }): boolean {
+  return source.slug === GENERATED_SOURCE_SLUG;
+}
