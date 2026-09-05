@@ -10,6 +10,24 @@
 - `tools/oxlint/anti-slop/` — vendored third-party lint plugin, MIT (do not edit; provenance in [tools/oxlint/README.md](tools/oxlint/README.md))
 - `.githooks/` — pre-commit lint gate and pre-push test gate, installed by the `prepare` script
 
+### Translations on demand (M193)
+
+The code: `app/lib/translation/*` (payload, limits, enqueue, panel resolver),
+`app/lib/llm/translation-schema.ts`, `app/prompts/translation/`,
+`app/workflows/operations/translation/translate-headword.ts`,
+`app/models/translation-runs.server.ts`, `drizzle/schema/translation-runs.ts`,
+`app/components/translation-pane.tsx`, the routes
+`api.translation.$headwordId.ts` and `api.translation.$headwordId.retry.ts`,
+and `cli/commands/translation.ts`. Tests: `tests/unit/translation-*.test.ts`,
+`tests/integration/translation-*.test.ts`, and
+`tests/integration/anonymous-search-enqueues-no-translation.test.ts`.
+
+Two rules: never pass `reasoningEffort` in a `registry.complete` call here,
+because OpenRouter rejects `none` for gemini-3.8-flash, and the active model's
+own configured setting already applies. And the pane has exactly five states,
+`ready`, `translating`, `no-entry`, `budget`, `failed`, with no "no translation
+yet" copy anywhere on the search surface.
+
 ## Prerequisites
 
 The four `@sprqvntrs/*` dependencies are published to npmjs and need no

@@ -218,6 +218,32 @@ spending caps alongside warning thresholds. When spending exceeds these
 thresholds, the system sends an HTTP POST request to `ALERT_WEBHOOK_URL`. If you
 do not configure a webhook, the system logs alerts to standard output.
 
+### Translations on demand
+
+A signed-in search for a word the dictionary cannot yet translate into the
+chosen language queues one job. The model returns the senses and the
+translations. They are written as ordinary dictionary rows under the source
+`llm-generated`, released under CC0 1.0 like the imported data, and marked
+"Generated" in the app. Every later reader of that pair gets the rows straight
+from the database, with no second model call.
+
+Three limits guard the corpus: a daily money cap, a daily cap on the number of
+runs (`MAX_TRANSLATION_RUNS_PER_DAY`, so a script that found the search box
+cannot flood the dictionary even at a fraction of a cent per call), and a
+per-session rate limit.
+
+Operator commands:
+
+```bash
+pnpm cli translation runs [--limit N] [--json]     # list recent runs
+pnpm cli translation retract <runId>                # undo one run
+pnpm cli dictionary stats --json                    # generated counts beside imported
+```
+
+`retract` deletes the rows one run created and keeps any row still referenced
+elsewhere, stamping `retracted_at` on the run instead. Generated rows can
+contain mistakes, and retraction is the correction path today.
+
 ## Configuration
 
 The `.env.example` file outlines every supported variable with commentary and
