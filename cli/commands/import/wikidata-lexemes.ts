@@ -43,6 +43,7 @@ import type {
   ImportOptions,
   ImportSummary,
 } from '../../lib/importers/contract';
+import type { Pos } from '#app/lib/dictionary/pos';
 import { normalizeForLanguage } from '../../lib/importers/normalize';
 import { readLines } from '../../lib/importers/stream';
 import { chunk, INSERT_CHUNK_SIZE, upsertHeadwords, upsertSource } from '../../lib/importers/upsert';
@@ -194,8 +195,17 @@ export type Lexeme = z.infer<typeof LexemeSchema>;
 // Mapping
 // =============================================================================
 
-/** The closed set of parts of speech this importer writes. */
-export type POS = 'noun' | 'verb' | 'adjective' | 'adverb' | 'other';
+/**
+ * The closed set of parts of speech this importer writes.
+ *
+ * DERIVED, NOT RETYPED. The values live in `app/lib/dictionary/pos.ts`, because
+ * the translation job writes target-side headwords into the same natural key and
+ * runs in the web server, where this module is unreachable. Two hand-written
+ * copies of the list would not fail; they would drift, and a headword written
+ * under a value the other side does not know would sit outside the shared key
+ * forever.
+ */
+export type POS = Pos;
 
 /**
  * Wikidata lexical category QIDs we recognise.

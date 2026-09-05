@@ -54,6 +54,20 @@ export default [
   // segment above and every vote would reach the poll loader instead.
   route('/api/enrichment-vote', 'routes/api.enrichment-vote.ts'),
 
+  // The translation pane's two halves (M193/02). The GET is public and read
+  // only, exactly like `/api/enrichment/:headwordId`: it reports where a pair
+  // stands and never enqueues, because the pane polls it every three seconds.
+  // The retry POST is the only other place a translation run is ever started,
+  // and it carries `authMiddleware` in the file: it spends money, so it needs an
+  // account, and under `/api/` that middleware refuses with a 401 in JSON rather
+  // than a redirect a `fetch` could not act on.
+  //
+  // THE RETRY PATH SITS UNDER THE DYNAMIC SEGMENT, NOT BESIDE IT, and that is
+  // safe here where `/api/enrichment-vote` was not: `retry` is a THIRD segment,
+  // so it cannot be swallowed by `:headwordId`, which matches exactly one.
+  route('/api/translation/:headwordId', 'routes/api.translation.$headwordId.ts'),
+  route('/api/translation/:headwordId/retry', 'routes/api.translation.$headwordId.retry.ts'),
+
   // =============================================================================
   // App Shell (sidebar, mobile drawer, bottom tab bar)
   // =============================================================================

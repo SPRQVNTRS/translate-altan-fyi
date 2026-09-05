@@ -8,6 +8,7 @@ import type { OperationHandler, WorkflowTemplate as BaseWorkflowTemplate } from 
 import { z } from 'zod';
 
 import { enrichmentJobPayloadSchema } from '#app/lib/enrichment/job-payload';
+import { translationJobPayloadSchema } from '#app/lib/translation/job-payload';
 
 // =============================================================================
 // WORKFLOW TYPES
@@ -16,6 +17,7 @@ import { enrichmentJobPayloadSchema } from '#app/lib/enrichment/job-payload';
 export const WORKFLOW_TYPES = {
   DUMMY: 'dummy-workflow',
   ENRICH_HEADWORD: 'enrich-headword',
+  TRANSLATE_HEADWORD: 'translate-headword',
 } as const;
 
 export type WorkflowType = (typeof WORKFLOW_TYPES)[keyof typeof WORKFLOW_TYPES];
@@ -79,3 +81,16 @@ export type DummyWorkflowContext = z.infer<typeof dummyWorkflowContextSchema>;
 export const enrichHeadwordContextSchema = enrichmentJobPayloadSchema;
 
 export type EnrichHeadwordContext = z.infer<typeof enrichHeadwordContextSchema>;
+
+/**
+ * The translation job's context, which is the enqueue payload unchanged.
+ *
+ * The same object on both sides ON PURPOSE, for the reason above: the contract a
+ * loader enqueues against and the document a handler decodes are one shape, so
+ * they cannot drift. The rules that shape enforces, and why it is a
+ * `strictObject` carrying no account id, are written out in
+ * `#app/lib/translation/job-payload`.
+ */
+export const translateHeadwordContextSchema = translationJobPayloadSchema;
+
+export type TranslateHeadwordContext = z.infer<typeof translateHeadwordContextSchema>;

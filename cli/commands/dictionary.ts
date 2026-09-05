@@ -43,6 +43,12 @@ import {
   translations,
 } from '#drizzle/schema';
 import { getRawDb } from '#drizzle/db';
+import {
+  readCorpusStats,
+  type CorpusStats,
+  type SenseLanguageStats,
+  type TranslationPairStats,
+} from '#app/models/corpus-stats.server';
 import { createTable, formatDate, outputJson, printSection } from '../lib/output';
 import type { TableColumn } from '../lib/types';
 
@@ -95,6 +101,19 @@ const SOURCE_COLUMNS: TableColumn<SourceRow>[] = [
   { header: 'Examples', key: (row) => String(row.examples), align: 'right' },
 ];
 
+const PAIR_COLUMNS: TableColumn<TranslationPairStats>[] = [
+  { header: 'From', key: 'from' },
+  { header: 'To', key: 'to' },
+  { header: 'Generated', key: (row) => String(row.generated), align: 'right' },
+  { header: 'Imported', key: (row) => String(row.imported), align: 'right' },
+];
+
+const LANGUAGE_COLUMNS: TableColumn<SenseLanguageStats>[] = [
+  { header: 'Language', key: 'language' },
+  { header: 'Generated', key: (row) => String(row.generated), align: 'right' },
+  { header: 'Imported', key: (row) => String(row.imported), align: 'right' },
+];
+
 export function registerDictionaryCommands(program: Command): void {
   const dictionaryCmd = program
     .command('dictionary')
@@ -119,7 +138,11 @@ async function showStats(options: { json: boolean }): Promise<void> {
   // entrypoint closes it in its `finally`.
   const db = getRawDb();
 
-  const [countRows, sourceRows] = await Promise.all([countTables(db), listSources(db)]);
+  const [countRows, sourceRows, corpus] = await Promise.all([
+    countTables(db),
+    listSources(db),
+    readCorpusStats(db),
+  ]);
 
   if (options.json) {
     outputJson({
@@ -132,6 +155,7 @@ async function showStats(options: { json: boolean }): Promise<void> {
         headwords: row.headwords,
         examples: row.examples,
       })),
+      corpus,
     });
     return;
   }
@@ -149,6 +173,30 @@ async function showStats(options: { json: boolean }): Promise<void> {
 
   printSection('Sources');
   console.log(createTable(SOURCE_COLUMNS, sourceRows).toString());
+
+  printCorpusStats(corpus);
+}
+
+/**
+ * Generated versus imported counts, printed as two small tables under the
+ * existing sections. Not licence-filtered: see `app/models/corpus-stats.server.ts`.
+ */
+function printCorpusStats(corpus: CorpusStats): void {
+  printSection('Corpus (generated vs imported)');
+
+  console.log('Translations by language pair:');
+  if (corpus.translationsByPair.length === 0) {
+    console.log('  No translations yet.');
+  } else {
+    console.log(createTable(PAIR_COLUMNS, corpus.translationsByPair).toString());
+  }
+
+  console.log('Senses by language:');
+  if (corpus.sensesByLanguage.length === 0) {
+    console.log('  No senses yet.');
+  } else {
+    console.log(createTable(LANGUAGE_COLUMNS, corpus.sensesByLanguage).toString());
+  }
 }
 
 /** Count every dictionary table, concurrently. */

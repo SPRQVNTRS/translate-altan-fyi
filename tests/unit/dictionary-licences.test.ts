@@ -69,14 +69,23 @@ function assertLicenceFilterIsInSql(label: string, query: { sql: string; params:
 }
 
 describe('dictionary licence allowlist', () => {
-  it('serves exactly the four approved licences', () => {
+  it('serves exactly the three approved licences', () => {
     assert.deepEqual(
       [...SERVED_LICENCES],
-      ['CC0-1.0', 'CC-BY-2.0-FR', 'CC-BY-4.0', 'LLM-GENERATED'],
+      ['CC0-1.0', 'CC-BY-2.0-FR', 'CC-BY-4.0'],
       'The served licence list changed. This is a legal decision, not a refactor: a licence added ' +
         'here becomes publicly served everywhere, immediately. Change this expectation only ' +
         'together with a recorded operator decision.',
     );
+  });
+
+  it('no longer serves the retired generated-content identifier', () => {
+    // `LLM-GENERATED` was on this list until 2026-09-05, when generated entries
+    // were released under CC0-1.0 like the imported data. No row carries it any
+    // more. This case is not decoration: it states that the removal was
+    // deliberate, so a future reader who finds a stored row with that licence
+    // knows the answer is to fix the row, not to re-add the identifier here.
+    assert.equal(isServedLicence('LLM-GENERATED'), false);
   });
 
   it('does not serve share-alike or copyleft licences', () => {

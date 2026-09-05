@@ -109,7 +109,7 @@ export function DailyNudge() {
           <li key={word.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
             <span className="font-medium">{word.lemma}</span>
             <span className="text-muted-foreground">
-              {word.translation === '' ? t('search.noTranslationYet') : word.translation}
+              {word.translation === '' ? t('review.noTranslation') : word.translation}
             </span>
           </li>
         ))}

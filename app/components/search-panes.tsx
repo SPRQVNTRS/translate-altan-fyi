@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Form, useNavigation } from 'react-router';
 import { EnrichmentSection } from '#app/components/enrichment-section';
 import { LanguageBar } from '#app/components/language-bar';
-import { DidYouMean, PhraseResults, SearchResults } from '#app/components/search-results';
+import { DictionaryEntries, DidYouMean, PhraseResults } from '#app/components/search-results';
+import { TranslationPane, useTranslationPane } from '#app/components/translation-pane';
 import { Button } from '#app/components/ui/button';
 import { Textarea } from '#app/components/ui/textarea';
 import { VoiceInput } from '#app/components/voice-input';
@@ -12,6 +13,7 @@ import type { Direction } from '#app/lib/dictionary/detect-language';
 import type { LanguagePair } from '#app/lib/dictionary/language-pair';
 import type { PhraseSearchResult, SearchHit } from '#app/lib/dictionary/search.server';
 import type { EnrichmentPanel } from '#app/lib/enrichment/state.server';
+import type { TranslationPanel } from '#app/lib/translation/panel.server';
 
 /** One rendered state of the translator surface, exactly as the loader answers it. */
 export interface SearchPanesProps {
@@ -26,6 +28,23 @@ export interface SearchPanesProps {
   phraseWordsOmitted: number;
   panel: EnrichmentPanel | null;
   /**
+   * Where the top hit's translation into the target language stands (M193/02).
+   *
+   * `null` on the branches that have no single word to translate: the untouched
+   * home screen and the phrase branch. It is NOT the same thing as `no-entry`,
+   * which means a word was searched for and the dictionary holds no headword
+   * for it.
+   */
+  translationPanel: TranslationPanel | null;
+  /**
+   * The word `translationPanel` is about, and the id the pane polls with.
+   *
+   * It is chosen by the LOADER, exact lemma preferred over the fuzzy top hit,
+   * and carried out rather than recomputed here: the panel and the id must not
+   * come from two reads of the same array.
+   */
+  translationHeadwordId: string | null;
+  /**
    * What the result region holds while nothing has been searched for.
    *
    * There is no hole to fill any more, since the column is one card under
@@ -39,25 +58,16 @@ export interface SearchPanesProps {
 }
 
 /**
- * The translation of a single word, as one line.
+ * The translation of a single word used to be computed here, from the loader's
+ * top hit, as `singleWordResult`. It is gone (M193/02).
  *
- * THE TOP HIT ONLY. The cards below the field carry every hit; this line is
- * the answer to "what does this word mean", and a field holding four words'
- * worth of readings is a list, not an answer.
- *
- * DEDUPLICATED, because two sources naming the same lemma is a fact about the
- * dictionary and not about the word. The gloss is the fallback: a headword can
- * be matched with no translation row at all, and the gloss is what the entry
- * page shows in that case.
- *
- * Pure, and exported, so a test can drive it without a browser.
+ * WHY, so nobody reinstates it: it could only ever show rows the LOADER already
+ * had, and this screen now starts a run for a word that has none. A helper
+ * reading `hits[0].translations` would go on rendering an empty answer while the
+ * pane beside it polled a run to completion, and the two would disagree on the
+ * same card. The answer comes from the pane's own state instead, through
+ * `translationPaneText`.
  */
-export function singleWordResult(hit: SearchHit | undefined): string {
-  if (hit === undefined) return '';
-  const lemmas = [...new Set(hit.translations.map((translation) => translation.lemma))];
-  if (lemmas.length > 0) return lemmas.join(', ');
-  return hit.gloss ?? '';
-}
 
 /**
  * A phrase, word by word: each word's first translation, in the order typed.
@@ -86,10 +96,21 @@ export function phraseResult(phrase: PhraseSearchResult): string {
 
 /** What the read-only answer field renders. */
 interface ResultFieldProps {
-  /** The answer itself. Empty when the search produced nothing to show. */
+  /**
+   * The answer as one string, for the copy button. Empty when there is nothing
+   * to copy yet, which disables the button.
+   */
   text: string;
-  /** What to say instead when `text` is empty. Already worded for the branch that produced it. */
-  emptyMessage: string;
+  /**
+   * The card's body, on the word branch: the translation pane, which owns every
+   * state a translation can be in and renders the answer itself.
+   *
+   * `null` on the phrase branch, which has no pane and shows `text` directly.
+   * The single empty sentence this replaced is gone from both locale files:
+   * "no translation for this yet" described a feature that did not exist, and
+   * now that one does, the pane says which of five things is actually true.
+   */
+  body: ReactNode | null;
   /** The word-by-word caveat, on the phrase branch only. */
   note: string | null;
 }
@@ -115,7 +136,7 @@ interface ResultFieldProps {
  * the answer, so a new answer is a new component with a fresh state rather
  * than an effect that watches a prop and corrects itself afterwards.
  */
-function ResultField({ text, emptyMessage, note }: ResultFieldProps) {
+function ResultField({ text, body, note }: ResultFieldProps) {
   const { t } = useTranslation();
   const [isCopied, setIsCopied] = useState(false);
   const canCopy = text !== '' && globalThis.navigator?.clipboard !== undefined;
@@ -154,9 +175,12 @@ function ResultField({ text, emptyMessage, note }: ResultFieldProps) {
       </div>
 
       {/* Selectable, at reading size. The answer is the one thing on this
-          screen a reader takes away with them, by copy button or by hand. */}
-      {text !== '' && <p className="mt-2 text-xl">{text}</p>}
-      {text === '' && <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>}
+          screen a reader takes away with them, by copy button or by hand. The
+          word branch hands its whole body to the pane, which renders the same
+          words at the same size and can also say what is happening when there
+          are none yet. */}
+      {body === null && text !== '' && <p className="mt-2 text-xl">{text}</p>}
+      {body}
       {note !== null && <p className="mt-3 text-xs text-muted-foreground">{note}</p>}
     </div>
   );
@@ -227,13 +251,11 @@ export function SearchPanes({
   didYouMean,
   phraseWordsOmitted,
   panel,
+  translationPanel,
+  translationHeadwordId,
   emptyPane,
 }: SearchPanesProps) {
   const { t } = useTranslation();
-  // The word the inline panel belongs to. It is read once here rather than as
-  // `hits[0]` at the render site, so the panel and the id it polls with cannot
-  // be taken from two different reads of the same array.
-  const topHit = hits[0];
   const navigation = useNavigation();
   const isSearching = navigation.state !== 'idle';
   // The voice control writes into THIS box and submits THIS form. It owns no
@@ -254,14 +276,23 @@ export function SearchPanes({
     formRef.current?.requestSubmit();
   };
 
-  // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE. The two branches
-  // answer different questions, so they get different empty sentences: no
-  // dictionary entry at all is a different fact from an entry with nothing to
-  // translate it to, and one message for both would tell half the readers
-  // something untrue.
-  const resultText = phrase === null ? singleWordResult(topHit) : phraseResult(phrase);
-  const emptyMessage =
-    hits.length === 0 && phrase === null ? t('search.noResults', { query: q }) : t('search.resultEmpty');
+  // THE TRANSLATION PANE'S WHOLE BEHAVIOUR, HELD HERE SO THE COPY BUTTON CAN
+  // REACH IT. The hook is called unconditionally, on every branch, because it is
+  // a hook: the phrase branch passes a null panel and a null id, which polls
+  // nothing and renders nothing, and the card below simply does not ask for its
+  // body.
+  const translation = useTranslationPane({
+    panel: translationPanel,
+    headwordId: translationHeadwordId,
+    to: direction.to,
+  });
+
+  // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE. On the word branch
+  // it comes from the pane rather than from the loader's hit, because a poll
+  // that has just landed holds words the loader could not have known about, and
+  // a copy button offering the older set would quietly hand the reader an answer
+  // the screen is not showing.
+  const resultText = phrase === null ? translation.text : phraseResult(phrase);
 
   return (
     <div className="flex flex-col gap-4">
@@ -345,7 +376,7 @@ export function SearchPanes({
             <ResultField
               key={resultText}
               text={resultText}
-              emptyMessage={emptyMessage}
+              body={phrase === null ? <TranslationPane controller={translation} to={direction.to} /> : null}
               note={phrase === null ? null : t('search.wordByWordNote')}
             />
             {/* WHAT THE SEARCH ACTUALLY READ, WHEN IT WAS NOT ALL OF IT.
@@ -363,9 +394,17 @@ export function SearchPanes({
                 {t('search.phraseTruncatedNote', { lookedUp: phrase.tokens.length })}
               </p>
             )}
-            <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
+            {/* The phrase branch keeps the old heading: it is answering "what
+                did you search for", and its own sections name themselves
+                underneath. The word branch's heading moved into
+                `DictionaryEntries`, which is the block it actually names. */}
+            {phrase !== null && (
+              <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
+            )}
             {phrase !== null && <PhraseResults phrase={phrase} from={direction.from} to={direction.to} />}
-            {phrase === null && hits.length > 0 && <SearchResults hits={hits} to={direction.to} />}
+            {phrase === null && hits.length > 0 && (
+              <DictionaryEntries hits={hits} to={direction.to} primaryHeadwordId={translationHeadwordId} />
+            )}
             {phrase === null && hits.length === 0 && (
               <p className="text-sm text-muted-foreground">{t('search.noResults', { query: q })}</p>
             )}
@@ -391,8 +430,14 @@ export function SearchPanes({
                 skeleton has a terminal path, and
                 `tests/integration/inline-enrichment-panel-resolves.test.ts`
                 drives it. */}
-            {panel !== null && topHit !== undefined && (
-              <EnrichmentSection panel={panel} headwordId={topHit.headwordId} to={direction.to} />
+            {/* THE SAME WORD BOTH PANELS ARE ABOUT, AND THE ID COMES FROM THE
+                LOADER. It used to be read here as `hits[0]`, which was the same
+                word the loader had resolved the panel for. It is not any more:
+                the loader prefers the EXACT lemma match over the fuzzy top hit
+                (M193, decision 1), so reading the array again here would poll
+                one word for a panel resolved against another. */}
+            {panel !== null && translationHeadwordId !== null && (
+              <EnrichmentSection panel={panel} headwordId={translationHeadwordId} to={direction.to} />
             )}
             {/* The correction is a link and nothing else. It renders under the
                 empty-result message rather than in place of it, so the reader

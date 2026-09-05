@@ -78,7 +78,6 @@ export const LICENCE_LABELS = {
   'CC0-1.0': 'CC0',
   'CC-BY-2.0-FR': 'CC BY 2.0 FR',
   'CC-BY-4.0': 'CC BY 4.0',
-  'LLM-GENERATED': 'LLM',
 } satisfies Record<ServedLicence, string>;
 
 /**

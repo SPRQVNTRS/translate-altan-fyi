@@ -79,8 +79,6 @@ function ResultExample({ example, to }: { example: SearchHitExample; to: Languag
  * in mono would claim it is a word you could write down as the answer.
  */
 function ResultTranslations({ hit }: { hit: SearchHit }) {
-  const { t } = useTranslation();
-
   if (hit.translations.length > 0) {
     return (
       <p className="text-base">
@@ -102,7 +100,13 @@ function ResultTranslations({ hit }: { hit: SearchHit }) {
     return <p className="text-sm text-muted-foreground">{hit.gloss}</p>;
   }
 
-  return <p className="text-sm text-muted-foreground">{t('search.noTranslationYet')}</p>;
+  // NOTHING, AND THAT IS THE POINT (M193/02). This used to render "no
+  // translation yet for this word", which is the sentence the whole milestone
+  // exists to retire: it described a permanent absence while the pane above the
+  // list is now busy filling exactly that gap. A card with neither a translation
+  // nor a gloss shows its word, its part of speech and its examples, which is
+  // everything the dictionary actually knows about it.
+  return null;
 }
 
 /** One result row: the word, what it means, and a couple of examples. */
@@ -169,6 +173,64 @@ export function SearchResults({ hits, to }: SearchResultsProps) {
         <ResultRow key={hit.headwordId} hit={hit} to={to} />
       ))}
     </ul>
+  );
+}
+
+export interface DictionaryEntriesProps {
+  hits: SearchHit[];
+  to: LanguageCode;
+  /**
+   * The hit the pane above is about: the exact lemma match when there is one,
+   * the top hit otherwise. Chosen by the loader and carried here, never
+   * recomputed, so the card shown first and the word being translated cannot
+   * come apart.
+   */
+  primaryHeadwordId: string | null;
+}
+
+/**
+ * The dictionary entries under the answer: the searched word, then the near
+ * spellings, folded away (M193/02, decision 5).
+ *
+ * WHY THE REST FOLDS. A fuzzy search for one word returns up to ten headwords,
+ * and under a translator-shaped answer card that reads as ten competing
+ * answers. The exact match is the one the reader asked for, so it stays open;
+ * the others are near SPELLINGS of it, which is what the disclosure says, and a
+ * reader who wants them is one tap away.
+ *
+ * A PLAIN `<details>`, NOT A COMPONENT WITH STATE. It works with no hydration
+ * at all, which matters on a server-rendered surface, and it costs no
+ * dependency. Nothing here is selectable and nothing is an action: a card is
+ * still a link to its entry.
+ *
+ * CLOSED BY DEFAULT, and `open` is deliberately absent rather than set to
+ * false: the attribute's presence is what opens it, so writing `open={false}`
+ * and later passing a truthy value would be one silent character away.
+ */
+export function DictionaryEntries({ hits, to, primaryHeadwordId }: DictionaryEntriesProps) {
+  const { t } = useTranslation();
+  const primary = hits.find((hit) => hit.headwordId === primaryHeadwordId) ?? hits[0];
+  const rest = hits.filter((hit) => hit !== primary);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="font-display text-base font-semibold">{t('search.entriesHeading')}</h2>
+      {primary !== undefined && (
+        <ul className="flex flex-col gap-3">
+          <ResultRow key={primary.headwordId} hit={primary} to={to} />
+        </ul>
+      )}
+      {rest.length > 0 && (
+        <details className="rounded-lg border bg-card p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            {t('search.similarSpellings', { count: rest.length })}
+          </summary>
+          <div className="mt-3">
+            <SearchResults hits={rest} to={to} />
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 

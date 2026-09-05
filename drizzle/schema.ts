@@ -25,6 +25,11 @@ export * from './schema/settings';
 // An enrichment belongs to the shared dictionary, not to a reader.
 export * from './schema/enrichment';
 
+// Translation runs: the provenance of every generated dictionary row. Not a
+// cache and not tenant-scoped; reached through `getRawDb()` like the dictionary
+// rows it accounts for.
+export * from './schema/translation-runs';
+
 // Reader votes on an enrichment, plus the per-headword re-enrichment cooldown.
 // Both describe the shared dictionary, and both are reached through `getRawDb()`.
 export * from './schema/votes';

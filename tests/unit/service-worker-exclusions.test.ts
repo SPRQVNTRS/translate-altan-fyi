@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Script } from 'node:vm';
+import { createContext, Script } from 'node:vm';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WORKER_FILE = 'public/sw.js';
@@ -68,6 +68,71 @@ const NO_CACHE_RULES: readonly Rule[] = [
     needle: 'isUncacheable(url)',
   },
 ];
+
+/**
+ * Live API paths the worker must refuse to cache, checked through the worker's
+ * OWN classifier rather than by searching its text.
+ *
+ * WHY THIS IS NOT ANOTHER NEEDLE. The rules above assert that a line of source
+ * still exists; this asserts what that line DOES. `/api/translation/:id` is a
+ * poll that reports whether a run has finished, and `/api/translation/:id/retry`
+ * starts one: a cached answer to either is a reader watching a spinner for a run
+ * that finished a minute ago, or a retry that appears to work and never happens.
+ * Neither path is named in `sw.js`, and neither should be, because the `/api/`
+ * prefix rule already covers every one of them. What has to be guarded is that
+ * it still does, for these paths, whatever the rule is rewritten into.
+ */
+const ORIGIN = 'https://example.test';
+
+const REQUIRED_UNCACHEABLE_PATHS = [
+  '/api/translation/99a991dc-8e80-4b65-82e5-effbbaf84269',
+  '/api/translation/99a991dc-8e80-4b65-82e5-effbbaf84269/retry',
+  '/api/enrichment/99a991dc-8e80-4b65-82e5-effbbaf84269',
+];
+
+/**
+ * The globals `sw.js` touches while it loads, plus the two slots this test uses
+ * to ask the worker a question and read the answer back out.
+ */
+interface WorkerSandbox {
+  self: { addEventListener: (name: string) => void; location: { origin: string } };
+  caches: { open: () => Promise<Record<string, never>>; keys: () => Promise<string[]> };
+  URL: typeof URL;
+  fetch: () => Promise<never>;
+  /** The URLs to classify, read by the appended line below. */
+  probes: string[];
+  /** What the worker's own classifier said about each one, written by that line. */
+  verdicts: boolean[];
+}
+
+/**
+ * Ask the REAL worker whether it would cache each URL.
+ *
+ * The worker is browser JavaScript that node cannot import, so it runs in a vm
+ * context with the globals it touches at load stubbed out. The classifier is not
+ * pulled out of the context and called from here: one appended line calls it
+ * INSIDE the context and writes the answers back, which keeps this test free of
+ * any claim about the shape of a value it did not create.
+ *
+ * A worker that no longer declares `isUncacheable` throws a ReferenceError here,
+ * which is the correct failure: the rule check above asserts the call site
+ * exists, and this one asserts the thing it calls still does.
+ */
+function classifyWithWorker(worker: string, urls: readonly string[]): boolean[] {
+  const sandbox: WorkerSandbox = {
+    self: { addEventListener: () => undefined, location: { origin: ORIGIN } },
+    caches: { open: () => Promise.resolve({}), keys: () => Promise.resolve([]) },
+    URL,
+    fetch: () => Promise.reject(new Error('the unit tier makes no requests')),
+    probes: [...urls],
+    verdicts: [],
+  };
+  const context = createContext(sandbox);
+  const probe = `${worker}
+;verdicts = probes.map(function (path) { return isUncacheable(new URL(path)); });`;
+  new Script(probe, { filename: WORKER_FILE }).runInContext(context);
+  return sandbox.verdicts;
+}
 
 /** Every account path the worker must refuse to cache. A path missing from the list is a page that would be cached. */
 const REQUIRED_AUTH_PATHS = [
@@ -148,6 +213,21 @@ describe('service worker exclusions', () => {
     const shell = parseAppShell(source);
     const overlap = shell.filter((path) => REQUIRED_AUTH_PATHS.includes(path));
     assert.deepEqual(overlap, [], `${WORKER_FILE} precaches account screens: ${overlap.join(', ')}`);
+  });
+
+  it('refuses to cache the translation poll, the retry and the enrichment poll', () => {
+    // The last probe is a shell route the worker MUST cache. Without it this
+    // case would be green against a classifier that returns true for every
+    // input, which caches nothing and breaks the app offline instead.
+    const probes = [...REQUIRED_UNCACHEABLE_PATHS, '/lists'];
+    const verdicts = classifyWithWorker(source, probes.map((path) => `${ORIGIN}${path}`));
+    const cached = REQUIRED_UNCACHEABLE_PATHS.filter((_path, index) => verdicts[index] !== true);
+    assert.deepEqual(
+      cached,
+      [],
+      `${WORKER_FILE} would cache ${cached.join(', ')}. A cached poll shows a finished run as still running, and a cached retry never reaches the server.`,
+    );
+    assert.equal(verdicts.at(-1), false, `${WORKER_FILE} now refuses to cache /lists, so the shell cannot open offline`);
   });
 
   it('uses no em dash', () => {

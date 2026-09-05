@@ -183,6 +183,16 @@ export const ROUTE_CLASSIFICATION = {
     access: 'gated-inline',
     reason: 'Its action calls `requireVoterAccount` first and answers 401 before any path that could reach `enqueueEnrichment` on a downvote.',
   },
+  'api.translation.$headwordId.ts': {
+    access: 'public',
+    reason:
+      'The read-only poll the translation pane drives. It resolves the panel and never enqueues, so it spends nothing. It serves what the entry at the same id already serves anyone.',
+  },
+  'api.translation.$headwordId.retry.ts': {
+    access: 'gated-inline',
+    reason:
+      'It exports `middleware = [authMiddleware]`, which under `/api/` refuses with a 401 in JSON. It starts a billed run, so it is the one half of the translation pair that needs an account.',
+  },
   'api.v1.transcribe.ts': {
     access: 'gated-inline',
     reason: 'Its action reads the session first and answers a 401 refusal in JSON. A redirect would be unusable to the `fetch` that calls it.',

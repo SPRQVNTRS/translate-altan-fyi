@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MetaFunction } from 'react-router';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
+import { GENERATED_SOURCE_SLUG } from '#app/lib/dictionary/generated-source';
 import { listSources } from '#app/lib/dictionary/sources.server';
 import { getRawDb } from '#drizzle/db';
 
@@ -19,17 +20,18 @@ export const meta: MetaFunction = ({ matches }) => {
  *
  * A Map rather than an object literal, so the lookup has one shape and an
  * unknown licence is a plain `undefined` instead of a prototype surprise.
- * `LLM-GENERATED` is deliberately absent: it is our own output, so there is no
- * upstream licence to link to, and the card says that in words instead.
+ *
+ * The generated source is in here like any other, because it now carries
+ * `CC0-1.0`, a real public licence with a real text. It used to carry its own
+ * identifier, `LLM-GENERATED`, and was deliberately absent from this map for
+ * that reason. That changed with the decision that generated entries are
+ * released under CC0 like the imported data.
  */
 const LICENCE_URLS = new Map<string, string>([
   ['CC0-1.0', 'https://creativecommons.org/publicdomain/zero/1.0/'],
   ['CC-BY-2.0-FR', 'https://creativecommons.org/licenses/by/2.0/fr/'],
   ['CC-BY-4.0', 'https://creativecommons.org/licenses/by/4.0/'],
 ]);
-
-/** The licence identifier for our own generated content. */
-const GENERATED_LICENCE = 'LLM-GENERATED';
 
 /**
  * The STABLE anchor for the generated-content card.
@@ -92,7 +94,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function SourceCardView({ source }: { source: SourceCard }) {
   const { t } = useTranslation();
   const licenceUrl = LICENCE_URLS.get(source.licence);
-  const isGenerated = source.licence === GENERATED_LICENCE;
+  // THE GENERATED SOURCE IS FOUND BY ITS SLUG, NOT BY ITS LICENCE.
+  //
+  // It used to be found by `licence === 'LLM-GENERATED'`, and that broke the
+  // moment the row's licence became `CC0-1.0`: the test matched nothing, the
+  // block stopped rendering, and the generated source fell in beside Wikidata as
+  // though it were an import. A licence is a property this row shares with other
+  // rows; the slug is its identity, and it is the same value every generated
+  // dictionary row attributes to.
+  const isGenerated = source.slug === GENERATED_SOURCE_SLUG;
 
   return (
     // `scroll-mt-24` clears the sticky app header, so a `#slug` jump lands on

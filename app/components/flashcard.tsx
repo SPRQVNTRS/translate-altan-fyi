@@ -57,7 +57,7 @@ export function Flashcard({ card, isFlipped, onFlip, onVerdict, announcement, pr
 
         {isFlipped && (
           <span className="text-base text-muted-foreground break-words">
-            {card.translation === '' ? t('search.noTranslationYet') : card.translation}
+            {card.translation === '' ? t('review.noTranslation') : card.translation}
           </span>
         )}
 

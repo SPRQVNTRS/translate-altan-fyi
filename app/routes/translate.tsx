@@ -12,8 +12,9 @@ import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
 import { entrySensesQuery } from '#app/lib/dictionary/entry.server';
 import { loadLandingExample } from '#app/lib/dictionary/landing-example';
 import { reconcilePairWithDirection, resolveLanguagePair } from '#app/lib/dictionary/language-pair';
-import { normalizeQuery } from '#app/lib/dictionary/normalize';
+import { normalizeForLanguage, normalizeQuery } from '#app/lib/dictionary/normalize';
 import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
+import { resolveTriggeredTranslationPanel, type TranslationPanel } from '#app/lib/translation/panel.server';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
 import { resolveUser } from '#app/middleware/auth';
@@ -175,6 +176,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       example,
       phraseWordsOmitted: 0,
       panel: null,
+      // Nothing was searched for, so there is no word to translate and no pane
+      // to feed. It is NOT `no-entry`, which is the answer to a real query that
+      // matched no headword.
+      translationPanel: null,
+      translationHeadwordId: null,
     };
   }
 
@@ -237,6 +243,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       example: null,
       phraseWordsOmitted,
       panel: null,
+      // A phrase triggers no generation at all (decision 8). The pane is not
+      // rendered on this branch, and passing it a panel would be the first step
+      // towards a phrase costing one model call per word.
+      translationPanel: null,
+      translationHeadwordId: null,
     };
   }
 
@@ -272,17 +283,41 @@ export async function loader({ request }: Route.LoaderArgs) {
   //   a job starts at all, so a decision taken after the response had gone
   //   would be no decision. The cost is a handful of local statements, no
   //   provider call: the enqueue behind them is still fire and forget.
+  // WHICH WORD THE TWO PANELS ARE ABOUT, DECIDED ONCE (decision 1).
+  //   `searchHeadwords` returns exact matches before fuzzy ones, but "first hit"
+  //   and "the word the reader typed" are not the same thing: a query can match
+  //   a longer headword ahead of its own exact lemma once the fuzzy branch
+  //   contributes. The exact lemma is preferred and `hits[0]` is the fallback,
+  //   and the choice is read ONCE here and carried out to the pane, so the panel
+  //   and the id the pane polls with cannot come from two reads of one array.
+  //
+  //   THE COMPARISON GOES THROUGH THE SAME NORMALISER THE IMPORTER USED to write
+  //   `headwords.lemma_normalized`. Comparing raw lemmas would miss the German
+  //   and Turkish rows whose stored form differs from their spelling, which is
+  //   exactly the set of words this milestone is about.
   const topHit = hits[0];
-  const panel =
-    topHit === undefined ? null : (
-      await resolveTriggeredPanel({
+  const chosenHit = hits.find((hit) => normalizeForLanguage(hit.lemma, direction.from) === query.normalized) ?? topHit;
+
+  // The senses the enrichment panel covers, read here because a search hit does
+  // not carry them: `SearchHit` is a lemma with its glosses and examples. It is
+  // one indexed query on the single-word branch only.
+  const senseIds =
+    chosenHit === undefined ? [] : (await entrySensesQuery(db, chosenHit.headwordId)).map((row) => row.senseId);
+
+  // THE TWO PANELS TOGETHER, IN ONE `Promise.all`. They ask different questions
+  // of different tables and neither one's answer feeds the other, so running
+  // them in sequence would add a round trip to the single-word branch for
+  // nothing. Both are AWAITED rather than fired behind the response, and for the
+  // same reason: the spend guards inside each of them decide whether a job
+  // starts at all, and a decision taken after the response has gone is no
+  // decision.
+  const [panel, translationPanel] = await Promise.all([
+    chosenHit === undefined ? null : (
+      resolveTriggeredPanel({
         db,
         request,
-        headwordId: topHit.headwordId,
-        // The senses the panel covers, read here because a search hit does not
-        // carry them: `SearchHit` is a lemma with its glosses and examples. It
-        // is one indexed query on the single-word branch only.
-        senseIds: (await entrySensesQuery(db, topHit.headwordId)).map((row) => row.senseId),
+        headwordId: chosenHit.headwordId,
+        senseIds,
         from: direction.from,
         to: direction.to,
         // The reader's own votes on the rows the panel renders. It comes from
@@ -292,7 +327,20 @@ export async function loader({ request }: Route.LoaderArgs) {
         // re-reading would risk two answers to one question in one request.
         accountId: user?.id ?? null,
       })
-    );
+    ),
+    // NO HEADWORD AT ALL IS `no-entry`, AND ONLY THE LOADER CAN SAY SO. Both
+    // functions in `panel.server.ts` are given a headword id, so neither of them
+    // can see this case. Nothing is queued for it: decision 8 says a query with
+    // no matching headword creates nothing.
+    chosenHit === undefined ?
+      ({ state: 'no-entry' } satisfies TranslationPanel)
+    : resolveTriggeredTranslationPanel(db, {
+        request,
+        headwordId: chosenHit.headwordId,
+        from: direction.from,
+        to: direction.to,
+      }),
+  ]);
 
   return {
     q,
@@ -305,6 +353,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     example: null,
     phraseWordsOmitted: 0,
     panel,
+    translationPanel,
+    translationHeadwordId: chosenHit?.headwordId ?? null,
   };
 }
 
@@ -329,7 +379,20 @@ export async function loader({ request }: Route.LoaderArgs) {
  * is the order the screen is read in.
  */
 export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
-  const { q, direction, pair, signedIn, hits, phrase, didYouMean, example, phraseWordsOmitted, panel } = loaderData;
+  const {
+    q,
+    direction,
+    pair,
+    signedIn,
+    hits,
+    phrase,
+    didYouMean,
+    example,
+    phraseWordsOmitted,
+    panel,
+    translationPanel,
+    translationHeadwordId,
+  } = loaderData;
 
   // ONE COLUMN, ONE WIDTH, AT EVERY VIEWPORT. `max-w-2xl` and nothing wider:
   // the surface below used to widen to `max-w-5xl` from `md` up so a second
@@ -371,6 +434,8 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
         didYouMean={didYouMean}
         phraseWordsOmitted={phraseWordsOmitted}
         panel={panel}
+        translationPanel={translationPanel}
+        translationHeadwordId={translationHeadwordId}
         // THE WORKED EXAMPLE, WHERE THE ANSWER CARD GOES. With nothing typed
         // there is no answer to show, so that place in the column shows one. It
         // is passed for a signed-in reader too: it is a demonstration rather

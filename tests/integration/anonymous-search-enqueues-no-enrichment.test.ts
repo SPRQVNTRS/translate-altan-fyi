@@ -51,10 +51,20 @@ import { RouterContextProvider } from 'react-router';
 
 import { closePool, poolInitialized } from '../../drizzle/db';
 import { getRawDb } from '../../drizzle/db';
-import { abuseCounters, enrichments, headwords, senses, senseVersions, sources, workflows } from '../../drizzle/schema';
+import {
+  abuseCounters,
+  enrichments,
+  headwords,
+  senses,
+  senseVersions,
+  sources,
+  translationRuns,
+  workflows,
+} from '../../drizzle/schema';
 import { counterKey } from '../../app/lib/abuse/rate-limit.server';
 import { enrichmentSingletonKey } from '../../app/lib/enrichment/enqueue.server';
 import { ENRICHMENT_QUEUE } from '../../app/lib/enrichment/limits';
+import { TRANSLATION_QUEUE } from '../../app/lib/translation/limits';
 import { PROMPT_VERSION } from '../../app/prompts/enrichment/version';
 import { loader as translateLoader } from '../../app/routes/translate';
 import { initializeWorkflows, stopOrchestrator } from '../../app/services/workflows.server';
@@ -185,6 +195,14 @@ after(async () => {
   if (DB_HOST) {
     await stopOrchestrator();
     await db.execute(sql`delete from pgboss.job where name = ${ENRICHMENT_QUEUE} and singleton_key like ${`${headwordId}:%`}`);
+    // THE SIGNED-IN CASE NOW STARTS A TRANSLATION RUN AS WELL (M193/02). The
+    // search loader triggers both panels for the top hit, so the signed-in
+    // request below leaves a queued `translate-headword` job and a
+    // `translation_runs` row behind it. The run row REFERENCES the headword,
+    // so leaving it here does not merely litter: the headword delete at the
+    // foot of this block would wait on it and the run would read as hung.
+    await db.execute(sql`delete from pgboss.job where name = ${TRANSLATION_QUEUE} and singleton_key like ${`${headwordId}:%`}`);
+    await db.delete(translationRuns).where(eq(translationRuns.headwordId, headwordId));
     await db.delete(workflows).where(sql`${workflows.context}->>'headwordId' = ${headwordId}`);
     if (createdCounterKeys.length > 0) {
       await db.delete(abuseCounters).where(inArray(abuseCounters.key, createdCounterKeys));

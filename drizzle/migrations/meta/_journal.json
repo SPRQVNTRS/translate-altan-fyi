@@ -134,6 +134,13 @@
       "when": 1788521236948,
       "tag": "0018_wealthy_leo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788561205125,
+      "tag": "0019_yellow_warhawk",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,7 @@ import {
   TRIGGER_LIMIT_PER_SESSION_PER_HOUR,
 } from '#app/lib/abuse/rate-limit.server';
 import { getActiveModel, listActiveModelAudit, setActiveModel } from '#app/models/app-settings.server';
+import { readCorpusStats } from '#app/models/corpus-stats.server';
 import { listFlaggedForReview } from '#app/models/votes.server';
 import { getRawDb } from '#drizzle/db';
 
@@ -98,13 +99,15 @@ export async function loader() {
   const status = registry.describeConfiguration(active);
   const audit = await listActiveModelAudit(AUDIT_LIMIT);
 
-  // The three spend reads are independent of each other and of the model reads
-  // above, so they are issued together. Every one of them is a plain read: this
-  // page never grants, releases or clears anything.
-  const [budget, rejections, flagged] = await Promise.all([
+  // The spend reads, the flagged queue and the corpus counts are independent of
+  // each other and of the model reads above, so they are issued together.
+  // Every one of them is a plain read: this page never grants, releases or
+  // clears anything.
+  const [budget, rejections, flagged, corpus] = await Promise.all([
     readBudget(),
     readRejections(),
     listFlaggedForReview(getRawDb(), FLAGGED_LIMIT),
+    readCorpusStats(getRawDb()),
   ]);
 
   // The catalog crosses to the client so the two dependent selects can react to
@@ -136,6 +139,7 @@ export async function loader() {
     spend,
     rejections,
     flagged,
+    corpus,
     // The two trigger ceilings travel as data rather than being read from the
     // module in the component, because `rate-limit.server` must never reach the
     // client bundle. They are printed beside the refusal counts so the operator
@@ -236,7 +240,7 @@ function describeSelection(selection: ActiveModelSelection | null): string {
 }
 
 export default function SuperLlm({ loaderData, actionData }: Route.ComponentProps) {
-  const { active, status, audit, providers, spend, rejections, flagged, triggerLimits } = loaderData;
+  const { active, status, audit, providers, spend, rejections, flagged, corpus, triggerLimits } = loaderData;
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== 'idle';
 
@@ -496,6 +500,71 @@ export default function SuperLlm({ loaderData, actionData }: Route.ComponentProp
         <p className="mt-3 text-sm text-muted-foreground">
           {`Triggers are limited to ${triggerLimits.perIpPerHour} per address per hour and ${triggerLimits.perSessionPerHour} per session per hour.`}
         </p>
+      </section>
+
+      <section className={CARD_CLASS}>
+        <h2 className={SECTION_LABEL_CLASS}>Corpus</h2>
+        {/* NOT LICENCE-FILTERED. This is an operator view of what the database
+            holds, not a reader view of what is served, see
+            `app/models/corpus-stats.server.ts`. Generated and imported are
+            always shown as two labelled numbers per cell, never summed into
+            one total, so a cell never reads as a single count that means two
+            different things. */}
+        <h3 className="mt-1 text-sm font-medium">Translations by language pair</h3>
+        {corpus.translationsByPair.length === 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">No translations yet.</p>
+        )}
+        {corpus.translationsByPair.length > 0 && (
+          <div className="mt-2">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>From</TableHead>
+                  <TableHead>To</TableHead>
+                  <TableHead>Generated</TableHead>
+                  <TableHead>Imported</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {corpus.translationsByPair.map((row) => (
+                  <TableRow key={`${row.from}-${row.to}`}>
+                    <TableCell className="font-mono">{row.from}</TableCell>
+                    <TableCell className="font-mono">{row.to}</TableCell>
+                    <TableCell className="tabular-nums">{row.generated}</TableCell>
+                    <TableCell className="tabular-nums">{row.imported}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <h3 className="mt-5 text-sm font-medium">Senses by language</h3>
+        {corpus.sensesByLanguage.length === 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">No senses yet.</p>
+        )}
+        {corpus.sensesByLanguage.length > 0 && (
+          <div className="mt-2">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Language</TableHead>
+                  <TableHead>Generated</TableHead>
+                  <TableHead>Imported</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {corpus.sensesByLanguage.map((row) => (
+                  <TableRow key={row.language}>
+                    <TableCell className="font-mono">{row.language}</TableCell>
+                    <TableCell className="tabular-nums">{row.generated}</TableCell>
+                    <TableCell className="tabular-nums">{row.imported}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </section>
 
       <section className={CARD_CLASS}>

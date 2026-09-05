@@ -11,6 +11,7 @@ import { CONFIG } from '#config';
 import { createComponentLogger } from '#app/lib/logger';
 import { registerAllWorkflows } from '#app/workflows';
 import { ENRICHMENT_QUEUE } from '#app/lib/enrichment/limits';
+import { TRANSLATION_QUEUE } from '#app/lib/translation/limits';
 
 const log = createComponentLogger('WorkflowService');
 
@@ -53,6 +54,10 @@ export async function initializeWorkflows(): Promise<WorkflowOrchestrator> {
       { name: 'default', workers: 2, pollingIntervalMs: 2000 },
       { name: 'sequential', workers: 1 }, // For workflows that must run one at a time
       { name: ENRICHMENT_QUEUE, workers: 2, pollingIntervalMs: 2000 },
+      // Its own pool, not enrichment's: a reader is waiting on a translation, and
+      // sharing a pool would put that wait behind a set of study notes nobody
+      // asked for yet. The polling interval is shorter for the same reason.
+      { name: TRANSLATION_QUEUE, workers: 2, pollingIntervalMs: 1000 },
     ],
     defaultTimeout: 30000,
     defaultRetryLimit: 3,
@@ -88,6 +93,15 @@ export async function initializeWorkflows(): Promise<WorkflowOrchestrator> {
   const boss = orchestrator.getBoss();
   await boss.createQueue(ENRICHMENT_QUEUE, { name: ENRICHMENT_QUEUE, policy: 'stately' });
   await boss.updateQueue(ENRICHMENT_QUEUE, { name: ENRICHMENT_QUEUE, policy: 'stately' });
+
+  // The translation queue needs the same treatment for the same reason, and it
+  // needs its OWN queue so that the policy is not shared with a feature that may
+  // one day want different dedupe semantics. Both calls again: `createQueue` is
+  // ON CONFLICT DO NOTHING and cannot repair an existing queue, `updateQueue`
+  // cannot create one, and only the pair is correct on a fresh database AND on
+  // an already-deployed one.
+  await boss.createQueue(TRANSLATION_QUEUE, { name: TRANSLATION_QUEUE, policy: 'stately' });
+  await boss.updateQueue(TRANSLATION_QUEUE, { name: TRANSLATION_QUEUE, policy: 'stately' });
 
   // Register all templates and operation handlers from app/workflows/
   registerAllWorkflows(orchestrator);

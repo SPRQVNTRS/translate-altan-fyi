@@ -50,7 +50,12 @@ export const sources = pgTable('sources', {
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   url: text('url'),
-  /** SPDX-style identifier: `CC0-1.0`, `CC-BY-2.0-FR`, `CC-BY-4.0`, plus `LLM-GENERATED` for our own enrichment output. */
+  /**
+   * SPDX-style identifier: `CC0-1.0`, `CC-BY-2.0-FR`, `CC-BY-4.0`. The allowlist
+   * of what may be SERVED is `app/lib/dictionary/licences.ts`, not this column.
+   * Our own generated content carries `CC0-1.0` like the imported data and is
+   * told apart by its source slug, `llm-generated`, not by its licence.
+   */
   licence: text('licence').notNull(),
   attribution: text('attribution').notNull(),
   importedAt: timestamp('imported_at', { withTimezone: true }),

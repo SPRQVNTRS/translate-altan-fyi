@@ -29,7 +29,6 @@
     "resultsHeading": "Ergebnisse",
     "resultsFor": "Ergebnisse für {{query}}",
     "noResults": "Keine Treffer für {{query}}. Schreibweise prüfen oder ein anderes Wort versuchen.",
-    "noTranslationYet": "Für dieses Wort gibt es noch keine Übersetzung.",
     "examplesLabel": "Beispiele",
     "directionLabel": "Suchrichtung",
     "flipDirection": "Sprachen tauschen und erneut suchen",
@@ -49,10 +48,11 @@
     "detectedAs": "{{language}} (erkannt)",
     "swapLanguages": "Die beiden Sprachen tauschen",
     "resultLabel": "Übersetzung",
-    "resultEmpty": "Dafür gibt es noch keine Übersetzung.",
     "wordByWordNote": "Wort für Wort. Dies ist ein Wörterbuch, es bildet keine Sätze.",
     "copy": "Übersetzung kopieren",
-    "copied": "Kopiert"
+    "copied": "Kopiert",
+    "entriesHeading": "Wörterbucheinträge, exakter Treffer und ähnliche Schreibweisen",
+    "similarSpellings": "Ähnliche Schreibweisen ({{count}})"
   },
   "voice": {
     "start": "Zuhören",
@@ -133,7 +133,8 @@
     "backToList": "Zurück zur Liste",
     "emptyTitle": "Diese Liste ist leer",
     "emptyBody": "Füge ein Wort von seiner Eintragsseite hinzu, um mit dem Wiederholen zu beginnen.",
-    "notFound": "Diese Liste ist nicht auf deinem Gerät gespeichert."
+    "notFound": "Diese Liste ist nicht auf deinem Gerät gespeichert.",
+    "noTranslation": "Für dieses Wort gibt es noch keine Übersetzung."
   },
   "nudge": {
     "title": "Tägliche Wiederholung",
@@ -300,6 +301,16 @@
     "budgetReached": "Neue Lernnotizen sind heute nicht verfügbar. Sie können den Wörterbucheintrag oben weiterhin lesen.",
     "rateLimited": "Sie haben zu oft neue Notizen angefordert. Bitte warten Sie einige Minuten, bevor Sie es erneut versuchen."
   },
+  "translation": {
+    "translating": "Wird übersetzt. Dauert einen Moment.",
+    "stillWorking": "Läuft noch. Schau gleich wieder rein, das Ergebnis wartet hier.",
+    "noEntry": "Kein Eintrag für dieses Wort. Prüfe ähnliche Schreibweisen unten.",
+    "budget": "Tageslimit für Übersetzungen erreicht. Versuch es morgen wieder.",
+    "failed": "Übersetzung fehlgeschlagen.",
+    "retry": "Erneut versuchen",
+    "generated": "Generiert",
+    "generatedHint": "Von einem Sprachmodell erstellt. Kann Fehler enthalten."
+  },
   "attribution": {
     "metaTitle": "Quellen",
     "metaDescription": "Datenquellen dieses Wörterbuchs, mit Lizenzen und Namensnennung.",
@@ -311,8 +322,8 @@
     "importedAtLabel": "Importiert",
     "versionLabel": "Version",
     "notImported": "Noch nicht importiert",
-    "generatedTitle": "Generierte Inhalte",
-    "generatedBody": "Ein KI-Sprachmodell verfasst die als generierter Inhalt gekennzeichneten Erklärungen und Beispielsätze. Vor der Veröffentlichung werden diese Texte von keiner Person überprüft. Für sie gilt keine vorgelagerte Lizenz.",
+    "generatedTitle": "Generierte Einträge",
+    "generatedBody": "Einige Bedeutungen und Übersetzungen wurden durch ein Sprachmodell generiert, wenn Nutzer nach einem Wort suchten, das in den importierten Daten nicht enthalten war. Sie sind in der App als generiert gekennzeichnet und stehen wie die importierten Daten unter CC0 1.0. Sie können Fehler enthalten.",
     "empty": "Noch keine Quellen importiert."
   },
   "sync": {
