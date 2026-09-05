@@ -72,3 +72,4 @@
 - [The translator surface is one column](project_translator_surface_is_one_column.md), the bar is a three-cell grid and neither card carries `.surface-brand`; the class-attribute tests are what keep the misalignment out
 - [checkTriggerRateLimit spends on every call](project_translate_rate_limit_last_of_three_guards_m193.md), so panel.server.ts asks it last; enrichment's own call site is a separate, out-of-scope gap
 - [The budget view collapses its reason](project_translate_budget_view_collapses_reason.md), pane-state.ts owns layout not copy; translation-pane.tsx reads state.panel.reason itself
+- [Attribution's generated-source check is DB-free by extraction site](project_translate_attribution_generated_source_slug.md) — isGeneratedSource lives in generated-source.ts, not attribution.tsx, because attribution.tsx imports drizzle/db
