@@ -28,6 +28,25 @@ own configured setting already applies. And the pane has exactly five states,
 `ready`, `translating`, `no-entry`, `budget`, `failed`, with no "no translation
 yet" copy anywhere on the search surface.
 
+### Favourites, history and translation votes (M194)
+
+The code: `app/lib/local-store/favorites.ts` and the `favorites` collection in
+`schema.ts` (`SCHEMA_VERSION` 3, synced, in the blob),
+`app/components/personal/favorite-toggle.tsx`,
+`app/components/personal/saved-word-row.tsx`, `app/routes/favourites.tsx`,
+`app/lib/local-store/history.ts`, `drizzle/schema/votes.ts`'s
+`translationVotes`, `app/models/translation-votes.server.ts`,
+`app/routes/api.translation-vote.ts`, `app/components/translation-votes.tsx`
+and `app/lib/votes/optimistic.ts`.
+
+Three rules. A favourite is NOT a list entry: one tap on an answer cannot ask a
+reader to pick a sense first, so it is its own entity and lists stay curated
+study material. `recordSearch` is an UPSERT on `(query, from, to)` and the row's
+id survives, so a repeat search moves a row rather than adding one, and history
+is still device-only with no sync stamp and nothing in the blob. A translation
+vote is recorded and nothing else: no re-run, no hiding, no reordering, and the
+operator's list on `/super/llm` is the only thing built on the scores.
+
 ## Prerequisites
 
 The four `@sprqvntrs/*` dependencies are published to npmjs and need no
