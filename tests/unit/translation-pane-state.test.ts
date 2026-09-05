@@ -28,6 +28,9 @@ import type { TranslationPanel } from '#app/lib/translation/panel.server';
 import {
   initialTranslationPaneState,
   isTranslationPanePolling,
+  translationPaneAllText,
+  translationPaneAlternatives,
+  translationPanePrimary,
   translationPaneReducer,
   translationPaneRows,
   translationPaneText,
@@ -50,6 +53,7 @@ const READY: TranslationPanel = {
       lemma: 'devirmek',
       pos: 'verb',
       confidence: 0.9,
+      note: null,
       generated: true,
       up: 0,
       down: 0,
@@ -60,6 +64,7 @@ const READY: TranslationPanel = {
       lemma: 'devirmek',
       pos: null,
       confidence: null,
+      note: null,
       generated: false,
       up: 0,
       down: 0,
@@ -67,6 +72,26 @@ const READY: TranslationPanel = {
     },
   ],
 };
+
+/**
+ * Three different words for one query, in the order `rankTranslationRows` put
+ * them. This is the shape the defect was reported against: the operator looked
+ * up one German word, was shown three Turkish ones, up-voted a single one of
+ * them, and every consumer of the pane still took all three.
+ */
+const THREE_ROWS = ['çapa', 'bahçe çapası', 'kazma'].map((lemma, index) => ({
+  translationId: `edge-${index + 1}`,
+  lemma,
+  pos: 'noun',
+  confidence: 0.8,
+  note: null,
+  generated: true,
+  up: 0,
+  down: 0,
+  myVote: null,
+}));
+
+const THREE_WORDS: TranslationPanel = { state: 'ready', translations: THREE_ROWS };
 
 /** Apply a list of actions in order, the way a session of the pane would. */
 function drive(state: TranslationPaneState, actions: TranslationPaneAction[]): TranslationPaneState {
@@ -174,10 +199,82 @@ describe('the translation pane machine', () => {
   });
 
   it('hands the copy button the words once each, and nothing at all before there are any', () => {
-    assert.equal(translationPaneText(initialTranslationPaneState(READY)), 'devirmek');
+    assert.equal(translationPaneAllText(initialTranslationPaneState(READY)), 'devirmek');
     assert.equal(translationPaneRows(initialTranslationPaneState(READY)).length, 2);
-    assert.equal(translationPaneText(initialTranslationPaneState(TRANSLATING)), '');
+    assert.equal(translationPaneAllText(initialTranslationPaneState(TRANSLATING)), '');
     assert.deepEqual(translationPaneRows(initialTranslationPaneState(FAILED)), []);
+  });
+});
+
+/**
+ * The answer, and the words that are not it.
+ *
+ * WHY THESE CASES EXIST. Three coequal words on one card is a card with no
+ * answer on it, and three consumers took the whole list from it: the copy
+ * button, the favourite snapshot and the device-local search history. So one row
+ * is the answer and the rest are alternatives, a tap moves the answer, and the
+ * tap writes and posts nothing. These cases pin the four properties that make
+ * that safe, none of which is visible in the markup.
+ */
+describe('which row is the answer, and which are the alternatives', () => {
+  const shown = initialTranslationPaneState(THREE_WORDS);
+
+  it('answers with the first row until the reader chooses another', () => {
+    assert.equal(translationPanePrimary(shown, null)?.lemma, 'çapa');
+    assert.deepEqual(
+      translationPaneAlternatives(shown, null).map((row) => row.lemma),
+      ['bahçe çapası', 'kazma'],
+    );
+  });
+
+  it('promotes the chosen row and leaves the others in the order the server sent', () => {
+    // The reader picked the third word. The other two keep `rank.ts`'s order:
+    // choosing a word is not choosing a new ranking, and the ranking belongs to
+    // everybody who looks the word up.
+    assert.equal(translationPanePrimary(shown, 'edge-3')?.lemma, 'kazma');
+    assert.deepEqual(
+      translationPaneAlternatives(shown, 'edge-3').map((row) => row.lemma),
+      ['çapa', 'bahçe çapası'],
+    );
+  });
+
+  it('falls back to the first row when the chosen id is not in the rows', () => {
+    // A poll can land a new row set while a choice is held. An answer card that
+    // emptied itself because of that would be worse than the defect this fixes.
+    assert.equal(translationPanePrimary(shown, 'edge-gone')?.lemma, 'çapa');
+    assert.equal(translationPaneAlternatives(shown, 'edge-gone').length, 2);
+  });
+
+  it('gives the star, the history and the copy button the answer alone', () => {
+    // This is the whole fix in one assertion: `text` is what the favourite
+    // snapshot and `recordSearch` read, and it is one word rather than a join.
+    assert.equal(translationPaneText(shown, null), 'çapa');
+    assert.equal(translationPaneText(shown, 'edge-2'), 'bahçe çapası');
+    assert.notEqual(translationPaneText(shown, null), translationPaneAllText(shown));
+  });
+
+  it('keeps the join for the copy-all button, words once each', () => {
+    assert.equal(translationPaneAllText(shown), 'çapa, bahçe çapası, kazma');
+    // Two sources naming the same word is a fact about the dictionary, not about
+    // the word: `READY` holds two rows and one word.
+    assert.equal(translationPaneAllText(initialTranslationPaneState(READY)), 'devirmek');
+  });
+
+  it('has no alternatives when there is one row', () => {
+    const single = initialTranslationPaneState({ state: 'ready', translations: THREE_ROWS.slice(0, 1) });
+    assert.equal(translationPanePrimary(single, null)?.lemma, 'çapa');
+    assert.deepEqual(translationPaneAlternatives(single, null), []);
+  });
+
+  it('has no answer at all on every state that is not ready', () => {
+    const others: TranslationPanel[] = [TRANSLATING, FAILED, BUDGET, { state: 'no-entry' }];
+    for (const panel of others) {
+      const state = initialTranslationPaneState(panel);
+      assert.equal(translationPanePrimary(state, null), null);
+      assert.deepEqual(translationPaneAlternatives(state, null), []);
+      assert.equal(translationPaneText(state, null), '');
+      assert.equal(translationPaneAllText(state), '');
+    }
   });
 });
 

@@ -180,6 +180,9 @@ describe('the phrase resolver, which never enqueues', () => {
           lemma: 'Arabayı depoya kadar doldur',
           pos: null,
           confidence: null,
+          // A sentence has no other word to be chosen over, so there is never a
+          // usage note on a phrase answer.
+          note: null,
           generated: true,
           up: 0,
           down: 0,

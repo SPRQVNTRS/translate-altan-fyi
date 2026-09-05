@@ -66,8 +66,58 @@ reader to pick a sense first, so it is its own entity and lists stay curated
 study material. `recordSearch` is an UPSERT on `(query, from, to)` and the row's
 id survives, so a repeat search moves a row rather than adding one, and history
 is still device-only with no sync stamp and nothing in the blob. A translation
-vote is recorded and nothing else: no re-run, no hiding, no reordering, and the
-operator's list on `/super/llm` is the only thing built on the scores.
+vote is recorded and nothing else: no re-run, no hiding, and the operator's list
+on `/super/llm` is the only thing built on the scores. The "no reordering" half
+of that rule was amended by M196 below, under a margin; the rest of it stands.
+
+### One answer, its alternatives, and a usage note (M196)
+
+The code: `app/lib/translation/rank.ts`, the ranking call at the foot of
+`listTranslationsInto` in `app/lib/translation/translations-query.server.ts`,
+`translations.note` in `drizzle/schema/dictionary.ts`, the `note` field in
+`app/lib/llm/translation-schema.ts` and its bullet in
+`app/prompts/translation/v2.md`, the write in
+`app/workflows/operations/translation/translate-headword.ts`, and on the screen
+`translationPanePrimary`, `translationPaneAlternatives`, `translationPaneText`
+and `translationPaneAllText` in `app/lib/translation/pane-state.ts`, with
+`TranslationPane` and `ResultField` rendering them.
+
+THE DEFECT. The answer card listed every translation the corpus held as coequal
+words, so it had no answer on it: the reader took the first, which was a fact
+about the alphabet. Three things then took the WHOLE list rather than any one
+word, the copy button, the favourite snapshot and the device history. An
+operator who up-voted one of three Turkish words for `Gartenhacke` still copied
+and kept the other two, and reported it as "I'm upvoting only one of the terms,
+yet all of them are dragged along".
+
+Four rules.
+
+**Choosing is not voting.** Tapping an alternative promotes it to the answer.
+That writes nothing, posts nothing and changes nothing for any other reader.
+Fusing the two controls would trap the reader either way: they could not pick a
+word without publicly judging the others, and could not judge one without
+changing what everybody else is shown.
+
+**The reader's own vote is never a sort key.** `myVote` is on every row and
+`rank.ts` does not read it. If it did, two readers would see two different
+primary answers for one word and the shared corpus view would quietly become a
+personalised one.
+
+**A score moves the answer only at a margin of two.** `VOTE_MARGIN_THRESHOLD`
+is the bounded amendment to M194's "no reordering". Below the margin the score
+counts as nothing, so on a low-traffic headword one drive-by vote cannot flip
+the word every later reader copies and saves. An imported edge leads a generated
+one regardless of score.
+
+**The note is optional at the schema, not only nullable at the column.** A lone
+candidate has nothing to disambiguate, and a model forced to fill the field
+would invent a usage claim that reads as authoritative. Every imported edge and
+every edge generated before prompt v2 carries `null`, and a row with no note
+renders nothing rather than promising one.
+
+Not done here: no backfill. A word translated before prompt v2 grows notes only
+if `pnpm cli translation retract` drops its edges and a reader looks it up
+again.
 
 ## Prerequisites
 

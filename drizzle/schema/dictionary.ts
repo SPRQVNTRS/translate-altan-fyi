@@ -320,6 +320,17 @@ export const translations = pgTable(
       .notNull()
       .references(() => sources.id),
     confidence: real('confidence'),
+    // One short sentence saying when this word is used rather than the others,
+    // written by the model that produced the edge.
+    //
+    // NULLABLE FOREVER, AND NOT A COLUMN TO BACKFILL. Every imported edge has
+    // none and always will: an importer copies a word-to-word or sense-to-sense
+    // fact out of Wikidata, PanLex or Tatoeba, and none of those sources carries
+    // a usage sentence to copy. An edge generated before prompt v2 has none
+    // either, because the field did not exist when it was written. So a reader
+    // seeing no note is the ordinary case, not a gap waiting to be filled, and
+    // no default could be honest about a word nobody wrote a note for.
+    note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

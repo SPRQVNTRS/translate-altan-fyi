@@ -141,6 +141,7 @@ function row(overrides: Partial<TranslationRow> = {}): TranslationRow {
     lemma: 'devirmek',
     pos: 'verb',
     confidence: 0.9,
+    note: null,
     generated: true,
     up: 0,
     down: 0,

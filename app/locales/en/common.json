@@ -309,7 +309,10 @@
     "retry": "Try again",
     "generated": "Generated",
     "generatedHint": "Made by a language model. It can contain mistakes.",
-    "tooLong": "That text is too long to translate. Try 200 characters or less."
+    "tooLong": "That text is too long to translate. Try 200 characters or less.",
+    "alternatives": "Other translations",
+    "useThis": "Use this translation as the answer",
+    "copyAll": "Copy all translations"
   },
   "attribution": {
     "metaTitle": "Sources",

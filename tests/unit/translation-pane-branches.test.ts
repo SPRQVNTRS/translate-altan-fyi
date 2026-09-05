@@ -20,7 +20,9 @@ import assert from 'node:assert/strict';
 import type { TranslationPanel } from '#app/lib/translation/panel.server';
 import {
   initialTranslationPaneState,
+  translationPaneAlternatives,
   translationPaneEndpoints,
+  translationPanePrimary,
   translationPaneReducer,
   translationPaneSeedKey,
   translationPaneText,
@@ -37,7 +39,17 @@ const PHRASE: TranslationPaneTarget = { kind: 'phrase', text: 'Das auto volltank
 const WORD_READY: TranslationPanel = {
   state: 'ready',
   translations: [
-    { translationId: 'edge-1', lemma: 'devirmek', pos: 'verb', confidence: 0.9, generated: true, up: 0, down: 0, myVote: null },
+    {
+      translationId: 'edge-1',
+      lemma: 'devirmek',
+      pos: 'verb',
+      confidence: 0.9,
+      note: null,
+      generated: true,
+      up: 0,
+      down: 0,
+      myVote: null,
+    },
   ],
 };
 
@@ -50,6 +62,7 @@ const PHRASE_READY: TranslationPanel = {
       lemma: 'arabayı doldurmak',
       pos: null,
       confidence: null,
+      note: null,
       generated: true,
       up: 0,
       down: 0,
@@ -94,10 +107,28 @@ describe('a word and a phrase answer through one state machine', () => {
       type: 'adopted',
       panel: PHRASE_READY,
     });
-    assert.equal(translationPaneText(state), 'arabayı doldurmak');
+    assert.equal(translationPaneText(state, null), 'arabayı doldurmak');
     // The defect this milestone exists for: the answer was the reader's own
     // sentence, lower-cased, echoed back under the heading "Translation".
-    assert.notEqual(translationPaneText(state), 'das auto volltanken');
+    assert.notEqual(translationPaneText(state, null), 'das auto volltanken');
+  });
+});
+
+describe('a phrase answer, which is one row and therefore has no alternatives', () => {
+  // The selection control the word branch gained is not a second phrase branch:
+  // a sentence is translated whole and comes back as exactly one row, so it is
+  // rendered as a primary with nothing under it and no vote control beside it.
+  // Asserted rather than assumed, because "there is only ever one row" is a
+  // property of the phrase writer, not of this pane.
+  const state = initialTranslationPaneState(PHRASE_READY);
+
+  it('reads the sentence as the answer, with nothing offered beside it', () => {
+    assert.equal(translationPanePrimary(state, null)?.lemma, 'arabayı doldurmak');
+    assert.deepEqual(translationPaneAlternatives(state, null), []);
+  });
+
+  it('answers with the sentence whatever id is held, since no other row exists', () => {
+    assert.equal(translationPanePrimary(state, 'edge-1')?.lemma, 'arabayı doldurmak');
   });
 });
 

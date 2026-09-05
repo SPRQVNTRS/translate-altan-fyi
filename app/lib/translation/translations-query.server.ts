@@ -42,6 +42,7 @@ import type { LanguageCode } from '#app/lib/dictionary/detect-language';
 import { GENERATED_SOURCE_SLUG } from '#app/lib/dictionary/generated-source';
 import { SERVED_LICENCES } from '#app/lib/dictionary/licences';
 import type { DictionaryDb } from '#app/lib/dictionary/queries.server';
+import { rankTranslationRows } from '#app/lib/translation/rank';
 import { headwords, senses, sources, translationVotes, translations } from '#drizzle/schema';
 
 /** One translation as the search pane renders it. */
@@ -61,6 +62,15 @@ export interface TranslationRow {
   pos: string | null;
   /** The edge's own confidence, 0 to 1, or `null` for an imported edge that states none. */
   confidence: number | null;
+  /**
+   * One short sentence saying when this word is used rather than the others, or
+   * `null`.
+   *
+   * `null` IS THE ORDINARY CASE, not a gap. Every imported edge has none, and a
+   * generated edge written before prompt v2 has none either, so a screen reads
+   * this as "there is nothing to add" rather than as "the note has not loaded".
+   */
+  note: string | null;
   /**
    * Whether a language model wrote this edge.
    *
@@ -125,9 +135,18 @@ function decodeStoredVote(value: number | null): -1 | 1 | null {
  * one, and a reader is not shown a "Generated" marker on a word an import
  * already carried.
  *
+ * THE SQL ORDER IS FOR THE DEDUPE. THE RANKING IS FOR THE READER.
+ *   They are two different questions over the same rows, and the `ORDER BY`
+ *   answers only the first. It encodes the dedupe preference, imported ahead of
+ *   generated for the same lemma and part of speech, so the loop below keeps the
+ *   imported row and drops the generated copy. Reordering the statement to
+ *   please a reader would hand every duplicate to the model. `rankTranslationRows`
+ *   then answers the second question over the survivors.
+ *
  * @param db The database handle.
  * @param params The headword and the language to translate into.
- * @returns The rows, alphabetical by word. Empty means this pair has no answer yet.
+ * @returns The rows, in reading order: the answer first, then the alternatives.
+ *   Empty means this pair has no answer yet.
  */
 export async function listTranslationsInto(
   db: DictionaryDb,
@@ -161,6 +180,7 @@ export async function listTranslationsInto(
       lemma: targetHeadwords.lemma,
       pos: targetHeadwords.pos,
       confidence: translations.confidence,
+      note: translations.note,
       sourceSlug: sources.slug,
       up: upCount,
       down: downCount,
@@ -201,11 +221,12 @@ export async function listTranslationsInto(
       lemma: row.lemma,
       pos: row.pos,
       confidence: row.confidence,
+      note: row.note,
       generated: row.sourceSlug === GENERATED_SOURCE_SLUG,
       up: row.up,
       down: row.down,
       myVote: decodeStoredVote(row.myVote),
     });
   }
-  return deduplicated;
+  return rankTranslationRows(deduplicated);
 }

@@ -1,5 +1,5 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Check, Copy, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Check, Copy, CopyPlus, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Form, useNavigation } from 'react-router';
 import { EnrichmentSection } from '#app/components/enrichment-section';
@@ -89,13 +89,115 @@ export interface SearchPanesProps {
  * rather than pretending to be prose.
  */
 
+/** What one copy button in the answer card's header needs. */
+interface CopyButtonProps {
+  /**
+   * What lands on the clipboard. Empty disables the button: there is nothing
+   * dishonest about a control that cannot act saying so.
+   */
+  text: string;
+  /** What the button is for, read by a screen reader and shown on hover. */
+  label: string;
+  /** The icon at rest. The tick that replaces it after a copy is the same on every button. */
+  icon: ReactNode;
+}
+
+/**
+ * A button that puts one string on the clipboard.
+ *
+ * IT EXISTS SO THE GUARD IS WRITTEN ONCE. There are two of these in the card
+ * header now, one for the answer and one for every candidate, and
+ * `navigator.clipboard` is undefined on an insecure origin, which local
+ * development over plain HTTP on a phone is. Written twice, the second copy is
+ * where the guard is eventually forgotten and a click handler throws.
+ *
+ * THE "COPIED" STATE RESETS BY REMOUNTING, and the card above is keyed on the
+ * answer, so a new answer, or a different one chosen from the alternatives, is a
+ * new button with a fresh state rather than an effect watching a prop.
+ */
+function CopyButton({ text, label, icon }: CopyButtonProps) {
+  const { t } = useTranslation();
+  const [isCopied, setIsCopied] = useState(false);
+  const [hasClipboard, setHasClipboard] = useState(false);
+  const canCopy = text !== '' && hasClipboard;
+
+  /**
+   * THE CLIPBOARD IS PROBED AFTER MOUNT, AND THAT IS NOT THE DERIVED-STATE
+   * ANTI-PATTERN. `navigator` does not exist while the server renders, so the
+   * probe CANNOT run during render: this is a browser environment being read,
+   * which is exactly what an effect is for, and not state computed from props.
+   *
+   * READ IT DURING RENDER AND THE BUTTON IS DEAD ON ARRIVAL. That is the defect
+   * this replaced: the server shipped `disabled=""` every time, the first client
+   * render said `disabled={false}`, and React reported the hydration mismatch
+   * and LEFT THE SERVER'S ATTRIBUTE IN PLACE, because it does not repair a
+   * mismatched attribute without a re-render. A browser walk of
+   * `/?q=umwerfen&from=de&to=tr` found BOTH copy buttons disabled on first
+   * paint, and working only after an unrelated click re-rendered the card. A
+   * reader who lands on an answer and reaches straight for copy got nothing.
+   *
+   * THE GUARD ITSELF STAYS. `navigator.clipboard` is genuinely undefined on an
+   * insecure origin, which local development over plain HTTP on a phone is, so
+   * the button must still disable itself there rather than throw inside a click
+   * handler. Only the MOMENT of the check moved.
+   */
+  useEffect(() => {
+    setHasClipboard(globalThis.navigator?.clipboard !== undefined);
+  }, []);
+
+  // An inner async function rather than a then-chain: the lint gate's
+  // `promise(always-return)` rule refuses a `.then` whose body returns nothing,
+  // and a copy button's callback has nothing to return.
+  const handleCopy = (): void => {
+    if (!canCopy) return;
+    const copy = async (): Promise<void> => {
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+    };
+    // A refused clipboard, which a browser permission prompt can produce,
+    // leaves the answer on screen and the button unchanged. There is nothing to
+    // tell the reader that they could not act on themselves.
+    void copy().catch(() => undefined);
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={handleCopy}
+      disabled={!canCopy}
+      aria-label={isCopied ? t('search.copied') : label}
+    >
+      {isCopied ?
+        <Check className="size-4" aria-hidden="true" />
+      : icon}
+    </Button>
+  );
+}
+
 /** What the read-only answer field renders. */
 interface ResultFieldProps {
   /**
-   * The answer as one string, for the copy button. Empty when there is nothing
-   * to copy yet, which disables the button.
+   * The ANSWER as one string, which is the primary word alone. Empty when there
+   * is nothing to copy yet, which disables the button.
    */
   text: string;
+  /**
+   * Every candidate word, once each, for the second button.
+   *
+   * IT IS A SEPARATE BUTTON RATHER THAN A REPLACEMENT. A reader comparing three
+   * candidate terms to paste somewhere loses that outright if copy-all goes
+   * away, so the join was relocated rather than deleted when the answer became
+   * one word.
+   */
+  allText: string;
+  /**
+   * Whether the pane is showing more than one row, which is the only thing the
+   * copy-all button is for. One row makes it a duplicate of the button beside
+   * it.
+   */
+  hasAlternatives: boolean;
   /**
    * The card's body: the translation pane, which owns every state a translation
    * can be in and renders the answer itself.
@@ -132,33 +234,17 @@ interface ResultFieldProps {
  * alike read as one thing, and tinting only the box a reader types into split
  * the pair into a bright half and a plain half stacked under it.
  *
- * COPYING IS GUARDED, NOT ASSUMED. `navigator.clipboard` is undefined on an
- * insecure origin, which local development over plain HTTP on a phone is, so
- * the button disables itself rather than throwing inside a click handler.
+ * IT CARRIES TWO COPY BUTTONS, AND BOTH ARE `CopyButton` ABOVE. The first takes
+ * the answer, the second every candidate; the clipboard guard and the "Copied"
+ * state live there, written once, rather than twice here.
  *
- * THE "COPIED" STATE RESETS BY REMOUNTING. The caller keys this component on
- * the answer, so a new answer is a new component with a fresh state rather
+ * THE CARD REMOUNTS ON A NEW ANSWER. The caller keys this component on the
+ * answer text, which is the PRIMARY word now, so choosing a different primary
+ * from the alternatives also resets both buttons. That is a fresh state rather
  * than an effect that watches a prop and corrects itself afterwards.
  */
-function ResultField({ text, body, favorite }: ResultFieldProps) {
+function ResultField({ text, allText, hasAlternatives, body, favorite }: ResultFieldProps) {
   const { t } = useTranslation();
-  const [isCopied, setIsCopied] = useState(false);
-  const canCopy = text !== '' && globalThis.navigator?.clipboard !== undefined;
-
-  // An inner async function rather than a then-chain: the lint gate's
-  // `promise(always-return)` rule refuses a `.then` whose body returns nothing,
-  // and a copy button's callback has nothing to return.
-  const handleCopy = (): void => {
-    if (!canCopy) return;
-    const copy = async (): Promise<void> => {
-      await navigator.clipboard.writeText(text);
-      setIsCopied(true);
-    };
-    // A refused clipboard, which a browser permission prompt can produce,
-    // leaves the answer on screen and the button unchanged. There is nothing to
-    // tell the reader that they could not act on themselves.
-    void copy().catch(() => undefined);
-  };
 
   return (
     <div className="rounded-2xl border p-5">
@@ -166,18 +252,19 @@ function ResultField({ text, body, favorite }: ResultFieldProps) {
         <p className="text-sm font-medium">{t('search.resultLabel')}</p>
         <div className="flex items-center gap-1">
           {favorite}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleCopy}
-            disabled={!canCopy}
-            aria-label={isCopied ? t('search.copied') : t('search.copy')}
-          >
-            {isCopied ?
-              <Check className="size-4" aria-hidden="true" />
-            : <Copy className="size-4" aria-hidden="true" />}
-          </Button>
+          {/* THE ANSWER, AND THEN EVERY CANDIDATE. The first button copies the
+              one word the card is answering with, which is what the star saves
+              and what the device history logs. The second appears only when
+              there is more than one row, and is the only place the joined list
+              still exists. */}
+          <CopyButton text={text} label={t('search.copy')} icon={<Copy className="size-4" aria-hidden="true" />} />
+          {hasAlternatives && (
+            <CopyButton
+              text={allText}
+              label={t('translation.copyAll')}
+              icon={<CopyPlus className="size-4" aria-hidden="true" />}
+            />
+          )}
         </div>
       </div>
 
@@ -380,6 +467,8 @@ export function SearchPanes({
             <ResultField
               key={resultText}
               text={resultText}
+              allText={translation.allText}
+              hasAlternatives={translation.alternatives.length > 0}
               body={<TranslationPane controller={translation} to={direction.to} />}
               // Nothing to keep until there is a word AND an answer: a star
               // over an empty pane would save the empty string as the

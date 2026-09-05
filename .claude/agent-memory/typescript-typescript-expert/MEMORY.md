@@ -73,3 +73,7 @@
 - [checkTriggerRateLimit spends on every call](project_translate_rate_limit_last_of_three_guards_m193.md), so panel.server.ts asks it last; enrichment's own call site is a separate, out-of-scope gap
 - [The budget view collapses its reason](project_translate_budget_view_collapses_reason.md), pane-state.ts owns layout not copy; translation-pane.tsx reads state.panel.reason itself
 - [Attribution's generated-source check is DB-free by extraction site](project_translate_attribution_generated_source_slug.md) — isGeneratedSource lives in generated-source.ts, not attribution.tsx, because attribution.tsx imports drizzle/db
+- [rank.ts is the one reading order](project_translate_rank_is_the_one_order.md) — myVote is never a sort key and a vote needs a margin of 2; the SQL ORDER BY stays the DEDUPE's
+- [One row is the answer, the rest are alternatives](project_translate_primary_answer_and_alternatives.md) — `translationPaneText` takes a chosenId and returns ONE lemma; the tap is ephemeral and posts nothing
+- [A candidate carries an optional usage note](project_translate_candidate_note_prompt_v2.md) — prompt v2 renames v1.md away, and note is refreshed to null on a re-run
+- [A browser probe read during render ships the server's answer](project_translate_env_probe_needs_a_mount_effect.md) — SSR emits `disabled=""`, React never repairs the mismatch; probe in a mount effect

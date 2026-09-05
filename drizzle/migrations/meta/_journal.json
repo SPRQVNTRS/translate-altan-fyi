@@ -155,6 +155,13 @@
       "when": 1788593800748,
       "tag": "0021_greedy_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788602428702,
+      "tag": "0022_peaceful_betty_brant",
+      "breakpoints": true
     }
   ]
 }

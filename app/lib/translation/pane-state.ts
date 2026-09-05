@@ -226,12 +226,92 @@ export function translationPaneRows(state: TranslationPaneState): TranslationRow
 }
 
 /**
- * The answer as one string, for the copy button.
+ * The one row that IS the answer, or null when there is none yet.
+ *
+ * A CARD OF COEQUAL WORDS IS A CARD WITH NO ANSWER ON IT. Three generated words
+ * side by side made every consumer of this pane take all three: the copy button
+ * copied the join, the star saved the join, and the device history logged the
+ * join. A reader who had already decided which word was right could not say so
+ * anywhere. So one row is the answer and the rest are alternatives, and every
+ * consumer reads the answer.
+ *
+ * THE CHOICE IS THE READER'S, AND IT IS NOT A VOTE. `chosenId` comes from a tap
+ * on an alternative. It writes nothing and posts nothing: a vote is a statement
+ * about the shared corpus and belongs to everybody, while picking which word to
+ * copy is a statement about this screen and belongs to nobody else. `rank.ts`
+ * decides the order for everyone, and it deliberately does not read `myVote`.
+ *
+ * AN UNKNOWN ID FALLS BACK TO THE FIRST ROW, NEVER TO NOTHING. A poll can land a
+ * new row set while a choice is held, and a card that emptied itself because the
+ * chosen row is gone would be a worse fault than the one this function fixes.
+ *
+ * @param state Where the pane stands.
+ * @param chosenId The row the reader tapped, or null while they have tapped none.
+ * @returns The primary row, or null on every state with no rows.
+ */
+export function translationPanePrimary(
+  state: TranslationPaneState,
+  chosenId: string | null,
+): TranslationRow | null {
+  const rows = translationPaneRows(state);
+  return rows.find((row) => row.translationId === chosenId) ?? rows[0] ?? null;
+}
+
+/**
+ * Every row that is not the answer, in the order the server sent them.
+ *
+ * THE SERVER'S ORDER SURVIVES A CHOICE. `rankTranslationRows` already put these
+ * rows in reading order, so promoting one of them must not also reshuffle the
+ * others: the reader picked a word, not a new ranking.
+ *
+ * @param state Where the pane stands.
+ * @param chosenId The row the reader tapped, or null while they have tapped none.
+ * @returns The remaining rows, empty when there is one row or none.
+ */
+export function translationPaneAlternatives(
+  state: TranslationPaneState,
+  chosenId: string | null,
+): TranslationRow[] {
+  const primary = translationPanePrimary(state, chosenId);
+  if (primary === null) return [];
+  return translationPaneRows(state).filter((row) => row.translationId !== primary.translationId);
+}
+
+/**
+ * The answer as one string: the primary word alone.
+ *
+ * THIS IS THE LINE THAT STOPS THE ALTERNATIVES BEING DRAGGED ALONG. The copy
+ * button, the favourite snapshot and the device-local search history all read
+ * this one value, so a reader who marked one word as their answer keeps, copies
+ * and logs that word rather than every candidate the model offered. The joined
+ * form still exists for a reader comparing candidates, as
+ * `translationPaneAllText` below, and it is a separate button.
+ *
+ * @param state Where the pane stands.
+ * @param chosenId The row the reader tapped, or null while they have tapped none.
+ * @returns The primary word, or an empty string on every state with no answer.
+ */
+export function translationPaneText(state: TranslationPaneState, chosenId: string | null): string {
+  return translationPanePrimary(state, chosenId)?.lemma ?? '';
+}
+
+/**
+ * Every word of the answer as one string, for the copy-all button.
  *
  * DEDUPLICATED ON THE WORD, because two sources naming the same word is a fact
  * about the dictionary rather than about the word, and a reader copying an
  * answer wants the words once each.
+ *
+ * IT IS NOT WHAT ANYTHING KEEPS. Nothing is saved or recorded from this value:
+ * it exists for the reader who is comparing three candidate terms and wants all
+ * three in a document somewhere. That reader used to be served by the only copy
+ * button there was, and deleting the join outright would have taken the case
+ * away rather than moved it.
+ *
+ * @param state Where the pane stands.
+ * @returns The words once each, comma separated, or an empty string when there
+ *   are none.
  */
-export function translationPaneText(state: TranslationPaneState): string {
+export function translationPaneAllText(state: TranslationPaneState): string {
   return [...new Set(translationPaneRows(state).map((row) => row.lemma))].join(', ');
 }

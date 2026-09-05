@@ -9,6 +9,9 @@ import type { TranslationPanel, TranslationRefusal, TranslationRow } from '#app/
 import {
   initialTranslationPaneState,
   isTranslationPanePolling,
+  translationPaneAllText,
+  translationPaneAlternatives,
+  translationPanePrimary,
   translationPaneReducer,
   translationPaneRows,
   translationPaneText,
@@ -49,10 +52,61 @@ const QUIET_LINE = 'text-sm text-muted-foreground';
 export interface TranslationPaneController {
   /** The one value the pane renders from. */
   view: TranslationPaneView;
-  /** The rows to list. Empty for every view but `ready`. */
+  /**
+   * Every row of the answer, in the order the server sent them. Empty for every
+   * view but `ready`.
+   *
+   * NOTHING RENDERS THIS FLAT ANY MORE, and nothing should. A list of coequal
+   * words is a card with no answer on it, which is the defect `primary` and
+   * `alternatives` below exist to fix. It is kept because it is the undivided
+   * list, and a consumer that needs to count the rows should count them here
+   * rather than add one to the alternatives.
+   */
   rows: TranslationRow[];
+  /**
+   * The one row that answers the reader, or `null` when there is no answer yet.
+   *
+   * IT IS THE ROW EVERY CONSUMER OF THIS PANE ACTS ON. The card renders it at
+   * reading size, the copy button copies it, the star saves it and the device
+   * history logs it. Before this existed the card drew three coequal words and
+   * all three of those consumers took every one of them, so a reader who had
+   * decided which word was right still copied and kept the other two.
+   */
+  primary: TranslationRow | null;
+  /**
+   * The rows that are not the answer, in the order the server sent them.
+   *
+   * They are shown, smaller, under the answer, and each one is a tap away from
+   * becoming it. The order is `rank.ts`'s and stays `rank.ts`'s: a choice
+   * promotes one word and reshuffles nothing.
+   */
+  alternatives: TranslationRow[];
+  /**
+   * Make one of the rows the answer.
+   *
+   * IT WRITES NOTHING AND POSTS NOTHING, and that is the whole design. A vote is
+   * a statement about the shared corpus, so it changes what every reader sees;
+   * choosing which of three words is MY answer is a view action on this screen
+   * and must not be one. Fusing the two would trap the reader either way: they
+   * could not pick a word without publicly judging the others, and could not
+   * judge one without changing what everybody else is shown. The vote controls
+   * beside each row are untouched by this.
+   *
+   * @param translationId The row to promote. An id that is not in the current
+   *   rows leaves the first row as the answer.
+   */
+  choose: (translationId: string) => void;
   /** The answer as one string, for the copy button above. Empty when there is no answer. */
   text: string;
+  /**
+   * Every word of the answer, once each, for the copy-all button.
+   *
+   * IT IS FOR COMPARING, NOT FOR KEEPING. A reader weighing three candidate
+   * terms wants all three somewhere they can look at them; nothing is saved or
+   * recorded from this string, and `text` above is what the star and the history
+   * read.
+   */
+  allText: string;
   /** Ask the server to try again. Only ever called from the `failed` view. */
   retry: () => void;
   /** Whether a retry is in flight, so the button can say so and refuse a second press. */
@@ -113,6 +167,16 @@ export function useTranslationPane({ panel, target }: UseTranslationPaneParams):
   const loaded = panel ?? NO_ENTRY_PANEL;
   const [state, setState] = useState<TranslationPaneState>(() => initialTranslationPaneState(loaded));
 
+  // THE READER'S CHOICE, HELD BESIDE THE MACHINE RATHER THAN INSIDE IT, AND THAT
+  // DOES NOT BREAK THE ONE-STATE-VALUE RULE ABOVE. `translationPaneView` is
+  // still the single switch the pane renders from, and this id decides none of
+  // its six values: a chosen row cannot make a `failed` pane `ready`, cannot
+  // start or stop a poll, and cannot age the clock. It is read only inside the
+  // `ready` view, to say which of that view's rows is the answer. Putting it in
+  // `TranslationPaneState` would have made it a second state value the reducer
+  // and every transition had to carry, for a thing no transition depends on.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+
   // RE-SEEDING ON A NEW ANSWER, IN RENDER RATHER THAN IN AN EFFECT. A search for
   // another word arrives as new props on the same component, and an effect that
   // corrected the state afterwards would render one frame of the previous word's
@@ -120,11 +184,18 @@ export function useTranslationPane({ panel, target }: UseTranslationPaneParams):
   // STATE and not the panel object, which is a fresh object on every navigation:
   // keying on identity would throw away a poll result the moment anything else
   // on the page re-rendered.
+  //
+  // THE CHOICE IS DROPPED HERE TOO, and this is the only place it is dropped. A
+  // new answer is a new set of rows, so a chosen id held across it would name a
+  // row belonging to the previous word. It rides the existing re-seed rather
+  // than an effect of its own for the same reason the state does: an effect
+  // would leave one frame of the old choice on the new answer.
   const seed = `${translationPaneSeedKey(target)}:${loaded.state}`;
   const [seededFrom, setSeededFrom] = useState(seed);
   if (seededFrom !== seed) {
     setSeededFrom(seed);
     setState(initialTranslationPaneState(loaded));
+    setChosenId(null);
   }
 
   const endpoints = translationPaneEndpoints(target);
@@ -178,6 +249,12 @@ export function useTranslationPane({ panel, target }: UseTranslationPaneParams):
     setState((previous) => translationPaneReducer(previous, { type: 'adopted', panel: answered }));
   }, [answered]);
 
+  // Wrapped rather than handing out `setChosenId` itself: the setter also
+  // accepts an updater function, and the controller's contract is one id.
+  const choose = (translationId: string): void => {
+    setChosenId(translationId);
+  };
+
   const retry = (): void => {
     if (retryUrl === null) return;
     void fetcher.submit(null, { method: 'post', action: retryUrl });
@@ -186,7 +263,11 @@ export function useTranslationPane({ panel, target }: UseTranslationPaneParams):
   return {
     view: translationPaneView(state),
     rows: translationPaneRows(state),
-    text: translationPaneText(state),
+    primary: translationPanePrimary(state, chosenId),
+    alternatives: translationPaneAlternatives(state, chosenId),
+    choose,
+    text: translationPaneText(state, chosenId),
+    allText: translationPaneAllText(state),
     retry,
     isRetrying: fetcher.state !== 'idle',
     refusalReason: state.panel.state === 'budget' ? state.panel.reason : null,
@@ -260,10 +341,17 @@ function GeneratedMarker() {
 }
 
 /**
- * One answer: the text, its part of speech, the marker when a model wrote it,
- * and whatever judgement control the caller decided belongs beside it.
+ * One answer: the word, its part of speech, the marker when a model wrote it,
+ * whatever judgement control the caller decided belongs beside it, and the
+ * model's usage note underneath.
  *
- * THE VOTE ARRIVES AS A NODE RATHER THAN BEING BUILT HERE, and that is what
+ * THE WORD ITSELF ARRIVES AS A NODE. The answer draws it as a span at reading
+ * size and an alternative draws it as a button that promotes it, and those are
+ * the only two things that differ between the two rows. Passing the node keeps
+ * one row component for both: an `isPrimary` flag here would be a second place
+ * deciding what the answer looks like.
+ *
+ * THE VOTE ALSO ARRIVES AS A NODE RATHER THAN BEING BUILT HERE, and that is what
  * keeps it off a phrase answer by construction. See `TranslationPane` below for
  * where the decision is taken and why it cannot be taken here: this component
  * cannot see which branch it is rendering, and a component that cannot see it
@@ -272,19 +360,25 @@ function GeneratedMarker() {
  * THE VOTE IS ON THIS ROW AND NOT ON THE CARD. The reader is looking at several
  * words for one query, and only they know which of them is wrong. A single
  * control over the whole answer would collect a judgement nobody could act on.
+ *
+ * THE NOTE IS PROSE ABOUT THE WORD, so it is not monospaced and it does not sit
+ * on the word's own line: it is one quiet sentence under it saying when this
+ * word is used rather than the others, which is the whole reason a card with
+ * several candidates on it is readable at all. Most rows carry none.
  */
-function TranslationLine({ row, to, votes }: { row: TranslationRow; to: LanguageCode; votes: ReactNode }) {
+function TranslationLine({ row, word, votes }: { row: TranslationRow; word: ReactNode; votes: ReactNode }) {
   return (
-    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-      {/* Monospaced, like every other word under examination on this screen.
-          The part of speech beside it is prose about the word, so it is not. */}
-      <span lang={to} className="font-mono text-xl">
-        {row.lemma}
-      </span>
-      {row.pos !== null && <span className="text-xs text-muted-foreground">{row.pos}</span>}
-      {row.generated && <GeneratedMarker />}
-      {votes}
-    </li>
+    <>
+      {/* `flex-wrap` with `basis-full` inside is what lets the generated
+          marker's revealed sentence take a line of its own on a narrow screen. */}
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        {word}
+        {row.pos !== null && <span className="text-xs text-muted-foreground">{row.pos}</span>}
+        {row.generated && <GeneratedMarker />}
+        {votes}
+      </div>
+      {row.note !== null && <p className={`mt-1 ${QUIET_LINE}`}>{row.note}</p>}
+    </>
   );
 }
 
@@ -312,24 +406,78 @@ export interface TranslationPaneProps {
  */
 export function TranslationPane({ controller, to }: TranslationPaneProps) {
   const { t } = useTranslation();
-  const { view, rows, target } = controller;
+  const { view, primary, alternatives, target } = controller;
+
+  // The vote control, built inside the `headword` branch of the target and
+  // handed to whichever row is being drawn. It is one expression rather than two
+  // so the answer and its alternatives cannot end up with different rules about
+  // who may vote.
+  const votesFor = (row: TranslationRow): ReactNode =>
+    target.kind === 'headword' ?
+      <TranslationVotes translationId={row.translationId} up={row.up} down={row.down} myVote={row.myVote} />
+    : null;
 
   if (view === 'ready') {
+    // A `ready` panel with no rows at all is not something the server produces:
+    // the resolver only answers `ready` once it holds at least one row. Drawing
+    // nothing is what the empty list here used to draw anyway, so this is a
+    // guard rather than a sixth state, and it must not fall through to the
+    // no-entry line below, which would tell a reader the word is unknown.
+    if (primary === null) return null;
     return (
-      <ul className="mt-2 flex flex-col gap-2">
-        {rows.map((row) => (
+      <div className="mt-2 flex flex-col gap-4">
+        <div>
           <TranslationLine
-            key={row.translationId}
-            row={row}
-            to={to}
-            votes={
-              target.kind === 'headword' ?
-                <TranslationVotes translationId={row.translationId} up={row.up} down={row.down} myVote={row.myVote} />
-              : null
+            row={primary}
+            votes={votesFor(primary)}
+            word={
+              // Monospaced, like every other word under examination on this
+              // screen. The part of speech beside it is prose about the word,
+              // so it is not.
+              <span lang={to} className="font-mono text-xl">
+                {primary.lemma}
+              </span>
             }
           />
-        ))}
-      </ul>
+        </div>
+
+        {/* THE ALTERNATIVES, NAMED, UNDER THE ANSWER AND SMALLER THAN IT. They
+            used to be three coequal words on one list, which is a card with no
+            answer on it: the reader took the first one, a fact about the
+            alphabet rather than about the language. A plain top rule separates
+            them, never a left border accent, which DESIGN.md section 10 bans.
+
+            TAPPING ONE MAKES IT THE ANSWER, AND POSTS NOTHING. The vote buttons
+            sit BESIDE this button and never inside it: a button inside a button
+            is invalid markup, and nesting them would let a vote swallow the
+            selection press. */}
+        {alternatives.length > 0 && (
+          <section className="flex flex-col gap-2 border-t pt-3">
+            <h3 className="text-sm font-medium text-muted-foreground">{t('translation.alternatives')}</h3>
+            <ul className="flex flex-col gap-2">
+              {alternatives.map((row) => (
+                <li key={row.translationId}>
+                  <TranslationLine
+                    row={row}
+                    votes={votesFor(row)}
+                    word={
+                      <button
+                        type="button"
+                        lang={to}
+                        aria-label={t('translation.useThis')}
+                        onClick={() => controller.choose(row.translationId)}
+                        className="font-mono text-base underline underline-offset-4 hover:no-underline"
+                      >
+                        {row.lemma}
+                      </button>
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     );
   }
 

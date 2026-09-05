@@ -62,9 +62,22 @@ export interface PhrasePanelKey {
  * anyway because it identifies the row a reader is looking at, which is what a
  * report or a retraction would need. The counters are zero and the reader's own
  * vote is null for the same reason: nobody can vote on this.
+ *
+ * `note` IS NULL, AND NOT BECAUSE IT IS MISSING. The note says when one word is
+ * used rather than another, and a sentence has no other word to be chosen over.
  */
 function toRow(id: string, translation: string): TranslationRow {
-  return { translationId: id, lemma: translation, pos: null, confidence: null, generated: true, up: 0, down: 0, myVote: null };
+  return {
+    translationId: id,
+    lemma: translation,
+    pos: null,
+    confidence: null,
+    note: null,
+    generated: true,
+    up: 0,
+    down: 0,
+    myVote: null,
+  };
 }
 
 /**

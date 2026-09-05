@@ -193,6 +193,48 @@ describe('the translation candidates under one sense', () => {
     assert.equal(schema.safeParse(answerWith([{ lemma: 'x', pos: 'verb' }])).success, false, 'confidence is required');
   });
 
+  it('accepts a candidate with no usage note, which is the ordinary case', () => {
+    // `note` is optional on purpose. A required note makes a model invent a
+    // usage claim for a lone candidate with nothing to be distinguished from,
+    // and an invented note reads as authoritative on the screen.
+    assert.equal(schema.safeParse(answerWith([candidate('devirmek')])).success, true);
+  });
+
+  it('accepts a usage note that is one short sentence', () => {
+    const note = 'Wird vor allem für Gegenstände verwendet, nicht für Personen.';
+    assert.equal(
+      schema.safeParse(answerWith([{ lemma: 'devirmek', pos: 'verb', note, confidence: 'high' }])).success,
+      true,
+    );
+  });
+
+  it('rejects a usage note longer than the cap', () => {
+    // A note past a hundred and sixty characters has stopped distinguishing the
+    // word and started defining it, which is what the gloss is for.
+    const tooLong = 'a'.repeat(161);
+    assert.equal(
+      schema.safeParse(answerWith([{ lemma: 'devirmek', pos: 'verb', note: tooLong, confidence: 'high' }])).success,
+      false,
+      'a note of 161 characters was accepted',
+    );
+    assert.equal(
+      schema.safeParse(answerWith([{ lemma: 'devirmek', pos: 'verb', note: 'a'.repeat(160), confidence: 'high' }]))
+        .success,
+      true,
+      'the cap itself was refused, so the boundary is off by one',
+    );
+  });
+
+  it('rejects an empty usage note', () => {
+    // An empty string is not the same answer as leaving the field out: it would
+    // be stored, and the screen would render a blank line under the word.
+    assert.equal(
+      schema.safeParse(answerWith([{ lemma: 'devirmek', pos: 'verb', note: '', confidence: 'high' }])).success,
+      false,
+      'an empty note was accepted',
+    );
+  });
+
   it('accepts a short register note and refuses a sentence', () => {
     assert.equal(
       schema.safeParse(answerWith([{ lemma: 'x', pos: 'verb', register: 'colloquial', confidence: 'high' }])).success,

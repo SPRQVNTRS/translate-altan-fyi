@@ -352,11 +352,15 @@ async function resolveTargetSense(
  * Upserted on `(from_sense_id, to_sense_id, source_id)`, which is what makes a
  * re-run idempotent. The confidence is refreshed on a conflict, because a later
  * run under a better model is a better answer to the same question and the row
- * is the same edge either way.
+ * is the same edge either way. The usage note is refreshed for that same reason,
+ * and it is refreshed to `null` when the newer answer carried none: leaving the
+ * old note in place would put one run's sentence beside another run's
+ * confidence, and the reader would be shown a note the model no longer stands
+ * behind.
  */
 async function upsertTranslationEdge(
   tx: TransactionDb,
-  params: { fromSenseId: string; toSenseId: string; sourceId: string; confidence: number },
+  params: { fromSenseId: string; toSenseId: string; sourceId: string; confidence: number; note?: string },
   written: WrittenRowIds,
 ): Promise<void> {
   // The table's check constraint forbids an edge from a sense to itself. It
@@ -365,6 +369,10 @@ async function upsertTranslationEdge(
   // whole transaction back and lose a good answer over a degenerate row.
   if (params.fromSenseId === params.toSenseId) return;
 
+  // `?? null` rather than leaving it undefined: the column is nullable and an
+  // absent note is a written NULL, both on the insert and on the update.
+  const note = params.note ?? null;
+
   const [row] = await tx
     .insert(translations)
     .values({
@@ -372,10 +380,11 @@ async function upsertTranslationEdge(
       toSenseId: params.toSenseId,
       sourceId: params.sourceId,
       confidence: params.confidence,
+      note,
     })
     .onConflictDoUpdate({
       target: [translations.fromSenseId, translations.toSenseId, translations.sourceId],
-      set: { confidence: params.confidence },
+      set: { confidence: params.confidence, note },
     })
     .returning({ id: translations.id, inserted: sql<boolean>`(xmax = 0)` });
 
@@ -439,6 +448,7 @@ async function writeCorpusRows(db: DictionaryDb, params: WriteParams): Promise<W
             toSenseId,
             sourceId,
             confidence: CONFIDENCE_VALUES[candidate.confidence],
+            note: candidate.note,
           },
           written,
         );

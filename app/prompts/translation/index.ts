@@ -43,7 +43,7 @@ import { PromptFileNotShippedError, substitutePlaceholders } from '#app/prompts/
 export { PROMPT_VERSION } from './version';
 
 /** Where the markdown sits, relative to the repository root. */
-const PROMPT_PATH_FROM_REPO_ROOT = 'app/prompts/translation/v1.md';
+const PROMPT_PATH_FROM_REPO_ROOT = 'app/prompts/translation/v2.md';
 
 /** The template, once it has been read. `null` until the first render. */
 let cachedTemplate: string | null = null;
@@ -62,7 +62,7 @@ export function isTemplateLoaded(): boolean {
  *    been bundled into `build/server/` and the markdown was left behind.
  */
 export function promptPathCandidates(): string[] {
-  return [fileURLToPath(new URL('./v1.md', import.meta.url)), resolve(process.cwd(), PROMPT_PATH_FROM_REPO_ROOT)];
+  return [fileURLToPath(new URL('./v2.md', import.meta.url)), resolve(process.cwd(), PROMPT_PATH_FROM_REPO_ROOT)];
 }
 
 /** The first candidate path that exists. */

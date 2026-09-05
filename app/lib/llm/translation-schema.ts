@@ -66,12 +66,31 @@ export const translationCandidateSchema = z.object({
   /**
    * A one-word note on register, such as `formal` or `colloquial`.
    *
-   * The one optional field in either shape. It is genuinely optional: most words
-   * are register-neutral and a model forced to say something would invent a
+   * Optional, for the same reason `note` below is: most words are
+   * register-neutral and a model forced to say something would invent a
    * distinction. Capped at thirty characters, because a model that starts
-   * writing a sentence here has misread the field.
+   * writing a sentence here has misread the field, and the sentence it wanted
+   * to write belongs in `note`.
    */
   register: z.string().max(30).optional(),
+  /**
+   * One short sentence saying WHEN this word is used rather than the others.
+   *
+   * OPTIONAL, AND DELIBERATELY SO. A required note forces the model to invent a
+   * usage claim for a lone candidate that has nothing to disambiguate, and a
+   * wrong note reads as authoritative: the reader has no second opinion on the
+   * screen and no way to tell an observation from an invention. An absent note
+   * says nothing, which is the honest answer when there is nothing to say.
+   *
+   * IT IS NOT `register`, AND THE TWO ARE NOT MERGED. `register` is a one-word
+   * label such as `formal`, which a screen can render as a badge beside the
+   * word. This is a sentence, which a screen renders as prose under it. Folding
+   * them together would lose the label and bury the sentence.
+   *
+   * Capped at a hundred and sixty characters, because a note longer than that
+   * has stopped distinguishing the word and started defining it.
+   */
+  note: z.string().min(1).max(160).optional(),
   confidence: translationConfidenceSchema,
 });
 

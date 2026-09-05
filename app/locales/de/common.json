@@ -309,7 +309,10 @@
     "retry": "Erneut versuchen",
     "generated": "Generiert",
     "generatedHint": "Von einem Sprachmodell erstellt. Kann Fehler enthalten.",
-    "tooLong": "Dieser Text ist zu lang zum Übersetzen. Versuch es mit maximal 200 Zeichen."
+    "tooLong": "Dieser Text ist zu lang zum Übersetzen. Versuch es mit maximal 200 Zeichen.",
+    "alternatives": "Weitere Übersetzungen",
+    "useThis": "Diese Übersetzung als Antwort verwenden",
+    "copyAll": "Alle Übersetzungen kopieren"
   },
   "attribution": {
     "metaTitle": "Quellen",
