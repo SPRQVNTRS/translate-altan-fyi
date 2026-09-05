@@ -48,3 +48,28 @@ Last `translation_runs` row (unchanged since step 4, confirming no re-run): `sta
 - The literal milestone claim "the second search moves `daily_budget` by zero" does **not** hold for the aggregate `spent_usd` column, because `daily_budget` is a shared meter across two independent LLM-consuming features: the M193 de→tr translation job (`translation_runs`) and a pre-existing per-headword auto-enrichment job (`enrichments`) that fires when a reader views a headword with zero senses — which `umwerfen` still was. In this run the enrichment for `umwerfen` queued on the *first* view and happened to complete asynchronously (~70s later) around the same time as the *second* search, moving the shared budget row a second time for a reason unrelated to translation caching. The specific, correctly-scoped claim — that the translation itself does not re-run and does not cost twice — is true and directly verified: `translation_runs` count stayed at 1 across both searches, and its single row's `cost_usd` never changed. Anyone reading only the aggregate `daily_budget.spent_usd` figure as proof of "second search is free" would be misled by this overlap; the per-feature row (`translation_runs`) is the correct instrument and it is unambiguous here.
 - The "Similar spellings (n)" disclosure rendered in its English form (`Similar spellings (19)`) rather than the German form (`Ähnliche Schreibweisen (n)`) mentioned as an alternative in the task instructions — the UI language at the time was English/mixed rather than German, so this is expected, not a defect, and is noted only because the instructions explicitly named both variants.
 - `daily_budget`'s BEFORE row was dated 2026-09-03 (the most recent existing row), not 2026-09-05, because no spend had happened yet today — the AFTER step created the first 2026-09-05 row. This is consistent with "budget rows only exist for days with activity" and not an anomaly, but it means the BEFORE/AFTER comparison spans two different calendar rows rather than one row's value changing.
+
+## Operator items, closed 2026-09-05 by the agent on the operator's instruction
+
+The operator asked for the three open items to be addressed rather than held.
+They were run as follows, with the same probe method as the run above
+(`probe-m194@example.com`, created through `/sign-up`, verified and given
+`is_superadmin` with one SQL statement, deleted afterwards: `DELETE 1`, and a
+follow-up count of `probe-m194%` users reads `0`).
+
+- PASS Item 1, the de to tr answer read and judged. The seven Turkish lemmas for
+  `umwerfen` are correct for the three senses the German verb carries: knocking a
+  thing over (`devirmek`, `yıkmak`, `altüst etmek`), astonishing a person
+  (`afallatmak`, `sarsmak`), and upsetting a plan (`bozmak`, `değiştirmek`).
+  Nothing in the set is a wrong sense or a calque. The live `translating` to
+  `ready` transition without a reload is step 3 above, 16 seconds.
+- PASS Item 2, the second search starts no run. `translation_runs` held at 1
+  across both searches, and the single row's `cost_usd` never changed (step 5).
+  The shared `daily_budget` row did move, from a separate enrichment job on the
+  same headword, which is the meter's own behaviour and not a second translation.
+- PASS Item 3, `/super/llm` read over the tailnet at 2026-09-05, with
+  `curl --resolve translate.altan.fyi:443:100.64.0.1`. The public IP answers
+  `403` for the same path, so the fence is intact. The Corpus section renders:
+  `de tr` generated **8**, imported **6**; senses by language `de` generated
+  **4**, `tr` generated **5**. Today's spend reads `$0.0244` of the `$3.0000`
+  cap, refusals `0` and `0`.
