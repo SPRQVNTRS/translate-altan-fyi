@@ -84,3 +84,41 @@ export const MAX_TRANSLATIONS_PER_SENSE = 5;
  * headroom for a real day's reading and none for a crawler.
  */
 export const MAX_TRANSLATION_RUNS_PER_DAY = 200;
+
+/**
+ * The longest piece of running text this installation will translate, in
+ * characters, measured on the text as typed.
+ *
+ * IT IS A REFUSAL, NEVER A TRUNCATION, and that is the whole reason the number
+ * lives here rather than inside a `slice`. Cutting a sentence at 200 characters
+ * would send the model a sentence the reader did not type, and present what
+ * came back as the answer to the one they did. A reader cannot see that; they
+ * would read a confident half-answer and trust it. So the guard refuses, says
+ * so, and leaves the box alone.
+ *
+ * TWO HUNDRED, because it is the length of a long ordinary sentence and a
+ * fraction of a paragraph. It is also the first guard the trigger asks, since
+ * it costs nothing and cannot be wrong: it needs no query, no clock and no
+ * shared counter.
+ *
+ * IT IS NOT `PHRASE_TOKEN_LIMIT`. That constant caps how many words the
+ * DICTIONARY lookup will match a phrase against, which is a different question
+ * about a different feature, and neither one bounds the other.
+ */
+export const PHRASE_MAX_CHARS = 200;
+
+/**
+ * How many phrase runs this installation will start in one UTC day.
+ *
+ * A SECOND CAP BESIDE THE MONEY, counted separately from the word one because
+ * the two bound different things. `MAX_TRANSLATION_RUNS_PER_DAY` bounds how much
+ * generated content lands in the shared dictionary; nothing a phrase run writes
+ * reaches the dictionary at all, so this cap bounds the CALLS: it is the answer
+ * to "a script found the search box and is pasting paragraphs into it", where
+ * the money cap alone leaves a cheap model thousands of calls before anyone
+ * notices.
+ *
+ * Counted from `phrase_translations`, over rows that are `pending` or `ok`, so a
+ * failed or refused run does not spend the day's allowance.
+ */
+export const MAX_PHRASE_RUNS_PER_DAY = 200;

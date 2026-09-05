@@ -28,7 +28,6 @@
     "submit": "Übersetzen",
     "note": "Vier Sprachen. Übersetzungen, Bedeutungen und Beispiele, selbst bei Tippfehlern.",
     "resultsHeading": "Ergebnisse",
-    "resultsFor": "Ergebnisse für {{query}}",
     "noResults": "Keine Treffer für {{query}}. Schreibweise prüfen oder ein anderes Wort versuchen.",
     "examplesLabel": "Beispiele",
     "directionLabel": "Suchrichtung",
@@ -38,7 +37,6 @@
     "didYouMeanLabel": "Meintest du",
     "didYouMeanAction": "Stattdessen nach {{suggestion}} suchen.",
     "phraseWordsHeading": "Wörter in diesem Ausdruck",
-    "phraseWordsNote": "Kein Eintrag für diesen Ausdruck. Gezeigt werden Bedeutungen und Beispiele für jedes einzelne Wort.",
     "phraseTruncatedNote": "Nur die ersten {{lookedUp}} Wörter wurden durchsucht. Der Rest wurde ignoriert.",
     "phraseTokenNoResults": "Kein Wörterbucheintrag für {{token}}.",
     "phraseExamplesHeading": "Hinterlegte Sätze mit diesem Ausdruck",
@@ -49,11 +47,11 @@
     "detectedAs": "{{language}} (erkannt)",
     "swapLanguages": "Die beiden Sprachen tauschen",
     "resultLabel": "Übersetzung",
-    "wordByWordNote": "Wort für Wort. Dies ist ein Wörterbuch, es bildet keine Sätze.",
     "copy": "Übersetzung kopieren",
     "copied": "Kopiert",
     "entriesHeading": "Wörterbucheinträge, exakter Treffer und ähnliche Schreibweisen",
-    "similarSpellings": "Ähnliche Schreibweisen ({{count}})"
+    "similarSpellings": "Ähnliche Schreibweisen ({{count}})",
+    "phraseEntriesNote": "Die Wörterbucheinträge für jedes Wort. Oben steht die Übersetzung des ganzen Satzes."
   },
   "voice": {
     "start": "Zuhören",
@@ -310,7 +308,8 @@
     "failed": "Übersetzung fehlgeschlagen.",
     "retry": "Erneut versuchen",
     "generated": "Generiert",
-    "generatedHint": "Von einem Sprachmodell erstellt. Kann Fehler enthalten."
+    "generatedHint": "Von einem Sprachmodell erstellt. Kann Fehler enthalten.",
+    "tooLong": "Dieser Text ist zu lang zum Übersetzen. Versuch es mit maximal 200 Zeichen."
   },
   "attribution": {
     "metaTitle": "Quellen",

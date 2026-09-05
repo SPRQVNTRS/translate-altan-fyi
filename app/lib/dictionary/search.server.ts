@@ -626,10 +626,13 @@ export async function searchHeadwords(
 //   happens to share the most three-letter runs with the whole string, which is
 //   a coincidence rather than an answer.
 //
-//   So a phrase is answered by the two things the dictionary genuinely knows
-//   about it: what each of its WORDS means, and which recorded SENTENCES
-//   contain it. Neither is a translation of the phrase, and the screen must not
-//   present them as one, which is what `search.phraseWordsNote` says out loud.
+//   So this function answers a phrase with the two things the DICTIONARY
+//   genuinely knows about it: what each of its WORDS means, and which recorded
+//   SENTENCES contain it. Neither is a translation of the phrase, and neither is
+//   presented as one: since M195 the translation of the whole sentence comes
+//   from the model, through `phrase-panel.server.ts`, and lands in the answer
+//   card above what this function returns. `search.phraseEntriesNote` is the
+//   line naming the block underneath for what it is.
 //
 // THE EXAMPLE SEARCH IS SQL-NARROWED AND TYPESCRIPT-DECIDED.
 //   Postgres cannot fold a sentence the way `normalizeForLanguage` does, so it

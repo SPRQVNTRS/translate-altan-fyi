@@ -34,6 +34,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { desc, eq, sql } from 'drizzle-orm';
 
 import type { DictionaryDb } from '#app/lib/dictionary/queries.server';
+import type { PaginationParams } from '#app/lib/pagination.server';
 import type { VoteTally } from '#app/lib/votes/score';
 import type { VoteValue } from '#app/models/votes.server';
 import { headwords, senses, translationVotes, translations } from '#drizzle/schema';
@@ -156,34 +157,75 @@ export interface DownVotedTranslationView {
  * @returns the edges, with their word and their direction.
  */
 export async function listDownVotedTranslations(db: DictionaryDb, limit: number): Promise<DownVotedTranslationView[]> {
+  return downVotedQuery(db).limit(limit);
+}
+
+/**
+ * The one statement both readers of this list run.
+ *
+ * IT IS SHARED RATHER THAN COPIED because the grouping is the privacy rule. Two
+ * copies of a five-join aggregate would be two chances to select the account
+ * column back into the answer, and the second copy is the one nobody rereads.
+ */
+function downVotedQuery(db: DictionaryDb) {
   const fromSenses = alias(senses, 'from_senses');
   const fromHeadwords = alias(headwords, 'from_headwords');
   const toSenses = alias(senses, 'to_senses');
   const toHeadwords = alias(headwords, 'to_headwords');
 
-  return (
+  return db
+    .select({
+      translationId: translations.id,
+      lemma: toHeadwords.lemma,
+      fromLanguageCode: fromHeadwords.languageCode,
+      toLanguageCode: toHeadwords.languageCode,
+      up: UP_COUNT,
+      down: DOWN_COUNT,
+      lastVotedAt: sql<Date>`max(${translationVotes.updatedAt})`,
+    })
+    .from(translationVotes)
+    .innerJoin(translations, eq(translations.id, translationVotes.translationId))
+    .innerJoin(fromSenses, eq(fromSenses.id, translations.fromSenseId))
+    .innerJoin(fromHeadwords, eq(fromHeadwords.id, fromSenses.headwordId))
+    .innerJoin(toSenses, eq(toSenses.id, translations.toSenseId))
+    .innerJoin(toHeadwords, eq(toHeadwords.id, toSenses.headwordId))
+    // The grouping is what removes the account column from the answer. Every
+    // selected expression is either grouped or aggregated, so no row that
+    // leaves this statement can be traced back to one reader.
+    .groupBy(translations.id, toHeadwords.lemma, fromHeadwords.languageCode, toHeadwords.languageCode)
+    .having(sql`count(*) filter (where ${translationVotes.value} = -1) > 0`)
+    .orderBy(desc(sql`max(${translationVotes.updatedAt})`));
+}
+
+/**
+ * The same list, one page at a time, with the count the envelope needs.
+ *
+ * WHY IT IS A SECOND FUNCTION AND NOT A THIRD PARAMETER. `listDownVotedTranslations`
+ * answers the operator's PAGE, which shows one screenful and no navigation; this
+ * answers the API's list endpoint, which owes its caller a `total` as well. The
+ * two share the statement above rather than the signature, so the page cannot
+ * start paying for a `COUNT(*)` it never renders.
+ *
+ * THE COUNT IS RUN IN PARALLEL AND COUNTS EDGES, NOT VOTES. One edge with nine
+ * down-votes is one row in the list, so counting the vote rows would report a
+ * total the caller can never page to.
+ *
+ * @param db The database handle.
+ * @param pagination How many rows, and where to start.
+ * @returns The page, and how many down-voted edges exist in total.
+ */
+export async function listDownVotedTranslationsPage(
+  db: DictionaryDb,
+  pagination: PaginationParams,
+): Promise<{ rows: DownVotedTranslationView[]; total: number }> {
+  const [rows, totalRow] = await Promise.all([
+    downVotedQuery(db).limit(pagination.limit).offset(pagination.offset),
     db
-      .select({
-        translationId: translations.id,
-        lemma: toHeadwords.lemma,
-        fromLanguageCode: fromHeadwords.languageCode,
-        toLanguageCode: toHeadwords.languageCode,
-        up: UP_COUNT,
-        down: DOWN_COUNT,
-        lastVotedAt: sql<Date>`max(${translationVotes.updatedAt})`,
-      })
+      .select({ value: sql<number>`count(distinct ${translationVotes.translationId})`.mapWith(Number) })
       .from(translationVotes)
-      .innerJoin(translations, eq(translations.id, translationVotes.translationId))
-      .innerJoin(fromSenses, eq(fromSenses.id, translations.fromSenseId))
-      .innerJoin(fromHeadwords, eq(fromHeadwords.id, fromSenses.headwordId))
-      .innerJoin(toSenses, eq(toSenses.id, translations.toSenseId))
-      .innerJoin(toHeadwords, eq(toHeadwords.id, toSenses.headwordId))
-      // The grouping is what removes the account column from the answer. Every
-      // selected expression is either grouped or aggregated, so no row that
-      // leaves this statement can be traced back to one reader.
-      .groupBy(translations.id, toHeadwords.lemma, fromHeadwords.languageCode, toHeadwords.languageCode)
-      .having(sql`count(*) filter (where ${translationVotes.value} = -1) > 0`)
-      .orderBy(desc(sql`max(${translationVotes.updatedAt})`))
-      .limit(limit)
-  );
+      .where(eq(translationVotes.value, -1))
+      .then((result) => result[0]),
+  ]);
+
+  return { rows, total: Number(totalRow?.value ?? 0) };
 }

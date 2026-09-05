@@ -45,14 +45,22 @@ export type { TranslationRow } from '#app/lib/translation/translations-query.ser
 /**
  * Which guard turned a trigger away.
  *
- * ALL THREE RENDER THE SAME SENTENCE, and the distinction is kept anyway. The
- * reader is told one thing, that today's limit is reached and tomorrow is when
- * to come back, because none of the three is actionable and naming the machinery
- * would only be noise. An operator reading a log, or a test asserting the gate
- * ORDER, needs to know which of the three spoke, and a union that collapsed them
- * could not say.
+ * THE FIRST THREE RENDER THE SAME SENTENCE, and the distinction is kept anyway.
+ * The reader is told one thing, that today's limit is reached and tomorrow is
+ * when to come back, because none of the three is actionable and naming the
+ * machinery would only be noise. An operator reading a log, or a test asserting
+ * the gate ORDER, needs to know which of the three spoke, and a union that
+ * collapsed them could not say.
+ *
+ * `too-long` IS THE ONE THAT READS DIFFERENTLY, AND ONLY THE PHRASE PATH EVER
+ * PRODUCES IT. It is the one refusal a reader can act on: their text is over
+ * the cap, and a shorter one goes through immediately, so telling them to come
+ * back tomorrow would be a lie. It lives in this union rather than in a sixth
+ * panel state because the pane has exactly five states and renders one
+ * component for both branches; a reader must not be able to tell which branch
+ * answered them.
  */
-export type TranslationRefusal = 'rate-limited' | 'budget' | 'daily-cap';
+export type TranslationRefusal = 'rate-limited' | 'budget' | 'daily-cap' | 'too-long';
 
 /** Translations exist for this pair. Nothing is queued and nothing is spent. */
 export interface TranslationPanelReady {

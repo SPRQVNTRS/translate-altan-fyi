@@ -75,29 +75,19 @@ export interface SearchPanesProps {
  */
 
 /**
- * A phrase, word by word: each word's first translation, in the order typed.
+ * The word-by-word join used to be computed here, in an exported helper, and it
+ * was the phrase branch's whole answer. It is gone (M195/02), name and all: the
+ * spec's own check greps this file for the old identifier and expects nothing.
  *
- * IT IS NOT A SENTENCE, AND THE SCREEN SAYS SO. This dictionary has no
- * grammar, no word order and no agreement: it can say what each word means and
- * nothing more. A field shaped like a translator's that silently returned this
- * as prose would be a lie about the product, so the note beside it is
- * compulsory rather than decorative.
- *
- * A WORD WITH NO ENTRY KEEPS ITS OWN SPELLING. Dropping it would quietly
- * shorten the reader's sentence and leave nothing on screen saying which word
- * went missing.
- *
- * Pure, and exported, so a test can drive it without a browser.
+ * WHY, so nobody reinstates it: it joined each word's first dictionary hit and
+ * KEPT THE READER'S OWN SPELLING for any word that had none, so
+ * `Das auto volltanken` came back as `das auto volltanken` under the heading
+ * "Translation". The operator read that as the button doing nothing, and they
+ * were right: it was the input echoed back. A sentence is translated whole by
+ * the model now, through the same pane the word branch renders, and the
+ * per-word entries keep their own section further down where they are useful
+ * rather than pretending to be prose.
  */
-export function phraseResult(phrase: PhraseSearchResult): string {
-  return phrase.tokens
-    .map((token) => {
-      const hit = token.hits[0];
-      if (hit === undefined) return token.token;
-      return hit.translations[0]?.lemma ?? hit.gloss ?? token.token;
-    })
-    .join(' ');
-}
 
 /** What the read-only answer field renders. */
 interface ResultFieldProps {
@@ -107,17 +97,16 @@ interface ResultFieldProps {
    */
   text: string;
   /**
-   * The card's body, on the word branch: the translation pane, which owns every
-   * state a translation can be in and renders the answer itself.
+   * The card's body: the translation pane, which owns every state a translation
+   * can be in and renders the answer itself.
    *
-   * `null` on the phrase branch, which has no pane and shows `text` directly.
-   * The single empty sentence this replaced is gone from both locale files:
-   * "no translation for this yet" described a feature that did not exist, and
-   * now that one does, the pane says which of five things is actually true.
+   * IT IS THE PANE ON BOTH BRANCHES NOW. It used to be `null` for a phrase,
+   * which is what left the phrase branch showing `text` directly with a caveat
+   * under it; a sentence is translated by the same machine as a word, so the
+   * card holds the same body either way and a reader cannot tell which branch
+   * answered them.
    */
-  body: ReactNode | null;
-  /** The word-by-word caveat, on the phrase branch only. */
-  note: string | null;
+  body: ReactNode;
   /**
    * The star, on the single-word branch only.
    *
@@ -151,7 +140,7 @@ interface ResultFieldProps {
  * the answer, so a new answer is a new component with a fresh state rather
  * than an effect that watches a prop and corrects itself afterwards.
  */
-function ResultField({ text, body, note, favorite }: ResultFieldProps) {
+function ResultField({ text, body, favorite }: ResultFieldProps) {
   const { t } = useTranslation();
   const [isCopied, setIsCopied] = useState(false);
   const canCopy = text !== '' && globalThis.navigator?.clipboard !== undefined;
@@ -192,14 +181,12 @@ function ResultField({ text, body, note, favorite }: ResultFieldProps) {
         </div>
       </div>
 
-      {/* Selectable, at reading size. The answer is the one thing on this
-          screen a reader takes away with them, by copy button or by hand. The
-          word branch hands its whole body to the pane, which renders the same
-          words at the same size and can also say what is happening when there
-          are none yet. */}
-      {body === null && text !== '' && <p className="mt-2 text-xl">{text}</p>}
+      {/* The pane renders the answer itself, at reading size and selectable:
+          it is the one thing on this screen a reader takes away with them, by
+          copy button or by hand. The card does not draw `text` beside it, and
+          must not: `text` is the SAME answer read out as one string for the
+          button above, so drawing it here would print every answer twice. */}
       {body}
-      {note !== null && <p className="mt-3 text-xs text-muted-foreground">{note}</p>}
     </div>
   );
 }
@@ -294,12 +281,14 @@ export function SearchPanes({
     formRef.current?.requestSubmit();
   };
 
-  // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE. On the word branch
-  // it comes from the pane rather than from the loader's hit, because a poll
-  // that has just landed holds words the loader could not have known about, and
-  // a copy button offering the older set would quietly hand the reader an answer
-  // the screen is not showing.
-  const resultText = phrase === null ? translation.text : phraseResult(phrase);
+  // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE, AND IT IS THE
+  // PANE'S OWN TEXT ON BOTH BRANCHES. It comes from the pane rather than from
+  // the loader, because a poll that has just landed holds an answer the loader
+  // could not have known about, and a copy button offering the older one would
+  // quietly hand the reader something the screen is not showing. The phrase
+  // branch used to read a word-by-word join instead, which is what made the copy
+  // button copy the reader's own sentence back to them.
+  const resultText = translation.text;
 
   // THE WORD THE STAR WOULD KEEP, LOOKED UP BY THE LOADER'S OWN CHOICE OF
   // HEADWORD. Reading `hits[0]` instead would be the defect the enrichment
@@ -391,8 +380,7 @@ export function SearchPanes({
             <ResultField
               key={resultText}
               text={resultText}
-              body={phrase === null ? <TranslationPane controller={translation} to={direction.to} /> : null}
-              note={phrase === null ? null : t('search.wordByWordNote')}
+              body={<TranslationPane controller={translation} to={direction.to} />}
               // Nothing to keep until there is a word AND an answer: a star
               // over an empty pane would save the empty string as the
               // translation, and a snapshot is forever.
@@ -427,13 +415,13 @@ export function SearchPanes({
                 {t('search.phraseTruncatedNote', { lookedUp: phrase.tokens.length })}
               </p>
             )}
-            {/* The phrase branch keeps the old heading: it is answering "what
-                did you search for", and its own sections name themselves
-                underneath. The word branch's heading moved into
-                `DictionaryEntries`, which is the block it actually names. */}
-            {phrase !== null && (
-              <h2 className="font-display text-base font-semibold">{t('search.resultsFor', { query: q })}</h2>
-            )}
+            {/* THE PER-WORD ENTRIES, UNDER THE ANSWER, NAMED FOR WHAT THEY
+                ARE. A "Results for <query>" heading used to sit here, over the
+                whole block, from the days when this branch had no answer of its
+                own and the word list WAS the result. The answer card above is
+                the result now, so a second heading claiming the same thing put
+                two answers on one screen. `PhraseResults` names its own two
+                sections, which is what a reader actually needs to know here. */}
             {phrase !== null && <PhraseResults phrase={phrase} from={direction.from} to={direction.to} />}
             {phrase === null && hits.length > 0 && (
               <DictionaryEntries hits={hits} to={direction.to} primaryHeadwordId={translationHeadwordId} />

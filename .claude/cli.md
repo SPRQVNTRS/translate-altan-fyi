@@ -51,6 +51,54 @@ pnpm cli api-key revoke <id>
 directly, because it is what mints the credential every other remote command
 needs. `list` and `revoke` go through the transport like everything else.
 
+### Translate
+
+```bash
+pnpm cli translate <text> --from <lang> --to <lang> [--no-wait] [--format json]
+```
+
+One command for a word and for a sentence. Nothing on the command line says
+which one the text is: the endpoint asks `normalizeQuery(q, from).isPhrase`, the
+same call the search screen makes, so the CLI and the screen can never disagree
+about what a phrase is. The answer carries the branch that ran, and its shape
+does not depend on it.
+
+```bash
+pnpm cli translate "Baum" --from de --to en
+pnpm cli translate "Das auto volltanken" --from de --to tr
+```
+
+Waiting is the default, because the answer is what you asked for. `--no-wait`
+returns whatever is true now, which for a first-time sentence is a note that a
+run is open. Either way the call goes through `POST /api/v1/translate`, so it
+carries the same length cap, rate limit, per-day cap and daily budget the screen
+does. A first call for a text costs a model call; every later call for the same
+text and direction is served from the cache and costs nothing.
+
+`--from` and `--to` must both be served languages and must differ.
+
+### Translation runs, votes and retraction
+
+```bash
+pnpm cli translation runs [--limit N] [--kind word|phrase|all] [--json]
+pnpm cli translation votes [--limit N] [--offset N] [--format json]
+pnpm cli translation retract <runId> [--json]
+```
+
+`runs` reads both ledgers. There are two since M195: a word run writes into the
+shared dictionary, a phrase run writes only its own row, so the tables are
+separate and `--kind` picks one. `all` is the default and prints the most recent
+runs of either kind, merged by time, with the kind in a column.
+
+`votes` lists the translations readers have voted down, newest vote first. It is
+the same list `/super/llm` renders, and it names no reader: the query groups the
+account column away before anything is selected. It goes through
+`GET /api/v1/translation-votes`, which asks for a superadmin key.
+
+`runs` and `retract` read Postgres directly, an ADR-0001 exception they share
+with the importers: they operate on the shared dictionary and have to work when
+the web application is the thing behaving badly.
+
 ### Dictionary imports
 
 Load an open-data dump into the shared dictionary zone. These commands talk to
@@ -150,6 +198,8 @@ cli/
 │   ├── api-key.ts
 │   ├── db.ts
 │   ├── dictionary.ts
+│   ├── translate.ts
+│   ├── translation.ts
 │   ├── data-migration/
 │   └── import/        # Open-data dictionary importers
 │       ├── index.ts

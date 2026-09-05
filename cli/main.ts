@@ -22,6 +22,7 @@ import { registerDataMigrationCommands } from './commands/data-migration/run';
 import { registerImportCommands } from './commands/import/index';
 import { registerDictionaryCommands } from './commands/dictionary';
 import { registerTranslationCommands } from './commands/translation';
+import { registerTranslateCommand } from './commands/translate';
 
 interface GlobalCliOptions {
   color?: boolean;
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
   registerImportCommands(program);
   registerDictionaryCommands(program);
   registerTranslationCommands(program);
+  registerTranslateCommand(program);
 
   await program.parseAsync(process.argv);
 }

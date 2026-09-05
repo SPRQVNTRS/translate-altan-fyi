@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { enrichmentJobPayloadSchema } from '#app/lib/enrichment/job-payload';
 import { translationJobPayloadSchema } from '#app/lib/translation/job-payload';
+import { phraseJobPayloadSchema } from '#app/lib/translation/phrase-job-payload';
 
 // =============================================================================
 // WORKFLOW TYPES
@@ -18,6 +19,7 @@ export const WORKFLOW_TYPES = {
   DUMMY: 'dummy-workflow',
   ENRICH_HEADWORD: 'enrich-headword',
   TRANSLATE_HEADWORD: 'translate-headword',
+  TRANSLATE_PHRASE: 'translate-phrase',
 } as const;
 
 export type WorkflowType = (typeof WORKFLOW_TYPES)[keyof typeof WORKFLOW_TYPES];
@@ -94,3 +96,14 @@ export type EnrichHeadwordContext = z.infer<typeof enrichHeadwordContextSchema>;
 export const translateHeadwordContextSchema = translationJobPayloadSchema;
 
 export type TranslateHeadwordContext = z.infer<typeof translateHeadwordContextSchema>;
+
+/**
+ * The phrase job's context, which is the enqueue payload unchanged.
+ *
+ * The same object on both sides ON PURPOSE, for the reason above. The rules that
+ * shape enforces, and why it is a `strictObject` carrying no reader, are written
+ * out in `#app/lib/translation/phrase-job-payload`.
+ */
+export const translatePhraseContextSchema = phraseJobPayloadSchema;
+
+export type TranslatePhraseContext = z.infer<typeof translatePhraseContextSchema>;

@@ -8,7 +8,7 @@ import { SearchPanes } from '#app/components/search-panes';
 import { useTranslationPane } from '#app/components/translation-pane';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
-import { detectLanguage } from '#app/lib/dictionary/detect-language';
+import { detectLanguage, type LanguageCode } from '#app/lib/dictionary/detect-language';
 import { suggestDidYouMean } from '#app/lib/dictionary/did-you-mean';
 import { entrySensesQuery } from '#app/lib/dictionary/entry.server';
 import { loadLandingExample } from '#app/lib/dictionary/landing-example';
@@ -16,6 +16,8 @@ import { reconcilePairWithDirection, resolveLanguagePair } from '#app/lib/dictio
 import { normalizeForLanguage, normalizeQuery } from '#app/lib/dictionary/normalize';
 import { resolveTriggeredPanel } from '#app/lib/enrichment/trigger.server';
 import { resolveTriggeredTranslationPanel, type TranslationPanel } from '#app/lib/translation/panel.server';
+import { resolveTriggeredPhrasePanel } from '#app/lib/translation/phrase-panel.server';
+import type { TranslationPaneTarget } from '#app/lib/translation/pane-state';
 import type { TitleHandle } from '#app/lib/route-title';
 import { searchHeadwords, searchPhrase } from '#app/lib/dictionary/search.server';
 import { resolveUser } from '#app/middleware/auth';
@@ -231,7 +233,43 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const query = normalizeQuery(q, direction.from);
   if (query.isPhrase) {
-    const phrase = await searchPhrase(db, { q, from: direction.from, to: direction.to });
+    // THE TWO HALVES OF A PHRASE ANSWER, IN ONE `Promise.all`, the same shape the
+    //   single-word branch below uses. `searchPhrase` reads the dictionary for
+    //   each word and `resolveTriggeredPhrasePanel` reads the phrase cache and
+    //   may queue one run for the whole sentence. Neither feeds the other, so
+    //   running them in sequence would add a round trip for nothing.
+    //
+    // M193's DECISION 8 IS REVERSED HERE, DELIBERATELY AND IN FULL (M195). That
+    //   decision said a phrase creates nothing, and this branch used to return
+    //   `translationPanel: null` because of it. What a reader got instead was
+    //   their own sentence lower-cased back at them under the heading
+    //   "Translation", which is the defect this milestone exists for. The fear
+    //   behind the old rule was a phrase costing one model call per word; that
+    //   is not what happens. ONE call translates the whole sentence, the answer
+    //   is cached on `(from, to, normalized)` so the second reader pays nothing,
+    //   and the four guards inside `resolveTriggeredPhrasePanel` decide whether
+    //   any call is made at all. Nothing it writes reaches the dictionary
+    //   tables: a sentence is not a lexical edge, and `phrase_translations` is
+    //   its own table for exactly that reason.
+    //
+    // IT IS AWAITED, like the word branch's panel and for the same reason: the
+    //   spend guards inside it decide whether a job starts, and a decision taken
+    //   after the response has gone is no decision.
+    const [phrase, translationPanel] = await Promise.all([
+      searchPhrase(db, { q, from: direction.from, to: direction.to }),
+      resolveTriggeredPhrasePanel(db, {
+        request,
+        // THE TEXT AS TYPED, AND THE FOLD THIS LOADER ALREADY COMPUTED. `q` is
+        // what a run would translate, and `query.normalized` is the cache key.
+        // Folding it a second time here would be a second implementation of the
+        // key, and the pane polls with the raw text so the server can fold it
+        // once, in `phraseKeyFromRequest`, exactly the way this line did.
+        sourceText: q,
+        sourceNormalized: query.normalized,
+        from: direction.from,
+        to: direction.to,
+      }),
+    ]);
     const phraseWordsOmitted = query.tokens.length - phrase.tokens.length;
     return {
       q,
@@ -244,10 +282,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       example: null,
       phraseWordsOmitted,
       panel: null,
-      // A phrase triggers no generation at all (decision 8). The pane is not
-      // rendered on this branch, and passing it a panel would be the first step
-      // towards a phrase costing one model call per word.
-      translationPanel: null,
+      translationPanel,
+      // NO HEADWORD, AND THERE IS NONE TO HAVE. A sentence is not a word: the
+      // enrichment panel and the favourite star below both key off this id, and
+      // neither has anything to act on here. The pane does not use it any more,
+      // it polls by the text.
       translationHeadwordId: null,
     };
   }
@@ -364,6 +403,31 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 /**
+ * What the translation pane is about on this render.
+ *
+ * IT IS A FUNCTION RATHER THAN A CHAIN OF TERNARIES IN THE RENDER because the
+ * three cases are three different things, not three values of one thing, and
+ * guard clauses say which is which. The phrase case is FIRST: a phrase search
+ * returns no hits and no headword id at all, so testing the id first would send
+ * every sentence down the `none` path and the pane would poll nothing forever.
+ *
+ * @param params Whether the loader took the phrase branch, the query as typed,
+ *   the headword the word branch chose, and the direction the search ran in.
+ * @returns The target the pane polls with.
+ */
+function paneTarget(params: {
+  phrase: boolean;
+  q: string;
+  headwordId: string | null;
+  direction: { from: LanguageCode; to: LanguageCode };
+}): TranslationPaneTarget {
+  const { phrase, q, headwordId, direction } = params;
+  if (phrase) return { kind: 'phrase', text: q, from: direction.from, to: direction.to };
+  if (headwordId !== null) return { kind: 'headword', headwordId, to: direction.to };
+  return { kind: 'none' };
+}
+
+/**
  * The home screen, laid out the way a translator is.
  *
  * THE SURFACE ITSELF LIVES IN `SearchPanes`, and this route is what feeds it.
@@ -408,12 +472,11 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
   } = loaderData;
 
   // THE PANE'S STATE MACHINE, CALLED UNCONDITIONALLY, because it is a hook. The
-  // branches with no word to translate pass a null panel and a null id, which
-  // polls nothing and renders nothing.
+  // landing branch passes a `none` target and a null panel, which polls nothing
+  // and renders nothing.
   const translation = useTranslationPane({
     panel: translationPanel,
-    headwordId: translationHeadwordId,
-    to: direction.to,
+    target: paneTarget({ phrase: phrase !== null, q, headwordId: translationHeadwordId, direction }),
   });
 
   // ONE COLUMN, ONE WIDTH, AT EVERY VIEWPORT. `max-w-2xl` and nothing wider:

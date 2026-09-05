@@ -148,6 +148,13 @@
       "when": 1788590674177,
       "tag": "0020_graceful_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788593800748,
+      "tag": "0021_greedy_galactus",
+      "breakpoints": true
     }
   ]
 }

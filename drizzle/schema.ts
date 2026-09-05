@@ -30,6 +30,11 @@ export * from './schema/enrichment';
 // rows it accounts for.
 export * from './schema/translation-runs';
 
+// Phrase translations: one typed sentence, translated whole by a model. It is
+// the run record AND the cache, and it is deliberately NOT dictionary data: the
+// reasons are written out in full at the top of the file.
+export * from './schema/phrase-translations';
+
 // Reader votes on an enrichment and on a single translation edge, plus the
 // per-headword re-enrichment cooldown. All three describe the shared
 // dictionary, and all three are reached through `getRawDb()`.

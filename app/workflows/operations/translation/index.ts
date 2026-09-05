@@ -5,3 +5,4 @@
  */
 
 export { translateHeadwordHandler, runTranslateHeadword, type TranslationRunSummary } from './translate-headword';
+export { translatePhraseHandler, runTranslatePhrase, type PhraseRunSummary } from './translate-phrase';

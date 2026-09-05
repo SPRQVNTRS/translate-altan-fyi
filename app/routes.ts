@@ -16,6 +16,18 @@ export default [
   // because enrichment writes them and the CLI reads them; the REST surface
   // over them had no caller at all.
 
+  // The product's own verb, over the API (M195/03). ONE endpoint answers a word
+  // and a sentence, and the body carries no `kind`: the branch is decided by the
+  // same `normalizeQuery` call the search loader makes, so the API and the
+  // screen can never disagree about what a phrase is. It is a bearer-token route
+  // rather than a session one because its caller is a script or the CLI, not a
+  // fetcher inside a rendered page, which is the same line `/api/v1/transcribe`
+  // sits on the other side of.
+  route('/api/v1/translate', 'routes/api.v1.translate.ts'),
+  // The operator's complaint queue, the rows `/super/llm` renders. Superadmin
+  // only: a score is an operator's instrument here, never public data.
+  route('/api/v1/translation-votes', 'routes/api.v1.translation-votes.ts'),
+
   // DB admin endpoints (superadmin only)
   route('/api/v1/admin/db/check', 'routes/api.v1.admin.db.check.ts'),
   route('/api/v1/admin/db/pool', 'routes/api.v1.admin.db.pool.ts'),
@@ -73,6 +85,16 @@ export default [
 
   route('/api/translation/:headwordId', 'routes/api.translation.$headwordId.ts'),
   route('/api/translation/:headwordId/retry', 'routes/api.translation.$headwordId.retry.ts'),
+
+  // The same two halves for a typed SENTENCE (M195/01). Both sit BESIDE
+  // `/api/translation/`, for the reason the vote route does: as
+  // `/api/translation/phrase` the `:headwordId` segment above would swallow them
+  // and every poll would reach the word loader. Both carry `authMiddleware` in
+  // the file, and the GET is gated where the word poll is public: no public
+  // surface serves a translated sentence, so an ungated read here would be a way
+  // to reach this installation's paid answers without ever signing in.
+  route('/api/translation-phrase', 'routes/api.translation-phrase.ts'),
+  route('/api/translation-phrase/retry', 'routes/api.translation-phrase.retry.ts'),
 
   // =============================================================================
   // App Shell (sidebar, mobile drawer, bottom tab bar)

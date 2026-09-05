@@ -28,7 +28,6 @@
     "submit": "Translate",
     "note": "Four languages. Translations, meanings and examples, even with spelling mistakes.",
     "resultsHeading": "Results",
-    "resultsFor": "Results for {{query}}",
     "noResults": "Nothing matched {{query}}. Check the spelling, or try another word.",
     "examplesLabel": "Examples",
     "directionLabel": "Search direction",
@@ -38,7 +37,6 @@
     "didYouMeanLabel": "Did you mean",
     "didYouMeanAction": "Search for {{suggestion}} instead.",
     "phraseWordsHeading": "Words in this phrase",
-    "phraseWordsNote": "No entry for this phrase. Showing meanings and examples for each word.",
     "phraseTruncatedNote": "Only the first {{lookedUp}} words were searched. The rest was ignored.",
     "phraseTokenNoResults": "No dictionary entry for {{token}}.",
     "phraseExamplesHeading": "Recorded sentences with this phrase",
@@ -49,11 +47,11 @@
     "detectedAs": "{{language}} (detected)",
     "swapLanguages": "Swap the two languages",
     "resultLabel": "Translation",
-    "wordByWordNote": "Word by word. This is a dictionary, so it does not build sentences.",
     "copy": "Copy the translation",
     "copied": "Copied",
     "entriesHeading": "Dictionary entries, exact word and similar spellings",
-    "similarSpellings": "Similar spellings ({{count}})"
+    "similarSpellings": "Similar spellings ({{count}})",
+    "phraseEntriesNote": "The dictionary entries for each word. The translation above is the whole sentence."
   },
   "voice": {
     "start": "Listen",
@@ -310,7 +308,8 @@
     "failed": "The translation failed.",
     "retry": "Try again",
     "generated": "Generated",
-    "generatedHint": "Made by a language model. It can contain mistakes."
+    "generatedHint": "Made by a language model. It can contain mistakes.",
+    "tooLong": "That text is too long to translate. Try 200 characters or less."
   },
   "attribution": {
     "metaTitle": "Sources",

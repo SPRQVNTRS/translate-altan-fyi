@@ -299,7 +299,14 @@ export function PhraseResults({ phrase, from, to }: PhraseResultsProps) {
     <div className="flex flex-col gap-5">
       <div>
         <h3 className="font-display text-base font-semibold">{t('search.phraseWordsHeading')}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{t('search.phraseWordsNote')}</p>
+        {/* WHAT THIS BLOCK IS, NOW THAT IT IS NOT THE ANSWER. The old line here
+            read "No entry for this phrase", which was true of a screen whose
+            only answer was a word-by-word join. The card above holds the
+            model's translation of the whole sentence now (M195/02), so a
+            sentence announcing a missing entry would contradict the answer the
+            reader has just read. This one says what the list underneath
+            actually is. */}
+        <p className="mt-1 text-sm text-muted-foreground">{t('search.phraseEntriesNote')}</p>
       </div>
 
       {phrase.tokens.map((match) => (

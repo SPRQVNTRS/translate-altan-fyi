@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFetcher } from 'react-router';
@@ -13,8 +13,11 @@ import {
   translationPaneRows,
   translationPaneText,
   translationPaneView,
+  translationPaneEndpoints,
+  translationPaneSeedKey,
   TRANSLATION_POLL_INTERVAL_MS,
   type TranslationPaneState,
+  type TranslationPaneTarget,
   type TranslationPaneView,
 } from '#app/lib/translation/pane-state';
 
@@ -66,17 +69,34 @@ export interface TranslationPaneController {
    * to choose it.
    */
   refusalReason: TranslationRefusal | null;
+  /**
+   * What this pane is translating, carried out so the render below can tell a
+   * dictionary word from a typed sentence.
+   *
+   * IT IS THE UNION, NOT A BOOLEAN. The one thing that differs between the two
+   * branches on screen is the vote control, and the reason it differs is that a
+   * phrase answer's `translationId` is a `phrase_translations` row rather than a
+   * dictionary edge. A `canVote` flag would carry the conclusion and lose the
+   * reason, and the next reader would be free to set it either way.
+   */
+  target: TranslationPaneTarget;
 }
 
 export interface UseTranslationPaneParams {
-  /** The loader's answer. `null` on the branches that have no single word to translate. */
+  /** The loader's answer. `null` on the branches with nothing to translate at all. */
   panel: TranslationPanel | null;
-  /** The word being translated, or `null` when the query matched nothing. */
-  headwordId: string | null;
-  to: LanguageCode;
+  /**
+   * The word or the sentence being translated.
+   *
+   * ONE HOOK SERVES BOTH BRANCHES, AND THAT IS A PRODUCT RULE (M195/02). A
+   * second hook for phrases would be a second set of transitions, a second stall
+   * rule and a second idea of what "translating" looks like, and the two would
+   * drift within a milestone. The union changes the two URLs and nothing else.
+   */
+  target: TranslationPaneTarget;
 }
 
-/** The panel a branch with no word to translate renders. */
+/** The panel a branch with nothing to translate renders. */
 const NO_ENTRY_PANEL: TranslationPanel = { state: 'no-entry' };
 
 /**
@@ -89,7 +109,7 @@ const NO_ENTRY_PANEL: TranslationPanel = { state: 'no-entry' };
  * loader sent. Reading the answer twice, once for the button and once for the
  * list, is how the two come to disagree.
  */
-export function useTranslationPane({ panel, headwordId, to }: UseTranslationPaneParams): TranslationPaneController {
+export function useTranslationPane({ panel, target }: UseTranslationPaneParams): TranslationPaneController {
   const loaded = panel ?? NO_ENTRY_PANEL;
   const [state, setState] = useState<TranslationPaneState>(() => initialTranslationPaneState(loaded));
 
@@ -100,15 +120,17 @@ export function useTranslationPane({ panel, headwordId, to }: UseTranslationPane
   // STATE and not the panel object, which is a fresh object on every navigation:
   // keying on identity would throw away a poll result the moment anything else
   // on the page re-rendered.
-  const seed = `${headwordId ?? ''}:${to}:${loaded.state}`;
+  const seed = `${translationPaneSeedKey(target)}:${loaded.state}`;
   const [seededFrom, setSeededFrom] = useState(seed);
   if (seededFrom !== seed) {
     setSeededFrom(seed);
     setState(initialTranslationPaneState(loaded));
   }
 
-  const isPolling = isTranslationPanePolling(state) && headwordId !== null;
-  const pollUrl = headwordId === null ? null : `/api/translation/${headwordId}?to=${to}`;
+  const endpoints = translationPaneEndpoints(target);
+  const isPolling = isTranslationPanePolling(state) && endpoints !== null;
+  const pollUrl = endpoints?.poll ?? null;
+  const retryUrl = endpoints?.retry ?? null;
 
   // ONE INTERVAL, NEVER TWO. The effect depends on a BOOLEAN, not on the elapsed
   // count, so a tick does not tear the interval down and start a fresh one,
@@ -127,9 +149,11 @@ export function useTranslationPane({ panel, headwordId, to }: UseTranslationPane
         // as a failed translation, because the run behind it may be running
         // perfectly well.
         if (!response.ok) throw new Error(`translation poll answered ${response.status}`);
-        // SAFETY: the body is whatever `routes/api.translation.$headwordId.ts`
-        // serialised, which is a `TranslationPanel` on every path through that
-        // loader, including its two unknown-id exits. The reducer below reads
+        // SAFETY: the body is whatever the polled route serialised, which is a
+        // `TranslationPanel` on every path through both of them:
+        // `routes/api.translation.$headwordId.ts` including its two unknown-id
+        // exits, and `routes/api.translation-phrase.ts` including its unreadable
+        // query exit. The reducer below reads
         // one field, `state`, and refuses anything that is not one of the three
         // terminal values, so a body that somehow did not come from that route
         // changes nothing rather than rendering a state the pane cannot draw.
@@ -155,8 +179,8 @@ export function useTranslationPane({ panel, headwordId, to }: UseTranslationPane
   }, [answered]);
 
   const retry = (): void => {
-    if (headwordId === null) return;
-    void fetcher.submit(null, { method: 'post', action: `/api/translation/${headwordId}/retry?to=${to}` });
+    if (retryUrl === null) return;
+    void fetcher.submit(null, { method: 'post', action: retryUrl });
   };
 
   return {
@@ -166,24 +190,44 @@ export function useTranslationPane({ panel, headwordId, to }: UseTranslationPane
     retry,
     isRetrying: fetcher.state !== 'idle',
     refusalReason: state.panel.state === 'budget' ? state.panel.reason : null,
+    target,
   };
 }
 
 /**
- * The locale key one `budget` view renders.
+ * The sentence each refusal renders, as a table over the union.
+ *
+ * A TABLE RATHER THAN A CHAIN OF COMPARISONS, so a fifth refusal added to
+ * `TranslationRefusal` fails the typecheck here instead of silently falling into
+ * whatever the last branch said. `satisfies` is what makes that true: it checks
+ * the keys against the union without widening the value type, so the lookup
+ * below still returns the literal keys.
  *
  * A PURE MAP, so the choice can be asserted without a DOM: this repo has none,
  * and `tests/unit/translation-pane-state.test.ts` calls this function directly
- * rather than rendering the pane to read its text. `rate-limited` is the one
- * refusal with its own sentence: `enrichment.rateLimited` says to wait a few
- * minutes, which is true of that guard alone. `budget` and `daily-cap` both
- * mean nothing more is coming today, so both keep `translation.budget`.
+ * rather than rendering the pane to read its text.
+ *
+ * `rate-limited` says to wait a few minutes, which is true of that guard alone.
+ * `too-long` is the phrase path's length cap and says to try a shorter text; it
+ * is a refusal rather than a sixth pane state, because the pane's job here is
+ * one quiet line and the line is the only thing that differs. `budget` and
+ * `daily-cap` both mean nothing more is coming today, so both keep one sentence.
+ */
+const REFUSAL_KEYS = {
+  'rate-limited': 'enrichment.rateLimited',
+  budget: 'translation.budget',
+  'daily-cap': 'translation.budget',
+  'too-long': 'translation.tooLong',
+} satisfies Record<TranslationRefusal, string>;
+
+/**
+ * The locale key one `budget` view renders.
  *
  * @param reason Which guard produced the refusal, or `null` on a view this
  *   function is never called for.
  */
 export function translationBudgetKey(reason: TranslationRefusal | null): string {
-  return reason === 'rate-limited' ? 'enrichment.rateLimited' : 'translation.budget';
+  return reason === null ? 'translation.budget' : REFUSAL_KEYS[reason];
 }
 
 /**
@@ -216,14 +260,20 @@ function GeneratedMarker() {
 }
 
 /**
- * One translation: the word, its part of speech, the marker when a model wrote
- * it, and the two buttons that say whether it is right.
+ * One answer: the text, its part of speech, the marker when a model wrote it,
+ * and whatever judgement control the caller decided belongs beside it.
+ *
+ * THE VOTE ARRIVES AS A NODE RATHER THAN BEING BUILT HERE, and that is what
+ * keeps it off a phrase answer by construction. See `TranslationPane` below for
+ * where the decision is taken and why it cannot be taken here: this component
+ * cannot see which branch it is rendering, and a component that cannot see it
+ * cannot get it wrong.
  *
  * THE VOTE IS ON THIS ROW AND NOT ON THE CARD. The reader is looking at several
  * words for one query, and only they know which of them is wrong. A single
  * control over the whole answer would collect a judgement nobody could act on.
  */
-function TranslationLine({ row, to }: { row: TranslationRow; to: LanguageCode }) {
+function TranslationLine({ row, to, votes }: { row: TranslationRow; to: LanguageCode; votes: ReactNode }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
       {/* Monospaced, like every other word under examination on this screen.
@@ -233,7 +283,7 @@ function TranslationLine({ row, to }: { row: TranslationRow; to: LanguageCode })
       </span>
       {row.pos !== null && <span className="text-xs text-muted-foreground">{row.pos}</span>}
       {row.generated && <GeneratedMarker />}
-      <TranslationVotes translationId={row.translationId} up={row.up} down={row.down} myVote={row.myVote} />
+      {votes}
     </li>
   );
 }
@@ -250,16 +300,34 @@ export interface TranslationPaneProps {
  * finishing, so the line asks the reader to come back rather than announcing a
  * failure this screen cannot see. Only a run row that reads failed produces the
  * failure line and the retry button.
+ *
+ * A PHRASE ANSWER CARRIES NO VOTE CONTROL, AND THE UNION IS WHY.
+ *   A vote is cast on a `translations` row, a dictionary edge between two
+ *   headwords. A phrase answer has no edge behind it: its `translationId` is a
+ *   `phrase_translations` row id, so offering the buttons would post a vote
+ *   against an id the votes table has never heard of. The control is therefore
+ *   built inside the `headword` branch of `controller.target` and passed down,
+ *   which means the phrase branch has no expression that could produce one. It
+ *   is not a flag anybody can set the wrong way.
  */
 export function TranslationPane({ controller, to }: TranslationPaneProps) {
   const { t } = useTranslation();
-  const { view, rows } = controller;
+  const { view, rows, target } = controller;
 
   if (view === 'ready') {
     return (
       <ul className="mt-2 flex flex-col gap-2">
         {rows.map((row) => (
-          <TranslationLine key={row.translationId} row={row} to={to} />
+          <TranslationLine
+            key={row.translationId}
+            row={row}
+            to={to}
+            votes={
+              target.kind === 'headword' ?
+                <TranslationVotes translationId={row.translationId} up={row.up} down={row.down} myVote={row.myVote} />
+              : null
+            }
+          />
         ))}
       </ul>
     );

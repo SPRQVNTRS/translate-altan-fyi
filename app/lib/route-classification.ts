@@ -209,6 +209,16 @@ export const ROUTE_CLASSIFICATION = {
     reason:
       'It exports `middleware = [authMiddleware]`, which under `/api/` refuses with a 401 in JSON. It starts a billed run, so it is the one half of the translation pair that needs an account.',
   },
+  'api.translation-phrase.ts': {
+    access: 'gated-inline',
+    reason:
+      'It exports `middleware = [authMiddleware]`, which under `/api/` refuses with a 401 in JSON. It never enqueues, but no public surface serves a translated sentence, so reading one needs the account every search needs.',
+  },
+  'api.translation-phrase.retry.ts': {
+    access: 'gated-inline',
+    reason:
+      'It exports `middleware = [authMiddleware]`. It starts a billed phrase run, so it is the half of the phrase pair that spends money.',
+  },
   'api.v1.transcribe.ts': {
     access: 'gated-inline',
     reason:
@@ -229,6 +239,11 @@ export const ROUTE_CLASSIFICATION = {
   'api.v1.admin.db.tables.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.describe.$table.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
   'api.v1.admin.db.query.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
+  // The product's own verb over the API (M195/03). An ORDINARY key, not a
+  // superadmin one: translating is what this application is for, and every
+  // spend guard the screen applies runs inside the shared resolver behind it.
+  'api.v1.translate.ts': { access: 'bearer-token', reason: 'requireApiKey.' },
+  'api.v1.translation-votes.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
 
   // ── The operator screens under `/super/` ───────────────────────────────
   // What is left of the inherited admin surface. The org tree, `/dashboard`,

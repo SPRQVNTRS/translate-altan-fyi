@@ -92,3 +92,71 @@ export const dbQuerySchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())),
   fields: z.array(z.string()),
 });
+
+// ---------------------------------------------------------------------------
+// Translation
+// ---------------------------------------------------------------------------
+
+/**
+ * One answered row, as the pane renders it and the CLI prints it.
+ *
+ * ON THE PHRASE BRANCH `lemma` HOLDS A WHOLE SENTENCE and `translationId` names
+ * a `phrase_translations` row rather than a dictionary edge. The schema is the
+ * same either way on purpose: a caller must not be able to tell which branch
+ * answered, which is the API-side reading of M195 decision 7.
+ */
+const translationRowSchema = z.object({
+  translationId: z.string(),
+  lemma: z.string(),
+  pos: z.string().nullable(),
+  confidence: z.number().nullable(),
+  generated: z.boolean(),
+  up: z.number(),
+  down: z.number(),
+  myVote: z.union([z.literal(-1), z.literal(1)]).nullable(),
+});
+
+/**
+ * The five states the pane has, plus the internal `none`.
+ *
+ * `none` IS HERE BECAUSE THE API CAN RETURN IT. It means "nothing has happened
+ * for this pair yet", which a caller sees when a guard refused nothing and no
+ * run has been recorded, and the CLI prints it as such rather than crashing on
+ * a state its schema forgot.
+ */
+const translationPanelSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('ready'), translations: z.array(translationRowSchema) }),
+  z.object({ state: z.literal('translating') }),
+  z.object({ state: z.literal('failed'), canRetry: z.literal(true), error: z.string().nullable() }),
+  z.object({
+    state: z.literal('budget'),
+    reason: z.enum(['rate-limited', 'budget', 'daily-cap', 'too-long']),
+  }),
+  z.object({ state: z.literal('no-entry') }),
+  z.object({ state: z.literal('none') }),
+]);
+
+/** What `POST /api/v1/translate` answers, for a word and for a sentence alike. */
+export const translateAnswerSchema = z.object({
+  q: z.string(),
+  from: z.string(),
+  to: z.string(),
+  kind: z.enum(['word', 'phrase']),
+  headwordId: z.string().nullable(),
+  panel: translationPanelSchema,
+});
+export type TranslateAnswerResponse = z.infer<typeof translateAnswerSchema>;
+
+/** One down-voted edge, as `GET /api/v1/translation-votes` lists it. */
+export const downVotedTranslationSchema = z.object({
+  translationId: z.string(),
+  lemma: z.string(),
+  fromLanguageCode: z.string(),
+  toLanguageCode: z.string(),
+  up: z.number(),
+  down: z.number(),
+  lastVotedAt: timestamp,
+});
+export type DownVotedTranslationRow = z.infer<typeof downVotedTranslationSchema>;
+
+export const translationVotesListSchema = paginatedSchema(downVotedTranslationSchema);

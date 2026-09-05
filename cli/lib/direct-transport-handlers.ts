@@ -14,14 +14,32 @@
  * by the preAction hook before any action runs.
  */
 
-import { pool } from '#drizzle/db';
+import { getRawDb, pool } from '#drizzle/db';
 import { listApiKeys, revokeApiKey } from '#app/models/api-keys.server';
+import { listDownVotedTranslationsPage } from '#app/models/translation-votes.server';
 import { parsePaginationParams } from '#app/lib/pagination.server';
+import { SERVED_LANGUAGES } from '#app/lib/dictionary/detect-language';
+import { resolveTranslateRequest } from '#app/lib/translation/translate-request.server';
 import { CliApiError, type DirectTransport } from './transport';
 import { z } from 'zod';
 
 /** Body accepted by `POST /api/v1/admin/db/query`. */
 const sqlQueryBodySchema = z.object({ sql: z.string() });
+
+/**
+ * Body accepted by the translate endpoint.
+ *
+ * IT IS THE SAME SHAPE THE HTTP ROUTE PARSES, and it is restated here rather
+ * than imported because the route module pulls in the router's generated types.
+ * The BODY of the endpoint is not duplicated: both transports call
+ * `resolveTranslateRequest`, which is where every guard and both branches live.
+ */
+const translateBodySchema = z.object({
+  q: z.string().min(1),
+  from: z.enum(SERVED_LANGUAGES),
+  to: z.enum(SERVED_LANGUAGES),
+  wait: z.boolean().default(false),
+});
 
 export function registerDirectTransportHandlers(direct: DirectTransport): void {
   // ---------------------------------------------------------------------------
@@ -39,6 +57,54 @@ export function registerDirectTransportHandlers(direct: DirectTransport): void {
   direct.register('DELETE', '/api/v1/api-keys/:id', async ({ params }) => {
     const record = await revokeApiKey(params['id']!);
     return { record };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Translation
+  // ---------------------------------------------------------------------------
+
+  // THE REQUEST IS SYNTHESISED, because there is no HTTP request in process.
+  // The rate limiter reads an address and a session cookie off it and finds
+  // neither, which it treats as unmetered: correct here and only here, since the
+  // CLI entrypoint is the trust boundary for direct calls. The length cap, the
+  // per-day cap and the daily budget still apply, so a local operator cannot
+  // spend past the installation's own limits.
+  //
+  // THE ORCHESTRATOR IS INITIALISED HERE, AND WITHOUT IT THIS COMMAND CANNOT
+  // WORK AT ALL. `getOrchestrator()` throws until something has called
+  // `initializeWorkflows()`, and the enqueue reads that failure as "no queue",
+  // so every first-time text would come back `failed` with "the translation
+  // queue is not available". The web server initialises at boot; a CLI process
+  // has to do it for itself. NO WORKER IS STARTED: registering the templates is
+  // what lets `start()` resolve a workflow and reach `boss.send`, and the job is
+  // then run by whichever deployment holds the worker.
+  direct.register('POST', '/api/v1/translate', async ({ body }) => {
+    const parsed = translateBodySchema.safeParse(body);
+    if (!parsed.success) throw new CliApiError(z.prettifyError(parsed.error), 400);
+    if (parsed.data.from === parsed.data.to) {
+      throw new CliApiError('from and to must be different languages', 400);
+    }
+    const request = new Request('https://cli.invalid/translate-command', { method: 'POST' });
+    // The import is dynamic for the reason `phrase-enqueue.server.ts` gives for
+    // its own: a static edge here would drag every workflow template, every
+    // operation handler and every prompt file into EVERY cli invocation,
+    // including `db check`.
+    const { initializeWorkflows, stopOrchestrator } = await import('#app/services/workflows.server');
+    await initializeWorkflows();
+    try {
+      return await resolveTranslateRequest(getRawDb(), { request, ...parsed.data });
+    } finally {
+      // Stopped in a `finally`, because pg-boss holds its own connections and a
+      // CLI that left them open would never exit. The command's answer is
+      // already computed by the time this runs.
+      await stopOrchestrator();
+    }
+  });
+
+  direct.register('GET', '/api/v1/translation-votes', async ({ query }) => {
+    const pagination = parsePaginationParams(query);
+    const { rows, total } = await listDownVotedTranslationsPage(getRawDb(), pagination);
+    return { data: rows, total, limit: pagination.limit, offset: pagination.offset };
   });
 
   // ---------------------------------------------------------------------------
