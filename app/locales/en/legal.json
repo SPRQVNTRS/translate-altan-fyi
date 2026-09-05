@@ -30,7 +30,7 @@
   },
   "privacy": {
     "title": "Privacy Policy",
-    "lead": "What you type reaches our server as plaintext so the server can search the dictionary. If you create an account and sync, your saved lists, notes, and revision progress are also stored on our server as readable data that we can inspect. This policy covers the service operated at translate.altan.fyi. Anyone hosting their own copy of the open-source software is responsible for their own installation.",
+    "lead": "What you type reaches our server as plaintext so the server can search the dictionary. If you create an account and sync, your saved lists, notes, and revision progress are also stored on our server as readable data that we can inspect. This policy covers the service operated at kenning.altan.fyi. Anyone hosting their own copy of the open-source software is responsible for their own installation.",
     "s1Heading": "1. The short version",
     "s1Item1": "You can use the whole app without an account. There is no sign-up wall, and no account is required to search, to save lists, or to revise them.",
     "s1Item2": "The words you search are sent to our server as plaintext. They have to be, because the server searches the shared dictionary with them.",
@@ -80,9 +80,9 @@
   },
   "terms": {
     "title": "Terms of Service",
-    "lead": "These terms govern your use of translate.altan.fyi, the service operated by the company named in the imprint. Using the site means you accept them.",
+    "lead": "These terms govern your use of kenning.altan.fyi, the service operated by the company named in the imprint. Using the site means you accept them.",
     "s1Heading": "1. The service",
-    "s1Body": "translate.altan.fyi is a free vocabulary and translation app. There is no payment, no plan, and no advertising. We may change what the service does, and we may stop offering it.",
+    "s1Body": "kenning.altan.fyi is a free vocabulary and translation app. There is no payment, no plan, and no advertising. We may change what the service does, and we may stop offering it.",
     "s2Heading": "2. Accounts",
     "s2Body1": "No account is required. Everything except syncing to a second device works without one.",
     "s2Body2": "An account consists of an email address and a password you choose. You are responsible for keeping your password secure. If you forget it, request a reset link and we will email one to the address on the account.",

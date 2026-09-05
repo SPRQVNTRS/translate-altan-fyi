@@ -67,13 +67,13 @@ describe('token lifetimes', () => {
 
 describe('the link a mail carries', () => {
   it('puts the token in the query string of an absolute URL', () => {
-    const url = buildTokenUrl({ origin: 'https://translate.altan.fyi', path: '/verify-email', token: 'abc123' });
+    const url = buildTokenUrl({ origin: 'https://kenning.altan.fyi', path: '/verify-email', token: 'abc123' });
 
-    assert.equal(url, 'https://translate.altan.fyi/verify-email?token=abc123');
+    assert.equal(url, 'https://kenning.altan.fyi/verify-email?token=abc123');
   });
 
   it('escapes a token rather than pasting it in raw', () => {
-    const url = buildTokenUrl({ origin: 'https://translate.altan.fyi', path: '/reset-password', token: 'a b&c' });
+    const url = buildTokenUrl({ origin: 'https://kenning.altan.fyi', path: '/reset-password', token: 'a b&c' });
 
     assert.equal(new URL(url).searchParams.get('token'), 'a b&c', 'the token did not survive the round trip');
     assert.ok(!url.includes('&c='), 'an unescaped token split into a second query parameter');

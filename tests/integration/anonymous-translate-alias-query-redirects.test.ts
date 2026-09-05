@@ -39,7 +39,7 @@ let session: TestUserSession | null = null;
 
 /** `GET /translate?q=Haus`, on the `translate-alias` route id's own pattern. */
 async function loadAliasQuery(cookie: string | null) {
-  const request = new Request(`https://translate.altan.fyi/translate?q=${WORD}&from=de&to=en`, {
+  const request = new Request(`https://kenning.altan.fyi/translate?q=${WORD}&from=de&to=en`, {
     headers: cookie === null ? {} : { cookie },
   });
   return translateLoader({
@@ -82,7 +82,7 @@ describe('an anonymous query on the /translate alias', () => {
     // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
     // the reader lands back where they were refused, and an assertion on the
     // full string would read as a broken gate the first time that changed.
-    assert.equal(new URL(thrown.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
+    assert.equal(new URL(thrown.headers.get('location') ?? '', 'https://kenning.altan.fyi').pathname, SIGN_IN_PATH);
   });
 
   it('answers the same URL with results once signed in', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {

@@ -70,7 +70,7 @@ function ancestorsOf(entries: readonly RouteConfigEntry[], file: string): string
  * returns nothing at all.
  */
 async function runGateAnonymously(): Promise<'admitted' | Response> {
-  const request = new Request('https://translate.altan.fyi/history');
+  const request = new Request('https://kenning.altan.fyi/history');
   const middleware: MiddlewareFunction = authMiddleware;
   try {
     await middleware(
@@ -135,6 +135,6 @@ describe('the healthcheck stays public', () => {
     // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
     // the reader lands back where they were refused, and an assertion on the
     // full string would read as a broken gate the first time that changed.
-    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
+    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://kenning.altan.fyi').pathname, SIGN_IN_PATH);
   });
 });

@@ -132,7 +132,7 @@ const db = {} as never;
 /** The key under test, one German word into Turkish, which is the case M193 was written for. */
 const key = { headwordId: '99a991dc-8e80-4b65-82e5-effbbaf84269', from: 'de', to: 'tr' } as const;
 
-const request = new Request('https://translate.altan.fyi/?q=umwerfen');
+const request = new Request('https://kenning.altan.fyi/?q=umwerfen');
 
 /** One translation row, as the corpus read returns it. */
 function row(overrides: Partial<TranslationRow> = {}): TranslationRow {

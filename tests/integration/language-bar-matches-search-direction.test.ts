@@ -53,7 +53,7 @@ after(async () => {
  * file is testing.
  */
 function searchRequest(session: TestUserSession, params: { from: string; to: string; q: string }): Request {
-  const url = new URL('https://translate.altan.fyi/');
+  const url = new URL('https://kenning.altan.fyi/');
   url.searchParams.set('from', params.from);
   url.searchParams.set('to', params.to);
   url.searchParams.set('q', params.q);

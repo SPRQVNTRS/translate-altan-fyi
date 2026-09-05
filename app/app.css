@@ -41,10 +41,31 @@
 }
 
 @theme {
-  --radius: 0.5rem;
+  /* 0.75rem, not 0.5. The Kenning mark is a stack of generously rounded
+     cards, and the shape language follows it: every derived step below
+     inherits the change, so the ladder stays proportional. */
+  --radius: 0.75rem;
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+  /* `xl` and `2xl` are DERIVED here, which they were not before. Tailwind
+     ships them as fixed 0.75rem and 1rem, so raising `--radius` to 0.75rem
+     would have made `rounded-lg` and `rounded-xl` the same curve and collapsed
+     the bottom of DESIGN.md's ladder. Deriving them shifts the whole ladder by
+     one step instead, so no component had to change to keep its place in it. */
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 12px);
+
+  /* Shadows are tinted, not black. A neutral-black shadow on the warm cream
+     page reads as a grey smudge; hue 28 keeps the falloff in the same family
+     as the surfaces it falls on. Alpha does the work, the hue only stops it
+     going cold. */
+  --shadow-2xs: 0 1px 2px 0 hsl(28 40% 12% / 0.04);
+  --shadow-xs: 0 1px 2px 0 hsl(28 40% 12% / 0.05);
+  --shadow-sm: 0 1px 3px 0 hsl(28 40% 12% / 0.07), 0 1px 2px -1px hsl(28 40% 12% / 0.07);
+  --shadow-md: 0 4px 8px -2px hsl(28 40% 12% / 0.09), 0 2px 4px -2px hsl(28 40% 12% / 0.06);
+  --shadow-lg: 0 12px 20px -4px hsl(28 40% 12% / 0.11), 0 4px 8px -4px hsl(28 40% 12% / 0.07);
+  --shadow-xl: 0 20px 32px -8px hsl(28 40% 12% / 0.14), 0 8px 12px -6px hsl(28 40% 12% / 0.08);
 
   --font-sans: 'Inter Variable', sans-serif;
   --font-mono: 'Victor Mono Variable', monospace;
@@ -61,6 +82,11 @@
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
 
+  /* The mark's coral. It is NOT a second primary: it carries no text, no
+     control and no state. Its only jobs are the mark itself and the second
+     stop in `.surface-brand`. See DESIGN.md section 2. */
+  --color-brand-2: hsl(var(--brand-2));
+
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
 
@@ -75,6 +101,13 @@
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* The two non-destructive states. They exist because the badge, alert and
+     toast primitives were carrying raw `green-*` and `amber-*` utilities,
+     which stayed cold and un-themed when the palette went warm. Soft fills use
+     alpha over these (`bg-success/10`), so neither needs a `-foreground`. */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -142,94 +175,104 @@
 
 @layer base {
   :root {
-    /* Blue-tinted light surface family. Hue 208 is the brand blue's own hue.
-       The page sits at a readable pale blue, `--card` stays pure white so
-       cards lift off it, and the greys carry the same hue so nothing reads as
-       a cold, unrelated grey beside a warm blue one.
+    /* Warm light surface family. Hue 36 is the brand ochre's own hue, so the
+       page, the cards, the hairlines and the brand are one system rather than
+       a warm accent dropped on cold grey.
 
-       These are the operator's chosen palette, "Open blue", picked on
-       2026-09-04 from three rendered candidates. The token SHAPE is unchanged
-       from the teal system it replaces: one hue drives the page, the cards,
-       the hairlines and the brand together.
+       These come from the Kenning mark, chosen 2026-09-05: the drawn amber is
+       `hsl(39 95% 54%)` and the drawn coral is `hsl(7 93% 62%)`. The drawn
+       amber is NOT `--primary`, and cannot be: as text on white it measures
+       1.93:1. `--primary` is that amber deepened until it clears 4.5:1 both as
+       link text and under white button text. It measures 6.19:1 both ways.
+       The drawn amber survives untouched in the mark and in low-alpha washes,
+       where contrast does not apply.
 
-       Contrast: `--foreground` is a near-black, so body text clears 15:1 on
-       both the card and the tinted page. `--muted-foreground` clears ~7.5:1
-       on white. */
-    --background: 208 46% 95%;
-    --foreground: 209 26% 9%;
+       Contrast, measured not assumed: `--foreground` is 17.34:1 on the card
+       and 16.06:1 on the page. `--muted-foreground` is 7.31:1 on the card. */
+    --background: 36 44% 96%;
+    --foreground: 30 20% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 209 26% 9%;
+    --card-foreground: 30 20% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 209 26% 9%;
-    --primary: 206 86% 34%;
+    --popover-foreground: 30 20% 10%;
+    --primary: 32 90% 30%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 208 38% 91%;
-    --secondary-foreground: 209 26% 14%;
-    --muted: 208 38% 91%;
-    --muted-foreground: 207 18% 37%;
-    --accent: 208 42% 88%;
-    --accent-foreground: 209 26% 14%;
+    --brand-2: 7 93% 62%;
+    --secondary: 38 36% 91%;
+    --secondary-foreground: 30 20% 15%;
+    --muted: 38 36% 91%;
+    --muted-foreground: 32 12% 33%;
+    --accent: 38 40% 88%;
+    --accent-foreground: 30 20% 15%;
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 208 30% 82%;
-    --input: 208 30% 82%;
-    --ring: 206 86% 34%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 208 42% 96%;
-    --sidebar-foreground: 207 18% 29%;
-    --sidebar-primary: 206 86% 34%;
+    --success: 142 72% 26%;
+    --warning: 45 96% 27%;
+    --border: 36 26% 82%;
+    --input: 36 26% 82%;
+    --ring: 32 90% 30%;
+    --chart-1: 32 90% 45%;
+    --chart-2: 7 80% 55%;
+    --chart-3: 45 85% 45%;
+    --chart-4: 18 70% 50%;
+    --chart-5: 52 60% 40%;
+    --sidebar-background: 38 40% 96%;
+    --sidebar-foreground: 32 12% 28%;
+    --sidebar-primary: 32 90% 30%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 208 42% 88%;
-    --sidebar-accent-foreground: 209 26% 14%;
-    --sidebar-border: 208 30% 83%;
-    --sidebar-ring: 206 86% 34%;
+    --sidebar-accent: 38 40% 88%;
+    --sidebar-accent-foreground: 30 20% 15%;
+    --sidebar-border: 36 26% 83%;
+    --sidebar-ring: 32 90% 30%;
   }
   .dark {
-    /* Blue-tinted near-black. Hue 208 with real chroma makes the dark theme
-       read as deep blue-black rather than grey-black, and the greys around it
-       share the hue so the tint does not cancel out.
+    /* Warm near-black. Hue 30 with real chroma makes the dark theme read as a
+       deep brown-black rather than grey-black, and the greys around it share
+       the hue so the tint does not cancel out.
 
-       `--card` sits ~3.5 lightness points above `--background` so cards keep
-       reading as elevated. `--foreground` clears 17:1 on both.
-       `--muted-foreground` clears 7:1. The brand lifts to a brighter, more
-       open blue here, the way the teal system lifted its own hue: a 34%
-       lightness brand reads as a bruise on a near-black page. */
-    --background: 208 34% 5%;
-    --foreground: 200 16% 97%;
-    --card: 208 28% 8.5%;
-    --card-foreground: 200 16% 97%;
-    --popover: 208 28% 8.5%;
-    --popover-foreground: 200 16% 97%;
-    --primary: 199 90% 58%;
-    --primary-foreground: 205 82% 8%;
-    --secondary: 208 20% 15%;
-    --secondary-foreground: 200 16% 97%;
-    --muted: 208 20% 15%;
-    --muted-foreground: 203 14% 69%;
-    --accent: 208 22% 17%;
-    --accent-foreground: 200 16% 97%;
-    --destructive: 0 70% 45%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 208 20% 17%;
-    --input: 208 20% 17%;
-    --ring: 199 90% 58%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 208 32% 7.5%;
-    --sidebar-foreground: 203 14% 89%;
-    --sidebar-primary: 199 90% 58%;
-    --sidebar-primary-foreground: 205 82% 8%;
-    --sidebar-accent: 208 22% 15%;
-    --sidebar-accent-foreground: 200 16% 97%;
-    --sidebar-border: 208 20% 15%;
-    --sidebar-ring: 199 90% 58%;
+       `--card` sits 3.5 lightness points above `--background` so cards keep
+       reading as elevated. The brand lifts here to a bright amber close to the
+       drawn one, because a 30% lightness ochre on a near-black page reads as
+       mud. It takes DARK text, not white: `--primary-foreground` on it
+       measures 10.62:1.
+
+       Contrast: `--foreground` is 16.97:1 on the card, `--muted-foreground`
+       is 8.78:1, `--primary` as text is 10.69:1. */
+    --background: 30 18% 5%;
+    --foreground: 38 14% 97%;
+    --card: 30 15% 8.5%;
+    --card-foreground: 38 14% 97%;
+    --popover: 30 15% 8.5%;
+    --popover-foreground: 38 14% 97%;
+    --primary: 41 96% 60%;
+    --primary-foreground: 30 60% 8%;
+    --brand-2: 7 93% 66%;
+    --secondary: 30 12% 15%;
+    --secondary-foreground: 38 14% 97%;
+    --muted: 30 12% 15%;
+    --muted-foreground: 36 10% 70%;
+    --accent: 30 14% 17%;
+    --accent-foreground: 38 14% 97%;
+    --destructive: 0 80% 65%;
+    --destructive-foreground: 30 60% 8%;
+    --success: 142 62% 55%;
+    --warning: 45 95% 58%;
+    --border: 30 12% 17%;
+    --input: 30 12% 17%;
+    --ring: 41 96% 60%;
+    --chart-1: 41 96% 60%;
+    --chart-2: 7 93% 66%;
+    --chart-3: 45 85% 60%;
+    --chart-4: 18 80% 62%;
+    --chart-5: 52 70% 55%;
+    --sidebar-background: 30 16% 7.5%;
+    --sidebar-foreground: 36 10% 88%;
+    --sidebar-primary: 41 96% 60%;
+    --sidebar-primary-foreground: 30 60% 8%;
+    --sidebar-accent: 30 14% 15%;
+    --sidebar-accent-foreground: 38 14% 97%;
+    --sidebar-border: 30 12% 15%;
+    --sidebar-ring: 41 96% 60%;
   }
 }
 
@@ -244,28 +287,28 @@
  * actually renders from: the `@theme inline` block below maps `--color-sidebar-*`
  * to them and overrides the mapping in the first `@theme` block. Both sets are
  * kept in sync deliberately, so whichever mapping wins, the chrome stays on the
- * same blue-tinted family as the page.
+ * same warm family as the page.
  */
 :root {
-  --sidebar: hsl(208 42% 96%);
-  --sidebar-foreground: hsl(207 18% 29%);
-  --sidebar-primary: hsl(206 86% 34%);
+  --sidebar: hsl(38 40% 96%);
+  --sidebar-foreground: hsl(32 12% 28%);
+  --sidebar-primary: hsl(32 90% 30%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(208 42% 88%);
-  --sidebar-accent-foreground: hsl(209 26% 14%);
-  --sidebar-border: hsl(208 30% 83%);
-  --sidebar-ring: hsl(206 86% 34%);
+  --sidebar-accent: hsl(38 40% 88%);
+  --sidebar-accent-foreground: hsl(30 20% 15%);
+  --sidebar-border: hsl(36 26% 83%);
+  --sidebar-ring: hsl(32 90% 30%);
 }
 
 .dark {
-  --sidebar: hsl(208 32% 7.5%);
-  --sidebar-foreground: hsl(203 14% 89%);
-  --sidebar-primary: hsl(199 90% 58%);
-  --sidebar-primary-foreground: hsl(205 82% 8%);
-  --sidebar-accent: hsl(208 22% 15%);
-  --sidebar-accent-foreground: hsl(200 16% 97%);
-  --sidebar-border: hsl(208 20% 15%);
-  --sidebar-ring: hsl(199 90% 58%);
+  --sidebar: hsl(30 16% 7.5%);
+  --sidebar-foreground: hsl(36 10% 88%);
+  --sidebar-primary: hsl(41 96% 60%);
+  --sidebar-primary-foreground: hsl(30 60% 8%);
+  --sidebar-accent: hsl(30 14% 15%);
+  --sidebar-accent-foreground: hsl(38 14% 97%);
+  --sidebar-border: hsl(30 12% 15%);
+  --sidebar-ring: hsl(41 96% 60%);
 }
 
 @theme inline {
@@ -304,9 +347,9 @@
   .surface-brand {
     background-image: linear-gradient(
       140deg,
-      hsl(var(--primary) / 0.18) 0%,
-      hsl(var(--primary) / 0.07) 45%,
-      hsl(var(--primary) / 0.02) 100%
+      hsl(var(--primary) / 0.16) 0%,
+      hsl(var(--brand-2) / 0.10) 45%,
+      hsl(var(--brand-2) / 0.02) 100%
     );
   }
 

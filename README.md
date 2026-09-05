@@ -1,4 +1,4 @@
-# translate.altan.fyi
+# kenning.altan.fyi
 
 A vocabulary and translation web app. You type a word or a phrase. The app
 returns a translation, a plain explanation, and example sentences. You can
@@ -55,8 +55,8 @@ passing them directly to Node.
 ### Install and run
 
 ```bash
-git clone https://github.com/SPRQVNTRS/translate-altan-fyi.git
-cd translate-altan-fyi
+git clone https://github.com/SPRQVNTRS/kenning-altan-fyi.git
+cd kenning-altan-fyi
 pnpm install
 
 # Install the pre-push gate. A fresh clone has none until this runs.
@@ -131,8 +131,8 @@ If no worker processes those tasks, page requests will hang indefinitely.
 Build and run the container image:
 
 ```bash
-docker build -f Dockerfile.pnpm -t translate-altan-fyi .
-docker run --env-file .env -p 3000:3000 translate-altan-fyi
+docker build -f Dockerfile.pnpm -t kenning-altan-fyi .
+docker run --env-file .env -p 3000:3000 kenning-altan-fyi
 ```
 
 To run outside Docker, build with `pnpm build`. Start the web server with `pnpm

@@ -20,7 +20,7 @@ import { getServerT } from '#app/emails/i18n.server';
 import { sendMail } from '#app/services/email.server';
 
 /** A link that goes nowhere, so a stray click on a test mail cannot verify anything. */
-const DUMMY_URL = 'https://translate.altan.fyi/verify?token=test-token-not-valid';
+const DUMMY_URL = 'https://kenning.altan.fyi/verify?token=test-token-not-valid';
 
 async function main(): Promise<void> {
   const to = process.argv[2];

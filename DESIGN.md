@@ -1,16 +1,20 @@
-# translate.altan.fyi Design Language
+# kenning.altan.fyi Design Language
 
-This product has its own look. A blue-tinted neutral scale on every surface, a
-single open-blue brand accent, a display grotesque for the chrome, and
-monospaced headwords. The chrome means the surrounding browser frame and UI
-shell. The visual feel is a quiet study tool: clean, text-forward, and
-unhurried. It is neither a playful consumer app nor a dense dashboard.
+This product has its own look. A warm-tinted neutral scale on every surface, a
+deep ochre brand accent, a display grotesque for the chrome, and monospaced
+headwords. The chrome means the surrounding browser frame and UI shell. The
+visual feel is a quiet study tool: clean, text-forward, and unhurried. It is
+neither a playful consumer app nor a dense dashboard.
 
-The colour tokens and the display face were teal and a display serif until
-M186, both copied from openplate (`openplate/DESIGN.md`), a sibling product.
-They are neither of those things now: the palette is the operator's own choice,
-"Open blue", and the display face is Bricolage Grotesque. Do not read a token
-value or a font name back out of openplate.
+The palette has moved twice, and the reason matters more than the values. It
+was teal and a display serif until M186, both copied from openplate
+(`openplate/DESIGN.md`), a sibling product. It became "Open blue" in M186, the
+operator's own choice. It became warm on 2026-09-05, and this time the palette
+was NOT chosen in the abstract: it was read off the Kenning brand mark, a stack
+of rounded cards drawn in amber and coral. The mark came first and the tokens
+follow it, which is why the corner radius moved in the same edit. Do not read a
+token value or a font name back out of openplate, and do not repaint a token
+without asking what it does to the mark.
 
 What DOES still come from openplate is the component library: the shadcn
 primitives under `app/components/ui/` and the shape of the outer shell. That
@@ -37,8 +41,8 @@ build.
 
 ## 1. Principles
 
-1. **Neutrals carry the chrome, blue carries the brand.** Most elements use
-   neutral colors. Reserve the brand blue for elements that need user focus: the
+1. **Neutrals carry the chrome, ochre carries the brand.** Most elements use
+   neutral colors. Reserve the brand ochre for elements that need user focus: the
    primary button, the active nav item, the focus ring, links, and the single
    hero card on a screen where one exists. Not every screen has one: the
    translator surface in section 3 deliberately has no brand wash at all.
@@ -69,42 +73,85 @@ build.
 ## 2. Color tokens
 
 Semantic tokens live in `app/app.css` as HSL triplets, following shadcn
-convention. Every surface and hairline border uses the brand hue of 208 degrees
-at low saturation. The chrome, the page, and the cards form a single blue-tinted
-system instead of a blue accent placed on cold grey. The values below are the
+convention. Every surface and hairline border carries the brand's own warm hue
+at low saturation. The chrome, the page, and the cards form a single warm
+system instead of a warm accent placed on cold grey. The values below are the
 ones in `app/app.css`. Change them in one place and copy them here in the same
 edit: a token table that drifts from the stylesheet is worse than no table.
 
-| Token                  | Light                   | Dark                      | Usage                         |
-| ---------------------- | ----------------------- | ------------------------- | ----------------------------- |
-| `--background`         | `208 46% 95%` pale blue | `208 34% 5%` blue-black   | page                          |
-| `--foreground`         | `209 26% 9%`            | `200 16% 97%`             | text                          |
-| `--card`               | white                   | `208 28% 8.5%`            | card surfaces                 |
-| `--muted`              | `208 38% 91%`           | `208 20% 15%`             | hover surfaces, subdued fills |
-| `--accent`             | `208 42% 88%`           | `208 22% 17%`             | hover surfaces, subdued fills |
-| `--muted-foreground`   | `207 18% 37%`           | `203 14% 69%`             | secondary text                |
-| `--border` / `--input` | `208 30% 82%`           | `208 20% 17%`             | hairlines                     |
-| `--primary`            | `206 86% 34%`           | `199 90% 58%`             | CTAs, links, active nav       |
-| `--primary-foreground` | white                   | `205 82% 8%`              | text on primary               |
-| `--destructive`        | `0 72% 45%`             | `0 70% 45%`               | delete, disconnect            |
-| `--ring`               | same as `--primary`     | same as `--primary`       | focus rings                   |
+| Token                  | Light           | Dark            | Usage                         |
+| ---------------------- | --------------- | --------------- | ----------------------------- |
+| `--background`         | `36 44% 96%` cream | `30 18% 5%` warm black | page                   |
+| `--foreground`         | `30 20% 10%`    | `38 14% 97%`    | text                          |
+| `--card`               | white           | `30 15% 8.5%`   | card surfaces                 |
+| `--muted`              | `38 36% 91%`    | `30 12% 15%`    | hover surfaces, subdued fills |
+| `--accent`             | `38 40% 88%`    | `30 14% 17%`    | hover surfaces, subdued fills |
+| `--muted-foreground`   | `32 12% 33%`    | `36 10% 70%`    | secondary text                |
+| `--border` / `--input` | `36 26% 82%`    | `30 12% 17%`    | hairlines                     |
+| `--primary`            | `32 90% 30%`    | `41 96% 60%`    | CTAs, links, active nav       |
+| `--primary-foreground` | white           | `30 60% 8%`     | text on primary               |
+| `--brand-2`            | `7 93% 62%`     | `7 93% 66%`     | the mark, and one gradient stop |
+| `--destructive`        | `0 72% 45%`     | `0 80% 65%`     | delete, disconnect            |
+| `--success`            | `142 72% 26%`   | `142 62% 55%`   | confirmed state               |
+| `--warning`            | `45 96% 27%`    | `45 95% 58%`    | caution state                 |
+| `--ring`               | same as `--primary` | same as `--primary` | focus rings           |
 
-`--card` stays pure white in light mode so cards stand out from the tinted page.
-`--foreground` maintains a contrast ratio above 15:1 against the card and page.
-`--muted-foreground` maintains about 7.5:1 against white and 7:1 in dark mode.
-The brand is darker in light mode and brighter in dark mode, rather than one
-value in both: a 34% lightness blue on a near-black page reads as a bruise.
+`--card` stays pure white in light mode so cards stand out from the cream page.
 
-The macro, adherence, and carb-status tokens from openplate were omitted. Those
-tokens describe food, which this product does not handle. Do not add them back
-speculatively. Add tokens only when a concrete screen needs them.
+**The drawn amber is not `--primary`, and cannot be.** The mark is drawn in
+`hsl(39 95% 54%)` amber and `hsl(7 93% 62%)` coral. As text on white, that amber
+measures **1.93:1**. It fails as link text, it fails as a section label, and
+under white button text it fails again. `--primary` is that amber deepened until
+it clears the bar in both directions at once: **6.19:1** as text on the card, and
+**6.19:1** with white text on it. The drawn amber survives untouched in two
+places where contrast does not apply, the mark itself and low-alpha washes.
 
-**Brand discipline.** Neutrals use a blue tint across the whole app. Limit
-saturated blue surfaces strictly. Only three utilities in `app.css` apply one.
-Each uses an `hsl(var(--primary) / ...)` gradient, never a raw literal value:
+The other measured values, so nobody has to re-derive them: `--foreground` is
+17.34:1 on the card and 16.06:1 on the page. `--muted-foreground` is 7.31:1 on
+the card. In dark mode `--foreground` is 16.97:1, `--muted-foreground` is
+8.78:1, `--primary` as text is 10.69:1, and `--primary-foreground` on `--primary`
+is 10.62:1. Dark mode's brand takes DARK text, not white, because the bright
+amber it needs on a near-black page is far too light to sit under white.
+
+**The three state tokens, and the one honest weakness in them.** `--destructive`,
+`--success` and `--warning` are the only status colours. `--success` and
+`--warning` are new: the badge, alert and toast primitives were carrying raw
+`green-*`, `amber-*` and `orange-*` utilities, which stayed cold and un-themed
+when the palette went warm. Soft fills are alpha over the token
+(`bg-success/10 text-success`), so neither needs a `-foreground`. Measured as
+text: success 6.02:1 light and 9.37:1 dark, warning 5.35:1 and 11.39:1,
+destructive 5.81:1 and 5.49:1.
+
+Dark `--destructive` was `0 70% 45%` until this edit and measured **3.08:1** on
+the dark card, below the 4.5:1 floor. That was a live accessibility failure,
+found while deriving the two new tokens, and it is fixed here rather than
+carried forward.
+
+**`--warning` sits close to `--primary`, and that is unavoidable.** The brand is
+a warm ochre, so any warm caution colour is its neighbour: the two measure
+1.16:1 against each other, which means they are near-identical in luminance.
+There is no warm hue left that reads as "caution" and not as "brand". So the
+rule is not a colour rule: **a warning state must always carry its icon, and
+colour is never its only signal.** That is WCAG 1.4.1 regardless, and here it is
+also the thing that makes the state legible at all. Never ship a warning that is
+distinguished by hue alone, and never put a `--warning` fill next to a
+`--primary` one.
+
+**`--brand-2` is not a second primary.** It is the mark's coral, and it has
+exactly two jobs: the mark, and the middle stop of `.surface-brand`. It carries
+no text, no control, no state and no meaning. It is deliberately NOT wired to
+`--destructive`: a coral that means "delete" on one screen and "brand" on
+another teaches the reader nothing, and the red destructive stays red so the two
+can never be confused.
+
+**Brand discipline.** Neutrals use a warm tint across the whole app. Limit
+saturated brand surfaces strictly. Only three utilities in `app.css` apply one.
+Each uses an `hsl(var(--primary) / ...)` or `hsl(var(--brand-2) / ...)` gradient,
+never a raw literal value:
 
 - `.surface-brand` styles the ONE hero card on a screen. Use it once per screen,
-  never twice.
+  never twice. It runs ochre into coral, so the hero carries both of the mark's
+  hues and nothing else in the app has to.
 - `.surface-brand-soft` styles empty-state panels, paired with `border-dashed`.
 - `.brand-glow` styles backdrops behind hero elements only.
 
@@ -127,6 +174,14 @@ treatments:
 | Interactive row or chip hover     | `hover:border-primary/40 hover:bg-primary/5`                                          |
 | Active bottom-nav tab             | `bg-primary/5` plus an `after:` top rule at `bg-primary`                               |
 | Active sidebar row                | the `SidebarMenuButton` `isActive` state, which already carries the brand              |
+
+**The PWA colours are a hand-kept copy.** `public/manifest.webmanifest` and the
+two `theme-color` meta tags in `app/root.tsx` carry resolved hex values, because
+neither a manifest nor a meta tag can read a CSS custom property. They are the
+light and dark `--background` values, `#f9f6f0` and `#0f0d0a`. Change them in
+the same edit as the token or the browser chrome drifts from the page. This is
+not hypothetical: the meta tag held `#057a78`, an openplate teal, straight
+through the M186 blue repalette and was only caught when this palette landed.
 
 ---
 
@@ -239,10 +294,25 @@ container and shadow, and render simple rows on the page.
 
 - Corner radii: Use `rounded-md` for buttons, inputs, and thumbnails. Use
   `rounded-lg` for cards and dialogs as the default curve. Use `rounded-xl` for
-  feature tiles and `rounded-2xl` for the search hero. Use `rounded-full` for
-  pills, chips, and status dots. Keep `--radius: 0.5rem`.
+  feature tiles and `rounded-2xl` for the translator cards. Use `rounded-full`
+  for pills, chips, and status dots.
+- **`--radius` is `0.75rem`, and the whole ladder derives from it.** It was
+  `0.5rem` until the Kenning mark landed: the mark is a stack of generously
+  rounded cards, so the interface rounds to match. `xl` and `2xl` are derived in
+  `@theme` too, which they were not before. Tailwind ships them as fixed values,
+  so raising `--radius` alone would have made `rounded-lg` and `rounded-xl` the
+  same curve and quietly collapsed the bottom of this ladder. Deriving all four
+  steps shifts the ladder as a unit, which is why no component had to change to
+  keep its place in it. Change `--radius` and every step moves together; hardcode
+  a step and it stops moving.
 - Shadows: Use `shadow-sm` at rest, `hover:shadow-md` on interactive cards, and
   `shadow-lg` on overlays. Never apply heavier shadows to elements at rest.
+- **Shadows are warm-tinted, not black.** The `--shadow-*` scale is redefined in
+  `@theme` over `hsl(28 40% 12%)` rather than Tailwind's neutral black. A pure
+  black falloff on a cream page reads as a grey smudge sitting on top of the
+  surface rather than as the surface lifting off it. Alpha still does all the
+  work; the hue only stops the shadow going cold. Use the `shadow-*` utilities
+  as normal, they pick this up for free. Never write a raw `box-shadow`.
 - Interactive-card hover recipe: Apply `transition-all duration-200
   hover:shadow-md hover:border-primary/40`. Omit `dark:` prefixes because
   `primary` colors adapt to the active theme automatically.

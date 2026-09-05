@@ -27,11 +27,11 @@ import {
 
 const API_KEY = 'ske_test_key';
 const BASE_URL = 'http://mail.test:3601';
-const LINK = 'https://translate.altan.fyi/verify?token=abc123';
+const LINK = 'https://kenning.altan.fyi/verify?token=abc123';
 
 /** A message with the link in it, so the console assertions have something to find. */
 const MESSAGE = {
-  from: 'no-reply@translate.altan.fyi',
+  from: 'no-reply@kenning.altan.fyi',
   to: 'reader@example.com',
   subject: 'Confirm your email address',
   text: `Hello,\n\nOpen this link:\n\n${LINK}\n\nThank you.`,
@@ -309,7 +309,7 @@ describe('transport selection', () => {
       assert.equal(result.messageId, 'msg_env');
       const call = stub.calls[0];
       assert.ok(call !== undefined);
-      assert.equal(sentBody(call).from, 'no-reply@translate.altan.fyi');
+      assert.equal(sentBody(call).from, 'no-reply@kenning.altan.fyi');
     } finally {
       stub.restore();
     }
@@ -318,10 +318,10 @@ describe('transport selection', () => {
   it('sends from EMAIL_FROM when the deployment sets one', async () => {
     const transport = createMemoryTransport();
     setTransportForTests(transport);
-    process.env.EMAIL_FROM = 'post@translate.altan.fyi';
+    process.env.EMAIL_FROM = 'post@kenning.altan.fyi';
 
     await sendMail({ to: MESSAGE.to, subject: MESSAGE.subject, text: MESSAGE.text });
 
-    assert.equal(transport.messages[0]?.from, 'post@translate.altan.fyi');
+    assert.equal(transport.messages[0]?.from, 'post@kenning.altan.fyi');
   });
 });

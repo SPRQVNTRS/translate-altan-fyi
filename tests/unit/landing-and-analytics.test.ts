@@ -35,20 +35,20 @@ function readAppFile(relativePath: string): string {
 
 describe('the analytics host gate', () => {
   it('reports visits from the production host', () => {
-    assert.equal(isAnalyticsHost('translate.altan.fyi'), true);
-    assert.equal(ANALYTICS_HOST, 'translate.altan.fyi');
+    assert.equal(isAnalyticsHost('kenning.altan.fyi'), true);
+    assert.equal(ANALYTICS_HOST, 'kenning.altan.fyi');
   });
 
   it('ignores the case and the port a client happens to send', () => {
-    assert.equal(isAnalyticsHost('Translate.Altan.FYI'), true);
-    assert.equal(isAnalyticsHost('translate.altan.fyi:443'), true);
+    assert.equal(isAnalyticsHost('Kenning.Altan.FYI'), true);
+    assert.equal(isAnalyticsHost('kenning.altan.fyi:443'), true);
   });
 
   it('reads the first entry of a forwarded proxy chain', () => {
-    assert.equal(isAnalyticsHost('translate.altan.fyi, 10.0.0.4'), true);
+    assert.equal(isAnalyticsHost('kenning.altan.fyi, 10.0.0.4'), true);
   });
 
-  for (const host of ['stage.translate.altan.fyi', 'localhost:3000', 'localhost', '127.0.0.1', 'altan.fyi', '']) {
+  for (const host of ['stage.kenning.altan.fyi', 'localhost:3000', 'localhost', '127.0.0.1', 'altan.fyi', '']) {
     it(`renders no tag for ${host === '' ? 'an empty host' : host}`, () => {
       assert.equal(isAnalyticsHost(host), false);
     });
@@ -59,8 +59,8 @@ describe('the analytics host gate', () => {
   });
 
   it('is not a suffix match, which would let any subdomain in', () => {
-    assert.equal(isAnalyticsHost('evil-translate.altan.fyi'), false);
-    assert.equal(isAnalyticsHost('translate.altan.fyi.example.com'), false);
+    assert.equal(isAnalyticsHost('evil-kenning.altan.fyi'), false);
+    assert.equal(isAnalyticsHost('kenning.altan.fyi.example.com'), false);
   });
 });
 

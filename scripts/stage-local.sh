@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Bring up a complete local instance of translate.altan.fyi, from nothing.
+# Bring up a complete local instance of kenning.altan.fyi, from nothing.
 #
 # WHAT "COMPLETE" MEANS HERE, AND WHY IT TAKES A SCRIPT
 #   Three separate things have to be true before this app answers a single

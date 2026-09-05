@@ -7,9 +7,11 @@ import { ThemeToggle } from '#app/components/theme-toggle';
 import { APP_NAME } from '#app/lib/app-name';
 import { routeTitle } from '#app/lib/route-title';
 import { cn } from '#app/lib/utils';
+import { useInstallPrompt } from '#app/hooks/use-install-prompt';
 import {
   activeNavigationHref,
   AppSidebar,
+  installNavigationAction,
   navigationItems,
   primaryNavigationItems,
   visibleFooterNavigationItems,
@@ -71,6 +73,37 @@ function DrawerRow({
 }
 
 /**
+ * The install row in the drawer, the mobile counterpart of the sidebar's.
+ *
+ * It shares `useInstallPrompt` with the sidebar row and the settings card, and
+ * like them it is absent, never disabled, until the browser has actually
+ * offered an install. A button is used rather than a link because there is no
+ * destination: the browser's own dialog opens over the current screen.
+ *
+ * @param onNavigate - closes the drawer, as with every other row in it.
+ */
+function InstallDrawerRow({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useTranslation();
+  const offer = useInstallPrompt();
+
+  if (offer.kind !== 'ready') return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onNavigate();
+        offer.install();
+      }}
+      className={cn(drawerItemClasses(false), 'w-full border-0 bg-transparent text-left')}
+    >
+      <installNavigationAction.icon className="h-4 w-4" aria-hidden="true" />
+      <span>{t(installNavigationAction.labelKey)}</span>
+    </button>
+  );
+}
+
+/**
  * The mobile navigation drawer. It renders the same catalog the desktop sidebar
  * does, in the same order and with the same footer separation, so a phone user
  * and a laptop user see one map of the app rather than two.
@@ -111,6 +144,7 @@ function NavDrawer() {
           {footerItems.map((item) => (
             <DrawerRow key={item.to} item={item} isActive={activeHref === item.to} onNavigate={close} />
           ))}
+          <InstallDrawerRow onNavigate={close} />
         </nav>
       </SheetContent>
     </Sheet>

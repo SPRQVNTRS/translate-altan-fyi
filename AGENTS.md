@@ -363,7 +363,7 @@ tailnet, and the superadmin session check runs as an independent second layer.
 | `SESSION_SECRET` | Production | Signs and encrypts the session cookie. Rotating it signs everybody out. |
 | `PIGEON_API_KEY` | Production | The tenant key that authenticates mail sends to pigeon. |
 | `PIGEON_BASE_URL` | Production | The pigeon service address, e.g. `http://100.64.0.1:3601`. |
-| `EMAIL_FROM` | No, defaults to `no-reply@translate.altan.fyi` | The sender address on outgoing mail. |
+| `EMAIL_FROM` | No, defaults to `no-reply@kenning.altan.fyi` | The sender address on outgoing mail. |
 
 Production refuses to start if `PIGEON_API_KEY` or `PIGEON_BASE_URL` is unset.
 The root peppering secret and the one-shot signup token from the account model

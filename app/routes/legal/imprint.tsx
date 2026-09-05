@@ -12,7 +12,7 @@ import { OPERATOR } from './operator';
  * The German-law provider identification (Impressum) for the hosted instance.
  *
  * Section 5 DDG binds the OPERATOR of a business-facing telemedia service, and
- * the hosted instance at translate.altan.fyi is one from the day it answers a
+ * the hosted instance at kenning.altan.fyi is one from the day it answers a
  * request. The duty does not wait for a payment: this product has none.
  *
  * The identifiers are NOT in the translation bundle. They come from

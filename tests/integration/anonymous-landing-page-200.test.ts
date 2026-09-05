@@ -6,7 +6,7 @@
  *   Everything else here closes a door. This one holds a door open. The gate
  *   added to `translate.tsx`'s loader is one line away from swallowing the landing
  *   page as well, and the failure would be silent in the worst way: a stranger
- *   following a link to translate.altan.fyi would be bounced to a sign-in form
+ *   following a link to kenning.altan.fyi would be bounced to a sign-in form
  *   for an account they cannot create, and nothing in a typecheck, a lint or a
  *   build would notice.
  *
@@ -47,7 +47,7 @@ const DB_HOST = process.env.DB_HOST;
  * framework makes rather than a narrower one invented here.
  */
 async function loadLandingAnonymously() {
-  const request = new Request('https://translate.altan.fyi/');
+  const request = new Request('https://kenning.altan.fyi/');
   return translateLoader({
     request,
     url: new URL(request.url),

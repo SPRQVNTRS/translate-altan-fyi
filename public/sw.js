@@ -1,4 +1,4 @@
-// translate.altan.fyi service worker, hand-rolled. No Workbox. Modelled on
+// kenning.altan.fyi service worker, hand-rolled. No Workbox. Modelled on
 // openplate/public/sw.js.
 //
 // The shape is deliberately conservative. This app's whole reason to exist is

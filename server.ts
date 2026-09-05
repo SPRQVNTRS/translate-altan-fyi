@@ -10,6 +10,7 @@ import { reportError } from '#app/lib/report-error.server';
 import { apiJsonMiddleware } from '#app/lib/api-middleware.server';
 import { CONFIG } from '#app/config';
 import { CLIENT_IP_HEADER } from '#app/middleware/rate-limit';
+import { canonicalHostRedirect } from '#app/lib/canonical-host';
 
 const { logger, logServerStart, logShutdown, logServerClosed } = createServerLogger({
   serviceName: 'translate-altan-fyi',
@@ -69,6 +70,27 @@ app.use((req, _res, next) => {
   delete req.headers[CLIENT_IP_HEADER];
   if (req.ip) req.headers[CLIENT_IP_HEADER] = req.ip;
   next();
+});
+
+/**
+ * THE CANONICAL HOST, 301, ISSUED BY THE CONTAINER ITSELF.
+ *
+ * Bay runs no redirect middleware in front of this app. Traefik routes both
+ * `kenning.altan.fyi` and the legacy `translate.altan.fyi` here, and the same
+ * pair of `stage.` hosts, so the only place a host can be corrected is this
+ * line. The rule and the reasoning live in `app/lib/canonical-host.ts`.
+ *
+ * The host comes from `req.hostname`, which Express resolves through the
+ * configured `trust proxy` hop count, so the client-written header is never
+ * read directly. That is the same convention as the `x-client-ip` block above.
+ */
+app.use((req, res, next) => {
+  const target = canonicalHostRedirect({ host: req.hostname, path: req.originalUrl });
+  if (target === null) {
+    next();
+    return;
+  }
+  res.redirect(301, target);
 });
 
 // handle asset requests

@@ -12,8 +12,8 @@ export function ErrorBoundary() {
     return (
       <PublicWrapper>
         <div className="flex min-h-[40vh] flex-col items-center justify-center text-center">
-          <h1 className="text-6xl font-bold text-zinc-900 dark:text-zinc-100">404</h1>
-          <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
+          <h1 className="text-6xl font-bold text-foreground">404</h1>
+          <p className="mt-4 text-lg text-muted-foreground">
             The page you&apos;re looking for doesn&apos;t exist.
           </p>
           <Link
@@ -30,14 +30,14 @@ export function ErrorBoundary() {
   return (
     <PublicWrapper>
       <div className="flex min-h-[40vh] flex-col items-center justify-center text-center">
-        <h1 className="text-3xl font-bold text-red-600 dark:text-red-400">
+        <h1 className="text-3xl font-bold text-destructive">
           Something Went Wrong
         </h1>
-        <p className="mt-4 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-4 text-muted-foreground">
           An unexpected error occurred.
         </p>
         {import.meta.env.DEV && error instanceof Error && (
-          <pre className="mt-4 max-w-full overflow-auto rounded bg-zinc-100 p-4 text-left text-sm dark:bg-zinc-800">
+          <pre className="mt-4 max-w-full overflow-auto rounded bg-muted p-4 text-left text-sm">
             {error.message}
           </pre>
         )}

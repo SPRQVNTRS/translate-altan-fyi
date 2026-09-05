@@ -62,7 +62,7 @@ export function expiryFor(input: { kind: UserTokenKind; now: Date }): Date {
 /**
  * The absolute URL a mail carries.
  *
- * @param input.origin the site's origin, for example `https://translate.altan.fyi`.
+ * @param input.origin the site's origin, for example `https://kenning.altan.fyi`.
  * @param input.path the path the link lands on, leading slash included.
  * @param input.token the raw token.
  * @returns the link, with the token in a `token` query parameter.

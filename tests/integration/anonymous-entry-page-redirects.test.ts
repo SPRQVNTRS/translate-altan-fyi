@@ -80,7 +80,7 @@ function collectFiles(entries: readonly RouteConfigEntry[]): string[] {
  * returns nothing at all.
  */
 async function runGate(cookie: string | null): Promise<'admitted' | Response> {
-  const request = new Request('https://translate.altan.fyi/entry/00000000-0000-0000-0000-000000000000', {
+  const request = new Request('https://kenning.altan.fyi/entry/00000000-0000-0000-0000-000000000000', {
     headers: cookie === null ? {} : { cookie },
   });
   const middleware: MiddlewareFunction = authMiddleware;
@@ -140,7 +140,7 @@ describe('the entry page is gated', () => {
     // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
     // the reader lands back where they were refused, and an assertion on the
     // full string would read as a broken gate the first time that changed.
-    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
+    assert.equal(new URL(outcome.headers.get('location') ?? '', 'https://kenning.altan.fyi').pathname, SIGN_IN_PATH);
   });
 
   it('admits a real invited session', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {

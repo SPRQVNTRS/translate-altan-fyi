@@ -16,7 +16,7 @@ type H1Variant =
 
 const h1VariantClasses = {
   default: 'text-4xl font-extrabold lg:text-5xl',
-  pageHeader: 'text-2xl font-semibold text-zinc-900 dark:text-zinc-100',
+  pageHeader: 'text-2xl font-semibold text-foreground',
   pageHeaderBold: 'text-2xl font-bold',
   subtlePageHeader: 'text-2xl font-semibold', // No text color by default
   loginHeader: 'text-center text-xl font-bold',
@@ -43,10 +43,10 @@ type H2Variant = 'default' | 'sectionHeader' | 'subSectionHeader' | 'subSectionH
 
 const h2VariantClasses = {
   default: 'border-b pb-2 text-3xl font-semibold first:mt-0',
-  sectionHeader: 'text-xl font-semibold text-zinc-900 dark:text-zinc-100',
+  sectionHeader: 'text-xl font-semibold text-foreground',
   subSectionHeader: 'text-lg font-semibold',
   subSectionHeaderWithMargin: 'text-lg font-semibold mb-2',
-  keywordsHeader: 'text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4',
+  keywordsHeader: 'text-lg font-semibold text-foreground mb-4',
 } satisfies Record<H2Variant, string>;
 
 type H2Props = PropsWithChildren<
@@ -69,8 +69,8 @@ type H3Variant = 'default' | 'cardHeader' | 'subSectionHeader' | 'websiteAttachm
 const h3VariantClasses = {
   default: 'text-2xl font-semibold',
   cardHeader: 'text-lg font-medium',
-  subSectionHeader: 'text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4',
-  websiteAttachmentHeader: 'font-medium text-zinc-900 dark:text-zinc-100', // Removed scroll-m-20 tracking-tight here as it was font-medium only before
+  subSectionHeader: 'text-lg font-semibold text-foreground mb-4',
+  websiteAttachmentHeader: 'font-medium text-foreground', // Removed scroll-m-20 tracking-tight here as it was font-medium only before
 } satisfies Record<H3Variant, string>;
 
 type H3Props = PropsWithChildren<

@@ -88,7 +88,7 @@ async function post(body: JsonValue, key: string | null): Promise<Response> {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (key !== null) headers.set('Authorization', `Bearer ${key}`);
 
-  const request = new Request('https://translate.altan.fyi/api/v1/translate', {
+  const request = new Request('https://kenning.altan.fyi/api/v1/translate', {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

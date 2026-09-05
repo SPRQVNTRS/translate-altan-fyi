@@ -1,9 +1,9 @@
 import { ThemeToggle } from './theme-toggle';
-import { Layers } from 'lucide-react';
 import * as React from 'react';
 import { useNavigation } from 'react-router';
 import { cn } from '#app/lib/utils';
 import { APP_NAME } from '#app/lib/app-name';
+import { KenningMark } from '#app/components/kenning-mark';
 import { useLoading } from '#app/context/loading';
 
 export default function PublicWrapper({
@@ -30,7 +30,7 @@ export default function PublicWrapper({
         >
           <div
             className={cn(
-              'h-full bg-linear-to-r from-blue-500 via-purple-500 to-pink-500',
+              'h-full bg-primary',
               'absolute top-0 left-0 w-1/3',
               'animate-loading-bar',
             )}
@@ -41,9 +41,7 @@ export default function PublicWrapper({
         <div>
           {showLogo && (
             <a href="/" className="flex items-center gap-3 font-medium hover:opacity-80 transition-opacity">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Layers className="h-5 w-5 text-primary-foreground" />
-              </div>
+              <KenningMark className="h-8 w-8 shrink-0" />
               <span className="font-display text-lg font-semibold text-foreground">{APP_NAME}</span>
             </a>
           )}

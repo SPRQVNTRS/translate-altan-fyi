@@ -112,7 +112,7 @@ function octet(): number {
 function searchRequest(q: string): Request {
   const ip = `198.51.${octet()}.${octet()}`;
   createdCounterKeys.push(counterKey('ip', ip));
-  const url = `https://translate.altan.fyi/translate?q=${encodeURIComponent(q)}&from=${FROM}&to=${TO}`;
+  const url = `https://kenning.altan.fyi/translate?q=${encodeURIComponent(q)}&from=${FROM}&to=${TO}`;
   // SIGNED IN, SINCE M184. A typed search requires an account: the loader
   // redirects a signed-out caller to `/sign-in` before it reads the
   // dictionary, so an anonymous request here would assert nothing about the
@@ -167,7 +167,7 @@ const polledPanelSchema = z.object({
  * either ends the skeleton or leaves it spinning forever.
  */
 async function panelFromPoll(headwordId: string): Promise<z.infer<typeof polledPanelSchema>> {
-  const request = new Request(`https://translate.altan.fyi/api/enrichment/${headwordId}?to=${TO}`);
+  const request = new Request(`https://kenning.altan.fyi/api/enrichment/${headwordId}?to=${TO}`);
   const response = await pollEnrichment({
     request,
     url: new URL(request.url),

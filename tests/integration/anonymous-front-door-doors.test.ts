@@ -132,7 +132,7 @@ describe('the front door an anonymous visitor is shown', () => {
     'puts the way in above the search box, not below it',
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
-      const request = new Request('https://translate.altan.fyi/');
+      const request = new Request('https://kenning.altan.fyi/');
       const loaderData = await translateLoader({
         request,
         url: new URL(request.url),
@@ -198,7 +198,7 @@ describe('the front door an anonymous visitor is shown', () => {
     'shows a signed-in reader neither the doors nor the privacy line',
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
-      const request = new Request('https://translate.altan.fyi/');
+      const request = new Request('https://kenning.altan.fyi/');
       const anonymous = await translateLoader({
         request,
         url: new URL(request.url),

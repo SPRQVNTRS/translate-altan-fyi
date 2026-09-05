@@ -134,7 +134,7 @@ async function post(params: { body: Uint8Array<ArrayBuffer>; ip: string; declare
   if (params.declaredLength !== undefined) headers.set('content-length', String(params.declaredLength));
   if (session !== null) headers.set('cookie', session.cookie);
 
-  const request = new Request('https://translate.altan.fyi/api/v1/transcribe?language=de', {
+  const request = new Request('https://kenning.altan.fyi/api/v1/transcribe?language=de', {
     method: 'POST',
     headers,
     // A `Blob` rather than the array itself: that is the shape the browser

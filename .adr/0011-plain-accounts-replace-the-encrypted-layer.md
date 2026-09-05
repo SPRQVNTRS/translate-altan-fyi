@@ -65,7 +65,7 @@ mail is required before the first sign-in.
 
 **Mail.** `@sprqvntrs/pigeon`, sent over plain `fetch` against the same wire
 contract `selfhostedworld-com` uses, with a console fallback in development
-(`app/services/email.server.ts`). From `no-reply@translate.altan.fyi`.
+(`app/services/email.server.ts`). From `no-reply@kenning.altan.fyi`.
 Templates are plain text, in English and German through i18n keys, written by
 wordsmith.
 

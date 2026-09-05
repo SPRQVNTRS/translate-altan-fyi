@@ -30,7 +30,7 @@
   },
   "privacy": {
     "title": "Datenschutzerklärung",
-    "lead": "Ihre Eingaben erreichen unseren Server als Klartext, damit er das Wörterbuch durchsuchen kann. Wenn Sie ein Konto erstellen und synchronisieren, werden auch Ihre gespeicherten Listen, Notizen und Lernfortschritte als lesbare Daten auf unserem Server gespeichert und können von uns eingesehen werden. Diese Datenschutzerklärung gilt für den unter translate.altan.fyi betriebenen Dienst. Wer eine eigene Kopie der Open-Source-Software betreibt, ist für die eigene Installation selbst verantwortlich.",
+    "lead": "Ihre Eingaben erreichen unseren Server als Klartext, damit er das Wörterbuch durchsuchen kann. Wenn Sie ein Konto erstellen und synchronisieren, werden auch Ihre gespeicherten Listen, Notizen und Lernfortschritte als lesbare Daten auf unserem Server gespeichert und können von uns eingesehen werden. Diese Datenschutzerklärung gilt für den unter kenning.altan.fyi betriebenen Dienst. Wer eine eigene Kopie der Open-Source-Software betreibt, ist für die eigene Installation selbst verantwortlich.",
     "s1Heading": "1. Die Kurzfassung",
     "s1Item1": "Sie können die gesamte App ohne ein Konto nutzen. Es gibt keine Registrierungspflicht, und Sie benötigen kein Konto, um Wörter zu suchen, Listen zu speichern oder diese zu wiederholen.",
     "s1Item2": "Wörter, nach denen Sie suchen, werden im Klartext an unseren Server übertragen. Das ist technisch erforderlich, da der Server damit das gemeinsame Wörterbuch durchsucht.",
@@ -80,9 +80,9 @@
   },
   "terms": {
     "title": "Nutzungsbedingungen",
-    "lead": "Diese Bedingungen regeln Ihre Nutzung von translate.altan.fyi, dem Dienst des im Impressum genannten Unternehmens. Mit der Nutzung der Website erklären Sie sich mit diesen Bedingungen einverstanden.",
+    "lead": "Diese Bedingungen regeln Ihre Nutzung von kenning.altan.fyi, dem Dienst des im Impressum genannten Unternehmens. Mit der Nutzung der Website erklären Sie sich mit diesen Bedingungen einverstanden.",
     "s1Heading": "1. Der Dienst",
-    "s1Body": "translate.altan.fyi ist eine kostenlose Vokabel- und Übersetzungs-App. Es gibt keine Zahlungen, keine Abonnements und keine Werbung. Wir können den Funktionsumfang des Dienstes ändern und die Bereitstellung jederzeit einstellen.",
+    "s1Body": "kenning.altan.fyi ist eine kostenlose Vokabel- und Übersetzungs-App. Es gibt keine Zahlungen, keine Abonnements und keine Werbung. Wir können den Funktionsumfang des Dienstes ändern und die Bereitstellung jederzeit einstellen.",
     "s2Heading": "2. Konten",
     "s2Body1": "Ein Konto ist nicht erforderlich. Bis auf die Synchronisierung mit einem zweiten Gerät funktioniert alles auch ohne Konto.",
     "s2Body2": "Ein Konto besteht aus einer E-Mail-Adresse und einem von Ihnen gewählten Passwort. Sie sind dafür verantwortlich, Ihr Passwort sicher zu verwahren. Wenn Sie es vergessen, fordern Sie einen Link zum Zurücksetzen an; wir senden dann einen solchen an die für das Konto hinterlegte Adresse.",

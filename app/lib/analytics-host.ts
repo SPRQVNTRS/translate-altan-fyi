@@ -2,7 +2,7 @@
  * Which host is allowed to load the analytics tag.
  *
  * ONE HOST, NAMED, AND NOTHING ELSE. The Matomo site id belongs to
- * `translate.altan.fyi`. Stage rehearsals and a developer's laptop hit the same
+ * `kenning.altan.fyi`. Stage rehearsals and a developer's laptop hit the same
  * code, and every visit they send would be counted as a real one, so the
  * measurement would stop meaning "somebody used the product". The gate is
  * therefore an allowlist of one name rather than a `NODE_ENV` check: a stage
@@ -14,7 +14,7 @@
  */
 
 /** The production host, and the only host this app reports visits from. */
-export const ANALYTICS_HOST = 'translate.altan.fyi';
+export const ANALYTICS_HOST = 'kenning.altan.fyi';
 
 /**
  * Strips the port and the case off a Host header value.

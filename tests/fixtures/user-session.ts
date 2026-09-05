@@ -68,7 +68,7 @@ export async function createTestUserSession(label: string): Promise<TestUserSess
   if (!created) throw new Error('could not create the test user');
 
   const setCookie = await commitUserSession({
-    request: new Request('https://translate.altan.fyi/'),
+    request: new Request('https://kenning.altan.fyi/'),
     userId: created.id,
   });
 

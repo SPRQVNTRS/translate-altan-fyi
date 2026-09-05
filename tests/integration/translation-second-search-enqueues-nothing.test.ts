@@ -85,7 +85,7 @@ function octet(): number {
 async function search() {
   const ip = `198.51.${octet()}.${octet()}`;
   createdCounterKeys.push(counterKey('ip', ip));
-  const request = new Request(`https://translate.altan.fyi/?q=${encodeURIComponent(lemma)}&from=${FROM}&to=${TO}`, {
+  const request = new Request(`https://kenning.altan.fyi/?q=${encodeURIComponent(lemma)}&from=${FROM}&to=${TO}`, {
     headers: { 'x-forwarded-for': ip, cookie: session?.cookie ?? '' },
   });
   return translateLoader({

@@ -95,7 +95,7 @@ async function openRun(): Promise<string> {
 
 /** The exact hop `TranslationSection` polls: `/api/translation/<id>?to=<code>`. */
 async function poll(): Promise<z.infer<typeof polledPanelSchema>> {
-  const request = new Request(`https://translate.altan.fyi/api/translation/${headwordId}?to=${TO}`);
+  const request = new Request(`https://kenning.altan.fyi/api/translation/${headwordId}?to=${TO}`);
   const response = await pollTranslation({
     request,
     url: new URL(request.url),

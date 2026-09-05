@@ -63,7 +63,7 @@ const RESET_PATH = '/reset-password';
  */
 export interface MailContext {
   t: TFunction;
-  /** For example `https://translate.altan.fyi`. Taken from the request URL by the caller. */
+  /** For example `https://kenning.altan.fyi`. Taken from the request URL by the caller. */
   origin: string;
 }
 

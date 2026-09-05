@@ -31,7 +31,7 @@ import enCommon from '#app/locales/en/common.json';
 import deCommon from '#app/locales/de/common.json';
 import { createMemoryTransport, sendMail, setTransportForTests, type MemoryTransport } from '#app/services/email.server';
 
-const ORIGIN = 'https://translate.altan.fyi';
+const ORIGIN = 'https://kenning.altan.fyi';
 const READER = 'reader@example.com';
 
 /** The catalogues, keyed the way the templates ask for them: one flat lookup per language. */
@@ -161,6 +161,6 @@ describe('a mailed link, minted to clicked', () => {
   it('reads no token out of a body whose link was mangled (guards the reader itself)', () => {
     // A test that could not fail is worse than no test: this proves the
     // extraction above is really reading the rendered text.
-    assert.equal(tokenFromMailBody('Open https://translate.altan.fyi/verify-email'), '');
+    assert.equal(tokenFromMailBody('Open https://kenning.altan.fyi/verify-email'), '');
   });
 });

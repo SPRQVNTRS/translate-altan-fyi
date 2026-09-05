@@ -12,10 +12,10 @@ export function RouteErrorBoundary() {
   if (isRouteErrorResponse(error)) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">
+        <h1 className="text-2xl font-bold text-destructive">
           {error.status} {error.statusText}
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-muted-foreground">
           {error.data?.message || 'An error occurred while loading this page.'}
         </p>
       </div>
@@ -26,14 +26,14 @@ export function RouteErrorBoundary() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">
+      <h1 className="text-2xl font-bold text-destructive">
         Something went wrong
       </h1>
-      <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-muted-foreground">
         An unexpected error occurred while loading this page.
       </p>
       {error instanceof Error && (
-        <pre className="mt-4 overflow-auto rounded bg-zinc-100 p-4 text-sm dark:bg-zinc-800">
+        <pre className="mt-4 overflow-auto rounded bg-muted p-4 text-sm">
           {error.message}
         </pre>
       )}

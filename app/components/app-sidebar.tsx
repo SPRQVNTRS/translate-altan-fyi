@@ -1,9 +1,23 @@
 import * as React from 'react';
-import { BookMarked, History, ScrollText, Search, Settings, ShieldCheck, Star, UserRound, type LucideIcon } from 'lucide-react';
+import {
+  BookMarked,
+  Download,
+  History,
+  ScrollText,
+  Search,
+  Settings,
+  ShieldCheck,
+  Star,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { cn } from '#app/lib/utils';
 import { Link } from '#app/components/link';
+import { APP_NAME } from '#app/lib/app-name';
+import { KenningMark } from '#app/components/kenning-mark';
+import { useInstallPrompt } from '#app/hooks/use-install-prompt';
 import {
   Sidebar,
   SidebarContent,
@@ -80,6 +94,36 @@ export const navigationItems: NavigationItem[] = [
   { labelKey: 'nav.admin', to: '/super', icon: ShieldCheck, group: 'footer', requiresSuperadmin: true },
 ];
 
+/**
+ * A navigation row that runs something instead of going somewhere. It is the
+ * catalog entry minus the parts only an href has: no `to`, so
+ * `activeNavigationHref` and the tab bar cannot see it and nothing needs a new
+ * branch to skip it.
+ */
+export type NavigationAction = Pick<NavigationItem, 'labelKey' | 'icon'>;
+
+/**
+ * Installing the app, as the one entry every surface that offers it reads.
+ *
+ * It is HERE, beside the destinations, because this file is the single place a
+ * navigation label and icon are named (DESIGN.md section 6). It is not a member
+ * of `navigationItems` because it has no href: it opens the browser's install
+ * dialog on the screen the reader is already on.
+ *
+ * The label is `settings.installTitle`, the sentence the settings card already
+ * uses. One phrasing per idea (DESIGN.md section 9 rule 7): a second wording
+ * for the same action would be two names for one thing.
+ *
+ * WHO RENDERS IT, AND WHEN. Only the sidebar and the mobile drawer, and only
+ * while `useInstallPrompt` answers `ready`, which cannot happen before mount or
+ * on a browser that has no install to offer. The row is therefore absent rather
+ * than disabled, and a reader never meets a control that does nothing.
+ */
+export const installNavigationAction = {
+  labelKey: 'settings.installTitle',
+  icon: Download,
+} satisfies NavigationAction;
+
 /** The day-to-day destinations, in catalog order: the top block of the drawer and the sidebar. */
 export const primaryNavigationItems: NavigationItem[] = navigationItems.filter((item) => item.group === 'primary');
 
@@ -137,9 +181,12 @@ export function activeNavigationHref(
 }
 
 /**
- * The brand mark. There is no icon asset in `public/` yet, so the expanded rail
- * shows a wordmark set in the display face, and the collapsed rail shows a
- * compact square mark, which keeps the icon rail from reading as empty chrome.
+ * The brand mark, with the wordmark beside it while the rail is expanded.
+ *
+ * The mark itself is `KenningMark`, the same drawing the favicon and the
+ * installed app icon carry. Both rails show it: it stood in as a letter in an
+ * ochre square until the real mark existed, and a collapsed rail with no mark
+ * reads as empty chrome.
  */
 function Logo() {
   const { state } = useSidebar();
@@ -157,14 +204,10 @@ function Logo() {
         isCollapsed && 'justify-center gap-0 px-0',
       )}
     >
-      {isCollapsed ?
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary font-display text-sm font-semibold text-primary-foreground"
-        >
-          t
-        </span>
-      : <span className="font-display text-lg font-semibold text-sidebar-foreground">translate</span>}
+      <KenningMark className="size-8 shrink-0" />
+      {!isCollapsed && (
+        <span className="font-display text-lg font-semibold text-sidebar-foreground">{APP_NAME}</span>
+      )}
     </Link>
   );
 }
@@ -180,6 +223,30 @@ function NavigationRow({ item, isActive }: { item: NavigationItem; isActive: boo
           <item.icon />
           <span>{t(item.labelKey)}</span>
         </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/**
+ * The install row, in the footer group beside the other things you do once.
+ *
+ * It renders NOTHING until the browser has handed the page a real install
+ * event. The server render and the first client render are both empty, so this
+ * cannot ship as a dead row: by the time it is in the DOM, clicking it opens
+ * the browser's install dialog.
+ */
+function InstallRow() {
+  const { t } = useTranslation();
+  const offer = useInstallPrompt();
+
+  if (offer.kind !== 'ready') return null;
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton onClick={offer.install}>
+        <installNavigationAction.icon />
+        <span>{t(installNavigationAction.labelKey)}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -222,6 +289,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           {footerItems.map((item) => (
             <NavigationRow key={item.to} item={item} isActive={activeHref === item.to} />
           ))}
+          <InstallRow />
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />

@@ -105,7 +105,7 @@ let baselineRateLimited = 0;
 
 /** A request from one address, carrying no cookie, so only the address bucket is counted. */
 function requestFrom(address: string): Request {
-  return new Request('https://translate.altan.fyi/entry/whatever', {
+  return new Request('https://kenning.altan.fyi/entry/whatever', {
     headers: { 'x-forwarded-for': address },
   });
 }

@@ -17,11 +17,11 @@ const badgeVariants = cva(
         // The affirmative half of the app's status colour language (a saved word,
         // a completed list), exposed as a reusable variant instead of every
         // caller re-inlining the green recipe.
-        success: 'border-transparent bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+        success: 'border-transparent bg-success/10 text-success',
         // The "needs attention" signal: amber, never red. Red is reserved for
         // destructive actions, so a stale entry or an unreviewed item reads as a
         // nudge rather than an error.
-        warning: 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        warning: 'border-transparent bg-warning/10 text-warning',
       },
     },
     defaultVariants: {

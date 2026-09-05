@@ -22,8 +22,15 @@
  */
 import { z } from 'zod';
 
-/** The default sender. Overridden with `EMAIL_FROM`, which production sets. */
-const DEFAULT_FROM = 'no-reply@translate.altan.fyi';
+/**
+ * The default sender. Overridden with `EMAIL_FROM`, which production sets.
+ *
+ * `kenning.altan.fyi` must be registered and verified as a sending domain in
+ * pigeon before this address can actually send mail. Pigeon enforces its own
+ * domain allowlist on top of SES, so a send against an unregistered domain
+ * answers `502 Domain kenning.altan.fyi is not verified for sending`.
+ */
+const DEFAULT_FROM = 'no-reply@kenning.altan.fyi';
 
 /** How long one send attempt may take before it is abandoned. */
 const SEND_TIMEOUT_MS = 15_000;

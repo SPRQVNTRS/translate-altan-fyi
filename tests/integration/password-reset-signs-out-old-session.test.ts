@@ -56,7 +56,7 @@ import {
  */
 const DB_HOST = process.env.DB_HOST;
 
-const ORIGIN = 'https://translate.altan.fyi';
+const ORIGIN = 'https://kenning.altan.fyi';
 const OLD_PASSWORD = 'the first long password';
 const NEW_PASSWORD = 'the second long password';
 

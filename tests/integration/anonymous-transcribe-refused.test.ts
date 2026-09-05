@@ -82,7 +82,7 @@ async function post(cookie: string | null): Promise<Response> {
   // requests, and only the first is what a stranger's browser sends.
   const headers = new Headers({ 'content-type': 'audio/webm', 'x-forwarded-for': ip });
   if (cookie !== null) headers.set('cookie', cookie);
-  const request = new Request('https://translate.altan.fyi/api/v1/transcribe', {
+  const request = new Request('https://kenning.altan.fyi/api/v1/transcribe', {
     method: 'POST',
     headers,
     body: new Uint8Array(0),

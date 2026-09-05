@@ -21,11 +21,11 @@
  *   `openplate/app/routes/legal/operator.ts` and
  *   `nicotinepouch-org/app/routes/legal/imprint.tsx`. Nothing here was derived,
  *   inferred or invented for this repo. The operator still has to confirm that
- *   this legal person is the one that operates translate.altan.fyi; if it is
+ *   this legal person is the one that operates kenning.altan.fyi; if it is
  *   not, this file is the single place that changes.
  */
 export const OPERATOR = {
-  /** The legal person. Not "translate.altan.fyi", which is a product name. */
+  /** The legal person. Not "kenning.altan.fyi", which is a product name. */
   legalName: 'SPARQ VENTURES UG (haftungsbeschränkt)',
   street: 'Straße 73 49',
   postalCode: '13125',

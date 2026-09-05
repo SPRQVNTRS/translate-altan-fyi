@@ -98,7 +98,7 @@ describe('the doors, for somebody who is already through them', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const response = await catchThrownResponse(() =>
-        signUpLoader(loaderArgs({ url: 'https://translate.altan.fyi/sign-up', pattern: '/sign-up', cookie: session?.cookie ?? null })),
+        signUpLoader(loaderArgs({ url: 'https://kenning.altan.fyi/sign-up', pattern: '/sign-up', cookie: session?.cookie ?? null })),
       );
 
       assert.equal(response.status, 302);
@@ -115,7 +115,7 @@ describe('the doors, for somebody who is already through them', () => {
     { skip: !DB_HOST ? 'DB_HOST not set' : false },
     async () => {
       const response = await catchThrownResponse(() =>
-        signInLoader(loaderArgs({ url: 'https://translate.altan.fyi/sign-in', pattern: '/sign-in', cookie: session?.cookie ?? null })),
+        signInLoader(loaderArgs({ url: 'https://kenning.altan.fyi/sign-in', pattern: '/sign-in', cookie: session?.cookie ?? null })),
       );
 
       assert.equal(response.status, 302);
@@ -130,7 +130,7 @@ describe('the doors, for somebody who is already through them', () => {
       // WITHOUT THIS CASE THE TWO ABOVE ARE SATISFIED BY A PAIR OF LOADERS THAT
       // REDIRECT EVERYBODY, which is an instance nobody can join.
       const signUpData = await signUpLoader(
-        loaderArgs({ url: 'https://translate.altan.fyi/sign-up', pattern: '/sign-up', cookie: null }),
+        loaderArgs({ url: 'https://kenning.altan.fyi/sign-up', pattern: '/sign-up', cookie: null }),
       );
       assert.equal(
         signUpData,
@@ -142,7 +142,7 @@ describe('the doors, for somebody who is already through them', () => {
       // `null`, so the assertion is that it RETURNED at all: a refusal here is
       // a thrown redirect, which would fail the await above.
       const signInData = await signInLoader(
-        loaderArgs({ url: 'https://translate.altan.fyi/sign-in', pattern: '/sign-in', cookie: null }),
+        loaderArgs({ url: 'https://kenning.altan.fyi/sign-in', pattern: '/sign-in', cookie: null }),
       );
       assert.deepEqual(signInData, { next: '/' }, 'a signed-out visitor was turned away from the sign-in form');
     },

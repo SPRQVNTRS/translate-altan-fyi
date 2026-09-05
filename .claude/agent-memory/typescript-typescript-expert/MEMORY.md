@@ -79,3 +79,8 @@
 - [A browser probe read during render ships the server's answer](project_translate_env_probe_needs_a_mount_effect.md) — SSR emits `disabled=""`, React never repairs the mismatch; probe in a mount effect
 - [The CLI boundary schema strips fields](project_cli_boundary_schema_strips_fields.md) — a field absent from cli/lib/schemas.ts is DISCARDED, not missing; layers 1 and 2 pass the panel through untouched
 - [A sentence goes under the CLI table](project_cli_note_renders_under_the_table.md) — never a fifth column; a null value prints nothing
+- [The canonical-host 301 comes from the container](project_canonical_host_301_lives_in_the_container.md) — kenning is canonical, translate is legacy; `req.hostname`, a dot-boundary suffix swap, and `/healthcheck` excluded
+- [role="img" is banned on an inline svg](project_role_img_is_banned_on_an_inline_svg.md) — the mark names itself with aria-label plus a `<title>`, and its two brand fills are the one raw-colour exception
+- [The install entry is a catalog action, not a destination](project_install_entry_is_a_catalog_action.md) — `useInstallPrompt` starts unavailable, so the row is absent before mount rather than dead
+- [translate.altan.fyi renamed to Kenning](project_translate_kenning_rename.md) — APP_NAME in app/lib/app-name.ts is the single source; historical launch-check docs keep the old domain
+- [A parallel visual rebrand can be mid-edit, uncommitted, in the same tree](project_translate_dirty_tree_parallel_rebrand.md) — check git status before touching anything, don't revert files outside your task's scope

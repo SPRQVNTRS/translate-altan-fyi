@@ -134,7 +134,7 @@ const key = {
   to: 'tr',
 } as const;
 
-const request = new Request('https://translate.altan.fyi/?q=Das%20auto%20volltanken');
+const request = new Request('https://kenning.altan.fyi/?q=Das%20auto%20volltanken');
 
 /** One phrase row, with only the fields the resolver reads filled in. */
 function row(status: PhraseTranslationView['status'], overrides: Partial<PhraseTranslationView> = {}) {
@@ -317,7 +317,7 @@ describe('the phrase trigger, which may', () => {
 
 describe('the polling key, read out of a query string', () => {
   it('folds the text the same way the cache key was written, so a poll finds its own row', () => {
-    const url = new URL('https://translate.altan.fyi/api/translation-phrase?q=%20Das%20Auto%20%20volltanken%20&from=de&to=tr');
+    const url = new URL('https://kenning.altan.fyi/api/translation-phrase?q=%20Das%20Auto%20%20volltanken%20&from=de&to=tr');
     assert.deepEqual(phraseKeyFromRequest(url), {
       sourceText: 'Das Auto  volltanken',
       sourceNormalized: 'das auto volltanken',

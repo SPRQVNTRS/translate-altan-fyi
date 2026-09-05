@@ -167,7 +167,7 @@ async function postVote(params: { enrichmentId: string; value: '1' | '-1'; cooki
   const headers = new Headers();
   if (params.cookie !== null) headers.set('cookie', params.cookie);
 
-  const request = new Request('https://translate.altan.fyi/api/enrichment-vote', {
+  const request = new Request('https://kenning.altan.fyi/api/enrichment-vote', {
     method: 'POST',
     headers,
     body,

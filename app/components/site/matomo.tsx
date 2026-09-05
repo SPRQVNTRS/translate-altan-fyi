@@ -27,7 +27,7 @@ import { useLocation } from 'react-router';
  */
 
 /**
- * The Matomo site id for `translate.altan.fyi`, registered in djinn's site map
+ * The Matomo site id for `kenning.altan.fyi`, registered in djinn's site map
  * under the `translate` alias.
  *
  * Written as a literal inside the snippet below rather than interpolated: an id

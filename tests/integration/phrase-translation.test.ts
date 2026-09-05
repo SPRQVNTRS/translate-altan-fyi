@@ -104,7 +104,7 @@ function octet(): number {
 async function search(phrase: { text: string; normalized: string }) {
   const ip = `198.51.${octet()}.${octet()}`;
   createdCounterKeys.push(counterKey('ip', ip));
-  const request = new Request(`https://translate.altan.fyi/?q=${encodeURIComponent(phrase.text)}`, {
+  const request = new Request(`https://kenning.altan.fyi/?q=${encodeURIComponent(phrase.text)}`, {
     headers: { 'x-forwarded-for': ip },
   });
   return resolveTriggeredPhrasePanel(db, {

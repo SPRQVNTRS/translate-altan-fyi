@@ -47,7 +47,7 @@ import {
  */
 const DB_HOST = process.env.DB_HOST;
 
-const ORIGIN = 'https://translate.altan.fyi';
+const ORIGIN = 'https://kenning.altan.fyi';
 const PASSWORD = 'a long enough password';
 
 const createdEmails: string[] = [];

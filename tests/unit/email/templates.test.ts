@@ -27,7 +27,7 @@ const LANGUAGES = ['en', 'de'] as const;
 const PARTS = ['greeting', 'body', 'action', 'ignore', 'signoff'] as const;
 
 /** A stand-in link, distinctive enough to count occurrences of. Not named `URL`, which is a global here. */
-const LINK = 'https://translate.altan.fyi/verify?token=abc123';
+const LINK = 'https://kenning.altan.fyi/verify?token=abc123';
 
 /** Written as escapes so this file does not trip `design-rules.test.ts` itself. */
 const DASHES = ['-', '–', '—'];
@@ -107,7 +107,7 @@ describe('mail templates', () => {
 
       it(`names no product or service in the ${name} mail in ${language}`, () => {
         const prose = `${rendered.subject} ${bodyWithoutLink(rendered.text)}`.toLowerCase();
-        for (const forbidden of ['translate.altan.fyi', 'pigeon', 'sparq']) {
+        for (const forbidden of ['kenning.altan.fyi', 'pigeon', 'sparq']) {
           assert.ok(!prose.includes(forbidden), `the mail names ${forbidden}`);
         }
       });

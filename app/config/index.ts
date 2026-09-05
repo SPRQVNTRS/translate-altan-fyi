@@ -111,7 +111,10 @@ export const CONFIG = {
    * base URL, development logs the mail to the console instead of sending it.
    */
   email: {
-    from: optionalEnv('EMAIL_FROM', 'no-reply@translate.altan.fyi'),
+    // `kenning.altan.fyi` must be registered and verified as a sending domain
+    // in pigeon before this address can actually send mail, or pigeon answers
+    // 502 for an unregistered domain.
+    from: optionalEnv('EMAIL_FROM', 'no-reply@kenning.altan.fyi'),
     pigeonApiKey: optionalEnv('PIGEON_API_KEY', ''),
     pigeonBaseUrl: optionalEnv('PIGEON_BASE_URL', ''),
   },

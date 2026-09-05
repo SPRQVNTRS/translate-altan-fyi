@@ -1,14 +1,14 @@
 {
-  "name": "translate",
-  "short_name": "translate",
+  "name": "Kenning",
+  "short_name": "Kenning",
   "description": "Look up a word or a phrase, keep the ones you want to learn.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "lang": "en",
-  "background_color": "#f1f7f8",
-  "theme_color": "#057a78",
+  "background_color": "#f9f6f0",
+  "theme_color": "#f9f6f0",
   "categories": ["education", "productivity", "books"],
   "icons": [
     {

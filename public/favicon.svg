@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Kenning">
+  <rect width="512" height="512" rx="112.6" ry="112.6" fill="#FFFEFD"/>
+  <rect x="58" y="68" width="320" height="210" rx="46" ry="46" fill="#F9A918" stroke="#FFFFFF" stroke-width="30" stroke-linejoin="round" />
+  <rect x="134" y="234" width="320" height="210" rx="46" ry="46" fill="#F85B46" stroke="#FFFFFF" stroke-width="30" stroke-linejoin="round" />
+</svg>

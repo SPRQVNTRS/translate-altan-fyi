@@ -99,7 +99,7 @@ export function ConfirmAction({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {fetcher.data?.error && (
-          <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950 p-3 rounded-lg">
+          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
             {fetcher.data.error}
           </div>
         )}

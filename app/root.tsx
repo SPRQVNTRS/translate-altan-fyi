@@ -194,8 +194,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Brand-tints the browser chrome on mobile and in the installed app. */}
-        <meta name="theme-color" content="#057a78" />
+        {/* Brand-tints the browser chrome on mobile and in the installed app.
+            These hexes are the resolved `--background` values from `app.css`,
+            light and dark, and must be updated together with that token: a
+            raster meta tag cannot read a CSS custom property. */}
+        <meta name="theme-color" content="#f9f6f0" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0f0d0a" media="(prefers-color-scheme: dark)" />
         <Meta />
         <Links />
         <script

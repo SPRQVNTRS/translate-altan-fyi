@@ -129,7 +129,7 @@ async function postVote(params: { translationId: string; value: string; cookie: 
   const headers = new Headers();
   if (params.cookie !== null) headers.set('cookie', params.cookie);
 
-  const request = new Request('https://translate.altan.fyi/api/translation-vote', {
+  const request = new Request('https://kenning.altan.fyi/api/translation-vote', {
     method: 'POST',
     headers,
     body,

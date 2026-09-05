@@ -3,7 +3,7 @@
  *
  * WHY THE INDEX AND NOT `/translate`
  *   `/?q=<word>` is the PRIMARY search URL of this product, confirmed live at
- *   `https://translate.altan.fyi/?q=Kummerspeck&from=en&to=de`. `/translate` is
+ *   `https://kenning.altan.fyi/?q=Kummerspeck&from=en&to=de`. `/translate` is
  *   the alias, and `app/routes.ts` names it `translate-alias` in as many words.
  *   The first draft of this milestone gated the alias and left this URL open,
  *   which would have shipped the whole thing and changed nothing. This case is
@@ -47,7 +47,7 @@ let session: TestUserSession | null = null;
  * `anonymous-translate-alias-query-redirects.test.ts` drives the other one.
  */
 async function loadIndexQuery(cookie: string | null) {
-  const request = new Request(`https://translate.altan.fyi/?q=${WORD}&from=de&to=en`, {
+  const request = new Request(`https://kenning.altan.fyi/?q=${WORD}&from=de&to=en`, {
     headers: cookie === null ? {} : { cookie },
   });
   return translateLoader({
@@ -90,7 +90,7 @@ describe('an anonymous query on the index route', () => {
     // THE PATH, NOT THE WHOLE HEADER. The gate carries `?next=` since M191 so
     // the reader lands back where they were refused, and an assertion on the
     // full string would read as a broken gate the first time that changed.
-    assert.equal(new URL(thrown.headers.get('location') ?? '', 'https://translate.altan.fyi').pathname, SIGN_IN_PATH);
+    assert.equal(new URL(thrown.headers.get('location') ?? '', 'https://kenning.altan.fyi').pathname, SIGN_IN_PATH);
   });
 
   it('answers the same URL with results once signed in', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {

@@ -86,7 +86,7 @@ describe('the front door stays open', () => {
   });
 
   it('answers a signed-out visitor with the signed-out state', { skip: !DB_HOST ? 'DB_HOST not set' : false }, async () => {
-    const request = new Request('https://translate.altan.fyi/account');
+    const request = new Request('https://kenning.altan.fyi/account');
     const data = await accountLoader({
       request,
       url: new URL(request.url),

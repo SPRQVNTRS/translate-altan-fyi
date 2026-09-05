@@ -1,11 +1,11 @@
 {
-  "name": "translate-altan-fyi",
+  "name": "kenning-altan-fyi",
   "version": "0.1.0",
   "license": "MIT",
-  "homepage": "https://translate.altan.fyi",
+  "homepage": "https://kenning.altan.fyi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SPRQVNTRS/translate-altan-fyi.git"
+    "url": "git+https://github.com/SPRQVNTRS/kenning-altan-fyi.git"
   },
   "type": "module",
   "dependencies": {

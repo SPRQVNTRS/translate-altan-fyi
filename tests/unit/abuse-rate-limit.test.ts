@@ -73,7 +73,7 @@ function stripComments(source: string): string {
 
 /** A request carrying only the headers a case sets. */
 function requestWith(headers: Record<string, string>): Request {
-  return new Request('https://translate.altan.fyi/entry/x', { headers });
+  return new Request('https://kenning.altan.fyi/entry/x', { headers });
 }
 
 describe('abuse: hourly window arithmetic', () => {

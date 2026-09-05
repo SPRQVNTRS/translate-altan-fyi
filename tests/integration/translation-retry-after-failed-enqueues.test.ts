@@ -101,7 +101,7 @@ function freshIp(): string {
 
 async function search() {
   const ip = freshIp();
-  const request = new Request(`https://translate.altan.fyi/?q=${encodeURIComponent(lemma)}&from=${FROM}&to=${TO}`, {
+  const request = new Request(`https://kenning.altan.fyi/?q=${encodeURIComponent(lemma)}&from=${FROM}&to=${TO}`, {
     headers: { 'x-forwarded-for': ip, cookie: session?.cookie ?? '' },
   });
   return translateLoader({
@@ -116,7 +116,7 @@ async function search() {
 /** `POST /api/translation/:headwordId/retry?to=tr`, with the fixture's own session. */
 async function retry() {
   const ip = freshIp();
-  const request = new Request(`https://translate.altan.fyi/api/translation/${headwordId}/retry?to=${TO}`, {
+  const request = new Request(`https://kenning.altan.fyi/api/translation/${headwordId}/retry?to=${TO}`, {
     method: 'POST',
     headers: { 'x-forwarded-for': ip, cookie: session?.cookie ?? '' },
   });
