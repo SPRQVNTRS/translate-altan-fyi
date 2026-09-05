@@ -1,10 +1,10 @@
 /**
- * The search log never leaves the device, and review state does — both proved
- * on the actual bytes, not on the projection alone.
+ * The search log never leaves the device, and review state and favourites do —
+ * all three proved on the actual bytes, not on the projection alone.
  *
  * WHAT THIS PROTECTS
- *   `app/lib/local-store/BLOB-CONTENTS.md` says the encrypted blob carries lists,
- *   list items, notes and review state, and deliberately not the search log. That is a
+ *   `app/lib/local-store/BLOB-CONTENTS.md` says the blob carries lists, list
+ *   items, notes, review state and favourites, and deliberately not the search log. That is a
  *   privacy promise made in copy on `/settings`, and the only thing that keeps
  *   it true is `toSyncedSnapshot` dropping the collection plus nothing
  *   downstream putting it back.
@@ -19,7 +19,7 @@
  *     the round-tripped payload is ALSO checked as serialized text for the
  *     distinctive query strings the fixture puts in the log.
  *   - The reverse failure, a test that passes by serializing nothing: the
- *     four synced collections are asserted to survive the round trip intact,
+ *     five synced collections are asserted to survive the round trip intact,
  *     stamps included.
  *   - Review state added to the local store but forgotten on one of the four
  *     seams it has to cross (the projection, the zod reader, the live bridge
@@ -27,6 +27,10 @@
  *     flashcard record stranded on one device while every other test stayed
  *     green, so the `review` cases below drive the projection, the encrypted
  *     round trip AND the live read.
+ *   - Favourites forgotten on any of those same four seams, which is the same
+ *     defect one collection later: a word starred on a phone would never reach
+ *     the laptop, and the reader would be told their favourites sync. The
+ *     `favourite` cases below drive the same three paths the review ones do.
  *   - Drift from the payload shape, whose keys are transcribed
  *     below as a literal and compared against what the client actually builds.
  *   - A projection that quietly drops soft-deleted rows. A delete that is
@@ -59,6 +63,8 @@ import {
   createPrimaryStore,
   deleteLocalNote,
   listHistory,
+  putFavorite,
+  removeFavorite,
   putLocalList,
   putLocalListItem,
   putLocalNote,
@@ -118,12 +124,28 @@ function deviceSnapshot(): LocalStoreSnapshot {
         deleted: false,
       },
     ],
+    favorites: [
+      {
+        id: 'hw-1::sense-1::en',
+        headwordId: 'hw-1',
+        senseId: 'sense-1',
+        lemma: 'Fahrkarte',
+        translationSnapshot: 'ticket',
+        from: 'de',
+        to: 'en',
+        lamport: 1,
+        deviceId: 'device-a',
+        updatedAt: UPDATED_AT,
+        deleted: false,
+      },
+    ],
     history: PRIVATE_QUERIES.map((query, index) => ({
       id: `h${index}`,
       query,
       from: 'de',
       to: 'en',
       headwordId: null,
+      translation: null,
       at: UPDATED_AT - index * 1000,
     })),
   };
@@ -163,7 +185,7 @@ describe('the sync projection drops the search log', () => {
     // ABSENT, not empty: `history: []` would still travel, and would be a
     // container a later write path could fill without anyone noticing.
     assert.ok(!('history' in synced), 'the projection carries a history key');
-    assert.deepEqual(Object.keys(synced).toSorted(), ['listItems', 'lists', 'notes', 'reviewState']);
+    assert.deepEqual(Object.keys(synced).toSorted(), ['favorites', 'listItems', 'lists', 'notes', 'reviewState']);
   });
 });
 
@@ -207,6 +229,39 @@ describe('the sync projection carries review state', () => {
   });
 });
 
+describe('the sync projection carries favourites', () => {
+  it('keeps the word, the answer, the pair and the stamp', () => {
+    const device = deviceSnapshot();
+    assert.ok(device.favorites.length > 0, 'the fixture must carry a favourite for this assertion to mean anything');
+
+    const synced = toSyncedSnapshot(device);
+
+    assert.deepEqual(synced.favorites, device.favorites, 'the projection dropped or reshaped the favourites');
+    const [favorite] = synced.favorites;
+    assert.ok(favorite !== undefined);
+    // The four fields the favourites screen renders, plus the ordering pair. A
+    // projection that carried the word but lost `to` would sync a row nobody
+    // can say the language of, and one that lost the stamp would sync a row
+    // that can never win a merge.
+    assert.equal(favorite.lemma, 'Fahrkarte');
+    assert.equal(favorite.translationSnapshot, 'ticket');
+    assert.equal(favorite.from, 'de');
+    assert.equal(favorite.to, 'en');
+    assert.equal(favorite.deviceId, 'device-a');
+    assert.ok(favorite.lamport > 0);
+  });
+
+  it('reads a v2 blob, which had no favourites, as an empty collection rather than a refusal', () => {
+    // A peer still on SCHEMA_VERSION 2 writes a payload with four
+    // collections. The reader must not reject it, and must not invent rows.
+    const legacy = { lists: [], listItems: [], notes: [], reviewState: [] };
+
+    const parsed = syncedSnapshotSchema.parse(legacy);
+
+    assert.deepEqual(parsed.favorites, [], 'an older peer\u2019s blob did not read as "no favourites"');
+  });
+});
+
 describe('the payload shape', () => {
   /**
    * The payload's key names, transcribed as a literal, so a rename on either
@@ -229,7 +284,7 @@ describe('the payload shape', () => {
 });
 
 describe('the envelope round trip', () => {
-  it('carries the four synced collections through intact, stamps included', () => {
+  it('carries the five synced collections through intact, stamps included', () => {
     const parsed = roundTrip();
 
     const snapshot = syncedSnapshotSchema.parse(parsed.snapshot);
@@ -252,6 +307,17 @@ describe('the envelope round trip', () => {
     // And the check is not vacuous: the lists DID make the trip through the
     // same serialization.
     assert.ok(serialized.includes('Fahrkarte'), 'the round trip carried no list items, so the checks above prove nothing');
+  });
+
+  it('carries the favourite through the round trip, addressable under its own namespace', () => {
+    const parsed = roundTrip();
+
+    const snapshot = syncedSnapshotSchema.parse(parsed.snapshot);
+    assert.deepEqual(snapshot.favorites, deviceSnapshot().favorites, 'the favourite did not survive the round trip');
+    assert.ok(
+      Object.keys(parsed.syncMeta.perEntity).includes('favorite:hw-1::sense-1::en'),
+      'the favourite is missing from the wire meta, so a merge cannot order it',
+    );
   });
 
   it('carries the review tally through the round trip, read back off the parsed payload', () => {
@@ -306,18 +372,30 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
       { id: 'i1', gotItCount: 2, stillLearningCount: 3, lastReviewedAt: UPDATED_AT },
       options,
     );
+    // Two favourites written through the real helper, one of them then
+    // removed. The removed one is what proves a star turned off travels as a
+    // tombstone rather than simply vanishing from the push.
+    await putFavorite(
+      { headwordId: 'hw-1', senseId: null, lemma: 'Fahrkarte', translationSnapshot: 'ticket', from: 'de', to: 'en' },
+      options,
+    );
+    await putFavorite(
+      { headwordId: 'hw-2', senseId: null, lemma: 'Bahnhof', translationSnapshot: 'station', from: 'de', to: 'en' },
+      options,
+    );
+    await removeFavorite('hw-2::::en', options);
     // A real deletion, through the real helper: a soft delete that bumps the
     // lamport, which is the only thing that can beat a peer still holding the
     // live row.
     await deleteLocalNote('n2', options);
 
     for (const query of PRIVATE_QUERIES) {
-      await recordSearch({ query, from: 'de', to: 'en', headwordId: null }, { store, now: () => UPDATED_AT });
+      await recordSearch({ query, from: 'de', to: 'en', headwordId: null, translation: null }, { store, now: () => UPDATED_AT });
     }
     return store;
   }
 
-  it('carries the four synced collections and no search log', async () => {
+  it('carries the five synced collections and no search log', async () => {
     const store = await writtenDevice();
     assert.equal((await listHistory({ store })).length, PRIVATE_QUERIES.length, 'the log must be in the store for this to mean anything');
 
@@ -326,7 +404,7 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
     // ABSENT, not empty — the same rule the projection is held to, asserted on
     // the function a device actually calls.
     assert.ok(!('history' in snapshot), 'the live read carries a history key');
-    assert.deepEqual(Object.keys(snapshot).toSorted(), ['listItems', 'lists', 'notes', 'reviewState']);
+    assert.deepEqual(Object.keys(snapshot).toSorted(), ['favorites', 'listItems', 'lists', 'notes', 'reviewState']);
     assert.deepEqual(snapshot.lists.map((list) => list.id), ['l1']);
     assert.deepEqual(snapshot.listItems.map((item) => item.id), ['i1']);
     assert.deepEqual(snapshot.reviewState.map((state) => state.id), ['i1']);
@@ -354,6 +432,24 @@ describe('the live sync read (app/lib/sync/local-store-bridge.ts)', () => {
     assert.equal(state.deviceId, 'device-a');
     assert.ok(state.lamport > 0, 'the review state left the device unstamped, so it can never win a merge');
     assert.equal(state.deleted, false);
+  });
+
+  it('carries both favourites, the removed one as a tombstone', async () => {
+    const store = await writtenDevice();
+
+    const snapshot = await readLocalSnapshot({ store });
+
+    assert.deepEqual(
+      snapshot.favorites.map((favorite) => favorite.id).toSorted(),
+      ['hw-1::::en', 'hw-2::::en'],
+      'the removed favourite was filtered out of the push, so the peer will put it back',
+    );
+    const removed = snapshot.favorites.find((favorite) => favorite.id === 'hw-2::::en');
+    const kept = snapshot.favorites.find((favorite) => favorite.id === 'hw-1::::en');
+    assert.ok(removed !== undefined && kept !== undefined);
+    assert.equal(removed.deleted, true, 'the removed favourite lost its deleted flag');
+    assert.equal(kept.deleted, false);
+    assert.ok(removed.lamport > kept.lamport, 'the tombstone did not carry the bumped lamport');
   });
 
   it('carries the tombstone, so a deletion actually reaches the peer', async () => {

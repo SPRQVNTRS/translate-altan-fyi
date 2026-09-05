@@ -18,13 +18,13 @@
  * pure logic modules (`backup.ts`, `blob-schema.ts`) and their unit tests stay
  * browser- and store-free.
  *
- * FOUR OF THE FIVE ENTITIES ARE SYNCED, AND ONE IS NOT. Lists, list items,
- * notes and review state carry a {@link SyncStamp} and are what the encrypted
- * blob transports (`app/lib/local-store/BLOB-CONTENTS.md`). Search entries are
- * device-only: they carry no stamp, are hard-deleted rather than tombstoned,
- * and are capped on the device. A reader who assumes the search table behaves
- * like the other four will get both the deletion semantics and the blob
- * contents wrong.
+ * FIVE OF THE SIX ENTITIES ARE SYNCED, AND ONE IS NOT. Lists, list items,
+ * notes, review state and favourites carry a {@link SyncStamp} and are what the
+ * synced blob transports (`app/lib/local-store/BLOB-CONTENTS.md`). Search
+ * entries are device-only: they carry no stamp, are hard-deleted rather than
+ * tombstoned, and are capped on the device. A reader who assumes the search
+ * table behaves like the other five will get both the deletion semantics and
+ * the blob contents wrong.
  */
 
 /**
@@ -37,8 +37,17 @@
  * device had no review state", which is exactly true. The orchestrator's
  * schema probe (`app/lib/sync/orchestrator.ts`) walks the AAD down from here
  * to 1, so a peer still on v1 stays readable.
+ *
+ * v3 added {@link LocalFavorite}, and it needed no upgrade step either, for
+ * exactly the reason v2 did not. Both readers default every collection to
+ * empty, so a v2 backup file and a v2 blob each read as "that device had no
+ * favourites". That is a true statement about a device running a build where
+ * favourites did not exist, so there is nothing for a migration step to
+ * repair, in either direction. The step that will need one is a bump that
+ * RENAMES or RESHAPES a field, and it goes in `backup.ts`'s
+ * `migrateEnvelopeForward`.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** Vocabulary lists table: one row per list, keyed by the list's `id`. */
 export const LISTS_TABLE = 'lists';
@@ -48,6 +57,8 @@ export const LIST_ITEMS_TABLE = 'listItems';
 export const NOTES_TABLE = 'notes';
 /** Review state table: one row per reviewed list entry, keyed by THAT ENTRY's id. */
 export const REVIEW_STATE_TABLE = 'reviewState';
+/** Favourites table: one row per saved word, keyed by the favourite's `id`. */
+export const FAVORITES_TABLE = 'favorites';
 /** Search log table: one row per recorded search, keyed by the entry's `id`. Device-only. */
 export const HISTORY_TABLE = 'history';
 /** The single JSON cell every primary row uses to hold its serialized entity. */
@@ -67,7 +78,7 @@ export const MIGRATION_GATE_CLEARED_FOR_VALUE = 'migrationGateClearedFor';
  *
  * A VALUE, NOT A ROW, AND DEVICE-ONLY. It is not an entity, it carries no
  * {@link SyncStamp}, and it never enters the encrypted blob: `blob-schema.ts`
- * projects the four synced COLLECTIONS and values are not among them, which is
+ * projects the five synced COLLECTIONS and values are not among them, which is
  * asserted in `tests/unit/personal/blob-serializer.test.ts`. Syncing it would
  * mean a phone opened at breakfast silences the laptop opened at lunch, and a
  * nudge is per device the same way a screen is.
@@ -87,7 +98,7 @@ export const NUDGE_SHOWN_ON_VALUE = 'nudgeShownOn';
  * VALUES, NOT ROWS, AND DEVICE-ONLY, for the same reason the nudge marker
  * above is. The pair is a preference like the theme, not something a person
  * wrote, it carries no {@link SyncStamp}, and it never enters the synced blob:
- * `blob-schema.ts` projects the four synced COLLECTIONS and values are not
+ * `blob-schema.ts` projects the five synced COLLECTIONS and values are not
  * among them. Syncing it would mean a phone set to Turkish retargets the
  * laptop mid-sentence.
  *
@@ -163,6 +174,41 @@ export interface LocalReviewState extends SyncStamp {
 }
 
 /**
+ * One word a reader kept with a single tap on the answer they were given.
+ *
+ * IT IS NOT A LIST ENTRY, AND THE TWO MUST NOT BE COLLAPSED. A list is curated
+ * study material: it is named, a word enters it at ONE chosen meaning, and the
+ * review loop draws its cards from it. A favourite is the opposite gesture. It
+ * is one tap on an answer, and one tap cannot stop to ask which of seven senses
+ * the reader meant, so `senseId` here is usually null and that is the ordinary
+ * case rather than a missing value.
+ *
+ * `lemma` AND `translationSnapshot` ARE WHAT THE ROW RENDERS. The favourites
+ * screen reads them and nothing else, so it needs no dictionary query and works
+ * with the network off, which is the same reason {@link LocalListItem} carries
+ * its own snapshot. The snapshot is also frozen for the same reason: a later
+ * translation run may improve the answer, and it must not silently rewrite what
+ * a reader chose to keep.
+ *
+ * `from` and `to` say which pair the answer was given in. They are what the row
+ * names to the reader, and what the link back to `/translate` needs to re-run
+ * the same search rather than a different one that happens to share a word.
+ */
+export interface LocalFavorite extends SyncStamp {
+  id: string;
+  headwordId: string;
+  /** The sense the reader had picked, or null when the save asked for none. */
+  senseId: string | null;
+  lemma: string;
+  /** The answer AS IT READ WHEN SAVED. A snapshot, deliberately: see this interface's own note. */
+  translationSnapshot: string;
+  /** The language the word was searched from. */
+  from: string;
+  /** The language the answer is in. The same word saved into two targets is two favourites. */
+  to: string;
+}
+
+/**
  * One recorded search. CLIENT-ONLY: no {@link SyncStamp}, because this never
  * crosses a device boundary and so has nothing to converge with.
  */
@@ -172,6 +218,17 @@ export interface LocalHistoryEntry {
   from: string;
   to: string;
   headwordId: string | null;
+  /**
+   * The answer this search got, as a SNAPSHOT written when the pane had one.
+   *
+   * `null` is a true state rather than a gap: a word being translated for the
+   * first time is recorded before any answer exists, and the row renders the
+   * term alone until one arrives. It is never re-read from the dictionary
+   * afterwards, for the reason {@link LocalListItem.translationSnapshot} is
+   * frozen: a later run may improve the answer, and a log of what a person saw must
+   * keep saying what they saw.
+   */
+  translation: string | null;
   /** Epoch-ms the search ran. This IS the ordering key here, which is sound because history never crosses a device boundary. */
   at: number;
 }
@@ -186,6 +243,7 @@ export interface LocalStoreSnapshot {
   listItems: LocalListItem[];
   notes: LocalNote[];
   reviewState: LocalReviewState[];
+  favorites: LocalFavorite[];
   history: LocalHistoryEntry[];
 }
 

@@ -13,14 +13,15 @@
  * this shape, because the server cannot read it.
  */
 import { z } from 'zod';
-import type { LocalList, LocalListItem, LocalNote, LocalReviewState } from './schema';
+import type { LocalFavorite, LocalList, LocalListItem, LocalNote, LocalReviewState } from './schema';
 
-/** The four collections that ride the encrypted blob. See app/lib/local-store/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
+/** The five collections that ride the synced blob. See app/lib/local-store/BLOB-CONTENTS.md for what is in it and what is deliberately not. */
 export interface SyncedSnapshot {
   lists: LocalList[];
   listItems: LocalListItem[];
   notes: LocalNote[];
   reviewState: LocalReviewState[];
+  favorites: LocalFavorite[];
 }
 
 /**
@@ -29,7 +30,7 @@ export interface SyncedSnapshot {
  *
  * THE PARAMETER IS THE NARROW SHAPE ON PURPOSE, AND THAT IS WHAT MAKES ONE
  * PROJECTION SERVE TWO CALLERS. A full `LocalStoreSnapshot` is assignable to
- * it, and so is the sync bridge's read of the same four collections with
+ * it, and so is the sync bridge's read of the same five collections with
  * tombstones included, so the device export path and the live push path go
  * through this function rather than through two lists of collection names that
  * can drift. `app/lib/sync/local-store-bridge.ts`'s `readLocalSnapshot` is the
@@ -45,6 +46,7 @@ export function toSyncedSnapshot(snapshot: SyncedSnapshot): SyncedSnapshot {
     listItems: snapshot.listItems,
     notes: snapshot.notes,
     reviewState: snapshot.reviewState,
+    favorites: snapshot.favorites,
   };
 }
 
@@ -98,6 +100,24 @@ const reviewStateSchema = z.object({
 });
 
 /**
+ * One word kept with a single tap. The key it is addressed by, `(headwordId,
+ * senseId, to)`, is folded into the `id` by `favorites.ts`, so nothing here has
+ * to validate a composite: an id that does not match the fields beside it is a
+ * row this device will simply address under its own id, which is the same
+ * outcome as any other foreign id.
+ */
+const favoriteSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  headwordId: z.string(),
+  senseId: z.string().nullable(),
+  lemma: z.string(),
+  translationSnapshot: z.string(),
+  from: z.string(),
+  to: z.string(),
+});
+
+/**
  * A `SyncedSnapshot` arriving from a peer, for `parseRemoteSnapshot` to
  * validate against.
  *
@@ -113,4 +133,5 @@ export const syncedSnapshotSchema = z.object({
   listItems: z.array(listItemSchema).default([]),
   notes: z.array(noteSchema).default([]),
   reviewState: z.array(reviewStateSchema).default([]),
+  favorites: z.array(favoriteSchema).default([]),
 });

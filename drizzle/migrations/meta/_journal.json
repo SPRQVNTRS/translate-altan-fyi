@@ -141,6 +141,13 @@
       "when": 1788561205125,
       "tag": "0019_yellow_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788590674177,
+      "tag": "0020_graceful_leech",
+      "breakpoints": true
     }
   ]
 }

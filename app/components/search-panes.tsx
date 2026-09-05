@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Form, useNavigation } from 'react-router';
 import { EnrichmentSection } from '#app/components/enrichment-section';
 import { LanguageBar } from '#app/components/language-bar';
+import { FavoriteToggle } from '#app/components/personal/favorite-toggle';
 import { DictionaryEntries, DidYouMean, PhraseResults } from '#app/components/search-results';
-import { TranslationPane, useTranslationPane } from '#app/components/translation-pane';
+import { TranslationPane, type TranslationPaneController } from '#app/components/translation-pane';
 import { Button } from '#app/components/ui/button';
 import { Textarea } from '#app/components/ui/textarea';
 import { VoiceInput } from '#app/components/voice-input';
@@ -13,7 +14,6 @@ import type { Direction } from '#app/lib/dictionary/detect-language';
 import type { LanguagePair } from '#app/lib/dictionary/language-pair';
 import type { PhraseSearchResult, SearchHit } from '#app/lib/dictionary/search.server';
 import type { EnrichmentPanel } from '#app/lib/enrichment/state.server';
-import type { TranslationPanel } from '#app/lib/translation/panel.server';
 
 /** One rendered state of the translator surface, exactly as the loader answers it. */
 export interface SearchPanesProps {
@@ -28,16 +28,21 @@ export interface SearchPanesProps {
   phraseWordsOmitted: number;
   panel: EnrichmentPanel | null;
   /**
-   * Where the top hit's translation into the target language stands (M193/02).
+   * The translation pane's whole behaviour, held by the CALLER (M194/02).
    *
-   * `null` on the branches that have no single word to translate: the untouched
-   * home screen and the phrase branch. It is NOT the same thing as `no-entry`,
-   * which means a word was searched for and the dictionary holds no headword
-   * for it.
+   * IT USED TO BE THE LOADER'S PANEL, and the hook was called here. The route
+   * needs the answer too, to hand to the history recorder beside this surface,
+   * and a second call to the hook would be a second poll of the same run. So
+   * the controller is lifted to the one place that has both consumers, and this
+   * component takes it as a prop like everything else it renders.
+   *
+   * A CALLER WITH NO SESSION CALLS THE HOOK ITSELF and passes what it gets. The
+   * hook starts no work: the poll is a GET against a route that cannot enqueue,
+   * and a `no-entry` panel polls nothing at all.
    */
-  translationPanel: TranslationPanel | null;
+  translation: TranslationPaneController;
   /**
-   * The word `translationPanel` is about, and the id the pane polls with.
+   * The word the pane above is about, and the id it polls with.
    *
    * It is chosen by the LOADER, exact lemma preferred over the fuzzy top hit,
    * and carried out rather than recomputed here: the panel and the id must not
@@ -113,6 +118,16 @@ interface ResultFieldProps {
   body: ReactNode | null;
   /** The word-by-word caveat, on the phrase branch only. */
   note: string | null;
+  /**
+   * The star, on the single-word branch only.
+   *
+   * `null` on the phrase branch, and that is a statement about the product
+   * rather than a layout choice: a phrase is not one word, it has no headword,
+   * and there is nothing for a favourite to be keyed by. The caller decides
+   * whether there is a word to keep; this card only decides where the control
+   * sits, which is beside the copy button, because both act on the answer.
+   */
+  favorite: ReactNode | null;
 }
 
 /**
@@ -136,7 +151,7 @@ interface ResultFieldProps {
  * the answer, so a new answer is a new component with a fresh state rather
  * than an effect that watches a prop and corrects itself afterwards.
  */
-function ResultField({ text, body, note }: ResultFieldProps) {
+function ResultField({ text, body, note, favorite }: ResultFieldProps) {
   const { t } = useTranslation();
   const [isCopied, setIsCopied] = useState(false);
   const canCopy = text !== '' && globalThis.navigator?.clipboard !== undefined;
@@ -160,18 +175,21 @@ function ResultField({ text, body, note }: ResultFieldProps) {
     <div className="rounded-2xl border p-5">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium">{t('search.resultLabel')}</p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleCopy}
-          disabled={!canCopy}
-          aria-label={isCopied ? t('search.copied') : t('search.copy')}
-        >
-          {isCopied ?
-            <Check className="size-4" aria-hidden="true" />
-          : <Copy className="size-4" aria-hidden="true" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          {favorite}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleCopy}
+            disabled={!canCopy}
+            aria-label={isCopied ? t('search.copied') : t('search.copy')}
+          >
+            {isCopied ?
+              <Check className="size-4" aria-hidden="true" />
+            : <Copy className="size-4" aria-hidden="true" />}
+          </Button>
+        </div>
       </div>
 
       {/* Selectable, at reading size. The answer is the one thing on this
@@ -251,7 +269,7 @@ export function SearchPanes({
   didYouMean,
   phraseWordsOmitted,
   panel,
-  translationPanel,
+  translation,
   translationHeadwordId,
   emptyPane,
 }: SearchPanesProps) {
@@ -276,23 +294,20 @@ export function SearchPanes({
     formRef.current?.requestSubmit();
   };
 
-  // THE TRANSLATION PANE'S WHOLE BEHAVIOUR, HELD HERE SO THE COPY BUTTON CAN
-  // REACH IT. The hook is called unconditionally, on every branch, because it is
-  // a hook: the phrase branch passes a null panel and a null id, which polls
-  // nothing and renders nothing, and the card below simply does not ask for its
-  // body.
-  const translation = useTranslationPane({
-    panel: translationPanel,
-    headwordId: translationHeadwordId,
-    to: direction.to,
-  });
-
   // THE ANSWER, AS ONE STRING, DECIDED HERE AND NOWHERE ELSE. On the word branch
   // it comes from the pane rather than from the loader's hit, because a poll
   // that has just landed holds words the loader could not have known about, and
   // a copy button offering the older set would quietly hand the reader an answer
   // the screen is not showing.
   const resultText = phrase === null ? translation.text : phraseResult(phrase);
+
+  // THE WORD THE STAR WOULD KEEP, LOOKED UP BY THE LOADER'S OWN CHOICE OF
+  // HEADWORD. Reading `hits[0]` instead would be the defect the enrichment
+  // panel already learned: the loader prefers the exact lemma match over the
+  // fuzzy top hit, so the array's first row is not always the word this card is
+  // answering, and a favourite keyed by one word and labelled with another is
+  // worse than no star at all.
+  const savableHit = hits.find((hit) => hit.headwordId === translationHeadwordId);
 
   return (
     <div className="flex flex-col gap-4">
@@ -378,6 +393,24 @@ export function SearchPanes({
               text={resultText}
               body={phrase === null ? <TranslationPane controller={translation} to={direction.to} /> : null}
               note={phrase === null ? null : t('search.wordByWordNote')}
+              // Nothing to keep until there is a word AND an answer: a star
+              // over an empty pane would save the empty string as the
+              // translation, and a snapshot is forever.
+              favorite={
+                savableHit !== undefined && resultText !== '' ?
+                  <FavoriteToggle
+                    headwordId={savableHit.headwordId}
+                    // No sense is recorded, because none was chosen. This card
+                    // shows one answer for the whole word, so a sense written
+                    // here would be a claim the reader never made.
+                    senseId={null}
+                    lemma={savableHit.lemma}
+                    translationSnapshot={resultText}
+                    from={direction.from}
+                    to={direction.to}
+                  />
+                : null
+              }
             />
             {/* WHAT THE SEARCH ACTUALLY READ, WHEN IT WAS NOT ALL OF IT.
                 `searchPhrase` looks up at most `PHRASE_TOKEN_LIMIT` words, and

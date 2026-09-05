@@ -3,6 +3,7 @@ import { isServedLanguage, type LanguageCode } from '#app/lib/dictionary/detect-
 import { entryHeadwordQuery } from '#app/lib/dictionary/entry.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
 import { resolveTranslationPanel, type TranslationPanel } from '#app/lib/translation/panel.server';
+import { requireVoterAccount } from '#app/lib/votes/account-gate.server';
 import { getRawDb } from '#drizzle/db';
 
 /**
@@ -20,6 +21,14 @@ import { getRawDb } from '#drizzle/db';
  * rows the dictionary already serves to anyone at the same id, so there is
  * nothing here a session could gate. The route that STARTS work is gated; this
  * one only reports.
+ *
+ * IT STILL READS THE SESSION, AND THAT DOES NOT GATE ANYTHING.
+ *   The rows carry the reader's own vote on each translation, so a poll that
+ *   landed after a vote and did not know who was asking would answer with the
+ *   buttons unpressed and silently undo what the reader just did. Resolving the
+ *   voter is therefore a read for the ANSWER, not a check on the caller: nobody
+ *   is refused, and an anonymous poll gets the same rows with every `myVote`
+ *   null and no per-account query issued.
  *
  * AN UNKNOWN HEADWORD IS AN ORDINARY 200 CARRYING `no-entry`.
  *   A polled id can go stale, and a 404 on a poll would put an error in a
@@ -57,6 +66,7 @@ export async function loader({ params, request }: Route.LoaderArgs): Promise<Res
     headwordId: headword.headwordId,
     from: headword.languageCode,
     to,
+    accountId: await requireVoterAccount(request),
   });
   return Response.json(panel);
 }

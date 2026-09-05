@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BookMarked, History, ScrollText, Search, Settings, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { BookMarked, History, ScrollText, Search, Settings, ShieldCheck, Star, UserRound, type LucideIcon } from 'lucide-react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { cn } from '#app/lib/utils';
@@ -56,13 +56,18 @@ export type NavigationItem = {
  * in `bottom-nav.tsx`. A wording or href change lands in one entry and all
  * three move together.
  *
- * The three primary entries are equal. This app has no flagship verb, so the
- * tab bar is three flat tabs, with no raised centre button.
+ * The primary entries are equal. This app has no flagship verb, so the tab bar
+ * is flat tabs, with no raised centre button.
+ *
+ * Favourites sits between Lists and History because that is the order the three
+ * are made in: a word is answered, kept with one tap, and only later curated or
+ * looked back over.
  */
 export const navigationItems: NavigationItem[] = [
   { labelKey: 'nav.search', to: '/', icon: Search, group: 'primary', tab: { order: 1 } },
   { labelKey: 'nav.lists', to: '/lists', icon: BookMarked, group: 'primary', tab: { order: 2 } },
-  { labelKey: 'nav.history', to: '/history', icon: History, group: 'primary', tab: { order: 3 } },
+  { labelKey: 'nav.favourites', to: '/favourites', icon: Star, group: 'primary', tab: { order: 3 } },
+  { labelKey: 'nav.history', to: '/history', icon: History, group: 'primary', tab: { order: 4 } },
   { labelKey: 'nav.settings', to: '/settings', icon: Settings, group: 'footer' },
   { labelKey: 'nav.account', to: '/account', icon: UserRound, group: 'footer' },
   // No `tab`: the mobile bar stays three tabs. Sources is a licence

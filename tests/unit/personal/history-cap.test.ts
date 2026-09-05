@@ -39,7 +39,7 @@ const NOW = 1_760_000_000_000;
 const AGE_BOUNDARY = NOW - HISTORY_MAX_AGE_DAYS * MS_PER_DAY;
 
 function entry({ id, at }: { id: string; at: number }): LocalHistoryEntry {
-  return { id, query: `query-${id}`, from: 'de', to: 'en', headwordId: null, at };
+  return { id, query: `query-${id}`, from: 'de', to: 'en', headwordId: null, translation: null, at };
 }
 
 /** `count` entries one minute apart, ending one minute before `NOW` — all comfortably inside the age window. */

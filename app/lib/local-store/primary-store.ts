@@ -8,7 +8,11 @@
  * "primary commit"
  * every screen writes to and the source the backup (`backup.ts`) and the sync
  * projection (`blob-schema.ts`) read from. The device-only search log has its
- * own module (`history.ts`), because its deletion semantics differ.
+ * own module (`history.ts`), because its deletion semantics differ, and
+ * favourites have their own (`favorites.ts`), because their id is DERIVED from
+ * what the row is about rather than minted by the caller. The merge write path
+ * and the tombstone compaction at the foot of this file still cover the
+ * favourites table: both are statements about every synced collection.
  *
  * Every entity is stored as ONE JSON cell per row (keyed by the entity's `id`),
  * so a row is read/written whole. Reads return entities in a stable order (by
@@ -47,17 +51,25 @@ import {
   LIST_ITEMS_TABLE,
   NOTES_TABLE,
   REVIEW_STATE_TABLE,
+  FAVORITES_TABLE,
   PRIMARY_ENTITY_CELL,
   SCHEMA_VERSION_VALUE,
   DEVICE_ID_VALUE,
 } from './store';
 import { getPrimaryStore, requestPersistentStorage } from './persist';
 import { SCHEMA_VERSION } from './schema';
-import type { LocalList, LocalListItem, LocalNote, LocalReviewState, SyncStamp } from './schema';
+import type { LocalFavorite, LocalList, LocalListItem, LocalNote, LocalReviewState, SyncStamp } from './schema';
 import type { SyncedSnapshot } from './blob-schema';
 
-/** Every entity kind this store persists as one JSON cell per row. */
-type PrimaryEntity = LocalList | LocalListItem | LocalNote | LocalReviewState;
+/**
+ * Every entity kind this store persists as one JSON cell per row.
+ *
+ * Favourites are in the union although their CRUD lives in `favorites.ts`: the
+ * merge write path and the tombstone compaction below both operate on every
+ * synced table, and leaving one out of either would strand that collection on
+ * the device it was written on.
+ */
+type PrimaryEntity = LocalList | LocalListItem | LocalNote | LocalReviewState | LocalFavorite;
 
 /** A list as a caller supplies it — the stamp is this module's to apply, never the caller's. */
 export type LocalListInput = Omit<LocalList, keyof SyncStamp>;
@@ -391,7 +403,7 @@ export async function deleteLocalReviewState(id: string, options: WriteOption = 
 // ---------------------------------------------------------------------------
 
 /**
- * Hard-removes every tombstone last written before `cutoffMs`, across all four
+ * Hard-removes every tombstone last written before `cutoffMs`, across all five
  * synced tables. Returns how many rows went.
  *
  * NOTHING CALLS THIS YET, on purpose. A tombstone may only be dropped once
@@ -410,7 +422,7 @@ export async function deleteLocalReviewState(id: string, options: WriteOption = 
 export async function purgeDeletedBefore(cutoffMs: number, { store }: StoreOption = {}): Promise<number> {
   const resolved = await resolveStore(store);
   let purged = 0;
-  for (const table of [LISTS_TABLE, LIST_ITEMS_TABLE, NOTES_TABLE, REVIEW_STATE_TABLE]) {
+  for (const table of [LISTS_TABLE, LIST_ITEMS_TABLE, NOTES_TABLE, REVIEW_STATE_TABLE, FAVORITES_TABLE]) {
     for (const id of resolved.getRowIds(table)) {
       const entity = readEntity<SyncStamp>(resolved, table, id);
       if (!entity || !entity.deleted || entity.updatedAt >= cutoffMs) continue;
@@ -439,7 +451,7 @@ export async function purgeDeletedBefore(cutoffMs: number, { store }: StoreOptio
  * Tombstones are written too, not skipped. A `deleted` row is how a delete
  * travels, and dropping it here would resurrect the entity on the next push.
  *
- * The four synced tables are replaced WHOLESALE with exactly the rows given —
+ * The five synced tables are replaced WHOLESALE with exactly the rows given —
  * a merge result is a statement about the whole collection, so a row absent
  * from it is a row that must be absent here. All of it happens in ONE TinyBase
  * transaction, so a concurrent read can never observe a half-applied merge, and
@@ -457,6 +469,7 @@ export async function writeMergedSnapshot(snapshot: SyncedSnapshot, { store }: S
     replaceTable(resolved, LIST_ITEMS_TABLE, snapshot.listItems);
     replaceTable(resolved, NOTES_TABLE, snapshot.notes);
     replaceTable(resolved, REVIEW_STATE_TABLE, snapshot.reviewState);
+    replaceTable(resolved, FAVORITES_TABLE, snapshot.favorites);
   });
 }
 

@@ -9,6 +9,17 @@
  * the consequence here is that there is nothing to converge with, so a deleted
  * entry needs no marker to say so.
  *
+ * ONE ROW PER SEARCH, NOT ONE ROW PER LOOKUP. `recordSearch` is an UPSERT on
+ * `(query, from, to)`, so searching the same word five times leaves one row
+ * carrying the latest instant rather than five rows saying the same thing.
+ * `headwordId` is deliberately outside that key: the same typed word can land
+ * on a different top hit as the dictionary grows, and a reader who types the
+ * same thing twice has run the same search either way.
+ *
+ * THE ROW'S `id` SURVIVES AN UPDATE, and that is a promise rather than an
+ * implementation detail: the id is what a screen keys a row on, so minting a
+ * new one on every repeat would replace the row a reader was looking at.
+ *
  * THE CAP IS ENFORCED ON EVERY WRITE, not on a schedule. A schedule is a second
  * thing that has to run, and a device whose scheduler never fires is exactly
  * the device holding the log nobody meant to keep. Writing is the only moment
@@ -90,12 +101,35 @@ export interface RecordSearchInput {
   from: string;
   to: string;
   headwordId: string | null;
+  /** The answer this search got, or `null` when it is being recorded before one arrived. */
+  translation: string | null;
+}
+
+/**
+ * What makes two recorded searches the same search: the words typed and the two
+ * languages. Nothing else, and the exclusion of `headwordId` is the point: see
+ * this module's header.
+ */
+function searchIdentity({ query, from, to }: { query: string; from: string; to: string }): string {
+  return [query, from, to].join('\u0000');
 }
 
 /**
  * Records one search, then rewrites the table to exactly what survives the cap.
- * A HARD delete: there is no tombstone, because there is nothing to converge
- * with.
+ *
+ * AN UPSERT. A search already in the log keeps its `id` and takes the new
+ * instant, headword and answer, so a repeat moves the row to the top instead of
+ * adding a second copy of it beside the first. `listHistory` and `pruneHistory`
+ * both order on `at`, so moving the instant IS moving the row, and no ordering
+ * code knows about any of this.
+ *
+ * AN ANSWER IS NEVER UNWRITTEN BY A LATER `null`. The recorder calls this once
+ * as soon as the search is on screen and again when the pane has words, and a
+ * repeat of the same search starts at `null` again while its own run warms up.
+ * Taking that `null` literally would blank an answer the reader can still see.
+ *
+ * The write itself is a full rewrite of the table, and a HARD one: there is no
+ * tombstone anywhere in this module, because there is nothing to converge with.
  */
 export async function recordSearch(
   input: RecordSearchInput,
@@ -104,8 +138,17 @@ export async function recordSearch(
   const store = await resolveStore(options.store);
   const now = options.now ?? Date.now;
   const at = now();
-  const entry: LocalHistoryEntry = { id: crypto.randomUUID(), ...input, at };
-  writeEntries(store, pruneHistory([...readEntries(store), entry], at));
+  const identity = searchIdentity(input);
+  const entries = readEntries(store);
+  const existing = entries.find((entry) => searchIdentity(entry) === identity);
+  const entry: LocalHistoryEntry = {
+    ...input,
+    id: existing?.id ?? crypto.randomUUID(),
+    translation: input.translation ?? existing?.translation ?? null,
+    at,
+  };
+  const others = entries.filter((other) => other.id !== entry.id);
+  writeEntries(store, pruneHistory([...others, entry], at));
 }
 
 /** Every recorded search still on this device, newest first. */

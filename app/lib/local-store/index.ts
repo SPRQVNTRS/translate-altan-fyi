@@ -57,6 +57,7 @@ export {
   LIST_ITEMS_TABLE,
   NOTES_TABLE,
   REVIEW_STATE_TABLE,
+  FAVORITES_TABLE,
   HISTORY_TABLE,
 } from './schema';
 export type {
@@ -65,6 +66,7 @@ export type {
   LocalListItem,
   LocalNote,
   LocalReviewState,
+  LocalFavorite,
   LocalHistoryEntry,
   LocalStoreSnapshot,
 } from './schema';
@@ -109,13 +111,28 @@ export {
 } from './primary-store';
 export type { LocalListInput, LocalListItemInput, LocalNoteInput, LocalReviewStateInput } from './primary-store';
 
+// Favourites: a saved word, kept with one tap. Synced like a list, and its own
+// module because the id is DERIVED from `(headwordId, senseId, to)` rather than
+// minted by the caller — which is what makes a second save of one word an
+// overwrite instead of a duplicate row. See `favorites.ts`.
+export {
+  putFavorite,
+  removeFavorite,
+  listFavorites,
+  listFavoritesIncludingDeleted,
+  getFavorite,
+  isFavorite,
+  favoriteId,
+} from './favorites';
+export type { LocalFavoriteInput } from './favorites';
+
 // The device-only search log, capped on every write and never synced.
 export { recordSearch, listHistory, clearHistory, pruneHistory, importHistoryEntries } from './history';
 export type { RecordSearchInput } from './history';
 
 // The projection onto what the encrypted blob carries.
 // `toSyncedSnapshot` is the ONLY projection: `app/lib/sync/local-store-bridge.ts`
-// reads the four synced collections and hands them here rather than naming
+// reads the five synced collections and hands them here rather than naming
 // them a second time, so the search log's exclusion is decided in one function
 // and a unit test that drives that function covers the live push path too.
 // THERE IS NO INVERSE HERE, AND ITS ABSENCE IS DELIBERATE. A `withSyncedSnapshot`

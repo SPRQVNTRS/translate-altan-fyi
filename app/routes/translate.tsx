@@ -5,6 +5,7 @@ import { LandingDoors, LandingExampleCard, LandingPrivacyNote } from '#app/compo
 import { PersistLanguagePair } from '#app/components/persist-language-pair';
 import { RecordSearch } from '#app/components/personal/record-search';
 import { SearchPanes } from '#app/components/search-panes';
+import { useTranslationPane } from '#app/components/translation-pane';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
 import { resolveRequestLanguage } from '#app/i18n/language-prefs';
 import { detectLanguage } from '#app/lib/dictionary/detect-language';
@@ -339,6 +340,10 @@ export async function loader({ request }: Route.LoaderArgs) {
         headwordId: chosenHit.headwordId,
         from: direction.from,
         to: direction.to,
+        // The same reader the enrichment panel above is given, from the same
+        // already-validated session, so the two panels on one screen cannot
+        // disagree about who is looking at them.
+        accountId: user?.id ?? null,
       }),
   ]);
 
@@ -371,6 +376,14 @@ export async function loader({ request }: Route.LoaderArgs) {
  * now, the decision is applied, and the split is worth keeping for the next
  * time a surface has to be shown to somebody without a session.
  *
+ * THE TRANSLATION PANE'S CONTROLLER IS HELD HERE, AND HANDED DOWN. It used to
+ * be created inside `SearchPanes`, which was right while the surface was its
+ * only reader. The history write beside the surface reads the same answer now,
+ * and a second call to the hook would be a second poll of one run, so the one
+ * place that has both readers holds it. The surface stays pure over its props
+ * and stays renderable without a session: a caller with no session calls the
+ * hook itself, and the hook starts no work.
+ *
  * WHAT STAYS HERE IS EVERYTHING THAT IS NOT THE SURFACE: the day's nudge above
  * it, the hero above that for a stranger, the history write beside it, and the
  * one privacy line under it. The worked example is the exception. It is handed
@@ -393,6 +406,15 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
     translationPanel,
     translationHeadwordId,
   } = loaderData;
+
+  // THE PANE'S STATE MACHINE, CALLED UNCONDITIONALLY, because it is a hook. The
+  // branches with no word to translate pass a null panel and a null id, which
+  // polls nothing and renders nothing.
+  const translation = useTranslationPane({
+    panel: translationPanel,
+    headwordId: translationHeadwordId,
+    to: direction.to,
+  });
 
   // ONE COLUMN, ONE WIDTH, AT EVERY VIEWPORT. `max-w-2xl` and nothing wider:
   // the surface below used to widen to `max-w-5xl` from `md` up so a second
@@ -434,7 +456,7 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
         didYouMean={didYouMean}
         phraseWordsOmitted={phraseWordsOmitted}
         panel={panel}
-        translationPanel={translationPanel}
+        translation={translation}
         translationHeadwordId={translationHeadwordId}
         // THE WORKED EXAMPLE, WHERE THE ANSWER CARD GOES. With nothing typed
         // there is no answer to show, so that place in the column shows one. It
@@ -444,11 +466,6 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
         emptyPane={example === null ? undefined : <LandingExampleCard example={example} />}
       />
 
-      {/* The history WRITE, and it renders nothing. It is here rather than in
-          the loader because the loader runs on the server, which must never
-          learn what anybody looked up. It sits beside the surface rather than
-          inside it because it is not part of the surface: a review page that
-          renders the panes must not record searches nobody made. */}
       {/* The language pair WRITE, and it renders nothing. It is here rather
           than inside `SearchPanes` for the reason `RecordSearch` is: a
           sessionless render of the surface must not write to the device. It
@@ -456,7 +473,24 @@ export default function TranslateRoute({ loaderData }: Route.ComponentProps) {
           on the next request. */}
       <PersistLanguagePair pair={pair} />
 
-      <RecordSearch query={q} from={direction.from} to={direction.to} headwordId={hits[0]?.headwordId ?? null} />
+      {/* The history WRITE, and it renders nothing. It is here rather than in
+          the loader because the loader runs on the server, which must never
+          learn what anybody looked up. It sits beside the surface rather than
+          inside it because it is not part of the surface: a sessionless render
+          of the panes must not record searches nobody made.
+
+          IT IS GIVEN THE ANSWER, from the same controller the surface renders,
+          which is why that controller is held above rather than inside
+          `SearchPanes`. The answer arrives after the first render on a word the
+          model is still translating, so this records the search first and its
+          answer second, onto the same row: `recordSearch` is an upsert. */}
+      <RecordSearch
+        query={q}
+        from={direction.from}
+        to={direction.to}
+        headwordId={hits[0]?.headwordId ?? null}
+        translation={translation.text}
+      />
 
       {/* ONE LINE, AND IT IS NOT A PITCH. The three sentences that described
           the product under the surface are gone: the hero above already says

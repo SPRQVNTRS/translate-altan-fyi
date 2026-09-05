@@ -38,6 +38,7 @@ import {
   listLocalListItems,
   listLocalNotes,
   listLocalReviewState,
+  listFavorites,
   listLocalLists,
   localDateKey,
   markNudgeShown,
@@ -144,6 +145,7 @@ describe('the marker never leaves the device', () => {
       listItems: await listLocalListItems({ store }),
       notes: await listLocalNotes({ store }),
       reviewState: await listLocalReviewState({ store }),
+      favorites: await listFavorites({ store }),
     });
 
     assert.equal(snapshot.listItems.length, 1, 'the fixture should have reached the projection');

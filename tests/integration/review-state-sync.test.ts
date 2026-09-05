@@ -65,7 +65,7 @@ function reviewRow(input: {
 
 /** A device's whole synced state, with review rows and nothing else. */
 function deviceSnapshot(reviewState: SyncedSnapshot['reviewState']): StampedSnapshot {
-  const snapshot: SyncedSnapshot = { lists: [], listItems: [], notes: [], reviewState };
+  const snapshot: SyncedSnapshot = { lists: [], listItems: [], notes: [], reviewState, favorites: [] };
   return { snapshot, meta: toWireMeta(snapshot) };
 }
 

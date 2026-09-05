@@ -95,7 +95,7 @@ function reviewState({
 }
 
 function emptySnapshot(): SyncedSnapshot {
-  return { lists: [], listItems: [], notes: [], reviewState: [] };
+  return { lists: [], listItems: [], notes: [], reviewState: [], favorites: [] };
 }
 
 /**
@@ -216,6 +216,7 @@ describe('merge conflict resolution', () => {
       ],
       notes: [note({ id: 'n1', lamport: 4, deviceId: 'device-a' })],
       reviewState: [reviewState({ id: 'i1', stillLearningCount: 1, lamport: 7, deviceId: 'device-a' })],
+      favorites: [],
     };
     const deviceB: SyncedSnapshot = {
       lists: [list({ id: 'l1', name: 'b-l1', lamport: 2, deviceId: 'device-b' })],
@@ -225,6 +226,7 @@ describe('merge conflict resolution', () => {
       ],
       notes: [note({ id: 'n1', lamport: 4, deviceId: 'device-b' })],
       reviewState: [reviewState({ id: 'i1', stillLearningCount: 5, lamport: 2, deviceId: 'device-b' })],
+      favorites: [],
     };
 
     const merged = mergeBothDirections(payload(deviceA), payload(deviceB));

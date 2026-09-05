@@ -8,6 +8,7 @@ import { EnrichmentSection } from '#app/components/enrichment-section';
 import { EntryUnavailable } from '#app/components/entry-unavailable';
 import { Link } from '#app/components/link';
 import { AddToListSheet } from '#app/components/personal/add-to-list-sheet';
+import { FavoriteToggle } from '#app/components/personal/favorite-toggle';
 import { EntryNote } from '#app/components/personal/entry-note';
 import { ExampleLanguageBadge } from '#app/components/search-results';
 import { SenseTabs } from '#app/components/sense-tabs';
@@ -181,13 +182,36 @@ export default function EntryRoute({ loaderData }: Route.ComponentProps) {
             onSelectSense={setSelectedSenseId}
           />
         </div>
-        <div className="mt-4">
+        {/* THE TWO SAVES, SIDE BY SIDE, BECAUSE THEY ARE DIFFERENT GESTURES.
+            The sheet is the considered save: it names a list and refuses until
+            a word with several senses has one picked. The star is the cheap
+            one: it keeps the word and the answer on screen, and asks nothing.
+            Putting them in one row is what makes the difference legible;
+            explaining it in a sentence under them would not. */}
+        <div className="mt-4 flex items-center gap-2">
           <AddToListSheet
             headwordId={entry.headwordId}
             lemma={entry.lemma}
             senseId={onlySense ? null : selectedSenseId}
             translationSnapshot={pickedSense?.translations[0]?.lemma ?? ''}
             senseCount={entry.senses.length}
+          />
+          {/* The sense the reader is actually looking at is recorded here,
+              unlike on the answer card where there is none to record. A word
+              with one sense still saves `null`: nothing was picked, and writing
+              a pick nobody made is the same untruth `AddToListSheet` avoids.
+
+              `direction` is null when the URL named no source language, and the
+              entry's own language is the honest answer for `from` then: it is
+              the language the word IS in, which is what the favourites row
+              names and what re-running the search needs. */}
+          <FavoriteToggle
+            headwordId={entry.headwordId}
+            senseId={onlySense ? null : selectedSenseId}
+            lemma={entry.lemma}
+            translationSnapshot={pickedSense?.translations[0]?.lemma ?? ''}
+            from={direction?.from ?? entry.languageCode}
+            to={to}
           />
         </div>
       </article>

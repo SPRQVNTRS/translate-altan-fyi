@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFetcher } from 'react-router';
+import { TranslationVotes } from '#app/components/translation-votes';
 import { Button } from '#app/components/ui/button';
 import type { LanguageCode } from '#app/lib/dictionary/detect-language';
 import type { TranslationPanel, TranslationRefusal, TranslationRow } from '#app/lib/translation/panel.server';
@@ -214,7 +215,14 @@ function GeneratedMarker() {
   );
 }
 
-/** One translation: the word, its part of speech, and the marker when a model wrote it. */
+/**
+ * One translation: the word, its part of speech, the marker when a model wrote
+ * it, and the two buttons that say whether it is right.
+ *
+ * THE VOTE IS ON THIS ROW AND NOT ON THE CARD. The reader is looking at several
+ * words for one query, and only they know which of them is wrong. A single
+ * control over the whole answer would collect a judgement nobody could act on.
+ */
 function TranslationLine({ row, to }: { row: TranslationRow; to: LanguageCode }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -225,6 +233,7 @@ function TranslationLine({ row, to }: { row: TranslationRow; to: LanguageCode })
       </span>
       {row.pos !== null && <span className="text-xs text-muted-foreground">{row.pos}</span>}
       {row.generated && <GeneratedMarker />}
+      <TranslationVotes translationId={row.translationId} up={row.up} down={row.down} myVote={row.myVote} />
     </li>
   );
 }
@@ -250,7 +259,7 @@ export function TranslationPane({ controller, to }: TranslationPaneProps) {
     return (
       <ul className="mt-2 flex flex-col gap-2">
         {rows.map((row) => (
-          <TranslationLine key={`${row.lemma}:${row.pos ?? ''}`} row={row} to={to} />
+          <TranslationLine key={row.translationId} row={row} to={to} />
         ))}
       </ul>
     );

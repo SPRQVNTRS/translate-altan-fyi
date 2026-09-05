@@ -5,12 +5,12 @@
  *
  * Schema-versioned backup: a full-fidelity JSON export/import of the primary
  * store, plus the "days since last export" tracking that drives the backup
- * nudge. The whole device — lists, list items, notes, review state, and the
- * search log — round-trips losslessly through a device-local file, and the envelope's
+ * nudge. The whole device — lists, list items, notes, review state, favourites
+ * and the search log — round-trips losslessly through a device-local file, and the envelope's
  * `schemaVersion` lets an export taken on an older build migrate forward on
  * import.
  *
- * THE EXPORT CARRIES ALL FOUR COLLECTIONS, INCLUDING SEARCH HISTORY, AND THE
+ * THE EXPORT CARRIES EVERY COLLECTION, INCLUDING SEARCH HISTORY, AND THE
  * SYNC BLOB DOES NOT. That is not an inconsistency, it is the distinction the
  * two things are for. A JSON export is the user's own file, written to their
  * own device, and the whole point of it is that they own everything — a backup
@@ -38,6 +38,7 @@ import {
   putLocalNote,
   putLocalReviewState,
 } from './primary-store';
+import { listFavoritesIncludingDeleted, putFavorite } from './favorites';
 import { importHistoryEntries, listHistory } from './history';
 
 /** A device-local backup file: the schema version, the export instant, and the data. */
@@ -96,12 +97,31 @@ const reviewStateSchema = z.object({
   lastReviewedAt: z.number().int(),
 });
 
+/** One word kept with a single tap. Its `id` folds the key it is addressed by; see `favorites.ts`. */
+const favoriteSchema = z.object({
+  ...syncStampFields,
+  id: z.string(),
+  headwordId: z.string(),
+  senseId: z.string().nullable(),
+  lemma: z.string(),
+  translationSnapshot: z.string(),
+  from: z.string(),
+  to: z.string(),
+});
+
 const historyEntrySchema = z.object({
   id: z.string(),
   query: z.string(),
   from: z.string(),
   to: z.string(),
   headwordId: z.string().nullable(),
+  /**
+   * Defaulted rather than required, so a file exported by a build that
+   * predates the field still imports. "That device recorded no answer" is the
+   * honest reading of a missing key, and it is the same state a search
+   * recorded before its answer arrived is already in.
+   */
+  translation: z.string().nullable().default(null),
   at: z.number().int(),
 });
 
@@ -116,6 +136,7 @@ const snapshotSchema = z.object({
   listItems: z.array(listItemSchema).default([]),
   notes: z.array(noteSchema).default([]),
   reviewState: z.array(reviewStateSchema).default([]),
+  favorites: z.array(favoriteSchema).default([]),
   history: z.array(historyEntrySchema).default([]),
 });
 
@@ -178,10 +199,11 @@ export function parseBackupEnvelope(json: string): RawBackupEnvelope {
  * newer-than-supported envelope is rejected up front, since this build can't
  * know how to safely down-convert it. Pure.
  *
- * THE CHAIN STILL HAS NO LINKS, AND THAT IS A PROPERTY OF THE v1 -> v2 BUMP
- * RATHER THAN AN OVERSIGHT. v2 only ADDED the review-state collection, and
- * `snapshotSchema` defaults every collection to empty, so a v1 file validates
- * as it stands and reads as "this device had no review state" — which is
+ * THE CHAIN STILL HAS NO LINKS, AND THAT IS A PROPERTY OF BOTH BUMPS SO FAR
+ * RATHER THAN AN OVERSIGHT. v2 only ADDED the review-state collection and v3
+ * only added favourites, and
+ * `snapshotSchema` defaults every collection to empty, so a v1 or a v2 file
+ * validates as it stands and reads as "this device had none of that" — which is
  * exactly what was true when it was written. A bump that RENAMES or RESHAPES a
  * field cannot be absorbed that way, and that is the one that gets a step
  * here. Per-version steps slot in below, each transforming `migratedData` from
@@ -225,6 +247,7 @@ async function readSnapshot(store?: Store): Promise<LocalStoreSnapshot> {
     listItems: await listLocalListItemsIncludingDeleted({ store }),
     notes: await listLocalNotesIncludingDeleted({ store }),
     reviewState: await listLocalReviewStateIncludingDeleted({ store }),
+    favorites: await listFavoritesIncludingDeleted({ store }),
     history: await listHistory({ store }),
   };
 }
@@ -242,6 +265,7 @@ export async function hasAnyLocalData({ store }: { store?: Store } = {}): Promis
     snapshot.listItems.length > 0 ||
     snapshot.notes.length > 0 ||
     snapshot.reviewState.length > 0 ||
+    snapshot.favorites.length > 0 ||
     // A search log alone counts. It is the one thing a person can accumulate
     // without ever having saved anything, and it is still theirs.
     snapshot.history.length > 0
@@ -266,6 +290,12 @@ async function importSnapshot(snapshot: LocalStoreSnapshot, store?: Store): Prom
   for (const item of snapshot.listItems) await putLocalListItem(item, { store });
   for (const note of snapshot.notes) await putLocalNote(note, { store });
   for (const reviewState of snapshot.reviewState) await putLocalReviewState(reviewState, { store });
+  // `putFavorite` DERIVES the id from the row rather than taking the one in the
+  // file, which is not a loss: the derivation is a pure function of the three
+  // fields beside it, so a row written by this app restores under exactly the
+  // id it was exported with. A row whose id was edited by hand restores under
+  // the id its own fields say it should have, which is the honest reading.
+  for (const favorite of snapshot.favorites) await putFavorite(favorite, { store });
   await importHistoryEntries(snapshot.history, { store });
 }
 

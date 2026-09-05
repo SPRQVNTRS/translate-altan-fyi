@@ -11,7 +11,8 @@
     "bottomBarLabel": "Hauptnavigation",
     "back": "Zurück",
     "attribution": "Quellen",
-    "admin": "Admin"
+    "admin": "Admin",
+    "favourites": "Favoriten"
   },
   "theme": {
     "selector": "Farbschema",
@@ -369,5 +370,29 @@
       "ignore": "Wenn du dies nicht angefordert hast, ignoriere diese Nachricht. Dein Passwort wird nicht geändert.",
       "signoff": "Vielen Dank."
     }
+  },
+  "favourites": {
+    "metaTitle": "Favoriten",
+    "metaDescription": "Wörter, die du beim Übersetzen gespeichert hast.",
+    "add": "Dieses Wort speichern",
+    "remove": "Gespeichertes Wort entfernen",
+    "rowSummary": "{{term}} → {{answer}}",
+    "pair": "{{from}} nach {{to}}",
+    "repeat": "Erneut nach {{term}} suchen",
+    "removeTrigger": "Entfernen",
+    "removeLabel": "{{term}} entfernen",
+    "removeTitle": "Dieses Wort entfernen?",
+    "removeBody": "Es wird auf all deinen Geräten aus dieser Liste entfernt.",
+    "removeConfirm": "Entfernen",
+    "removePending": "Wird entfernt...",
+    "removeCancel": "Abbrechen",
+    "removedToast": "Entfernt.",
+    "emptyTitle": "Noch keine Wörter gespeichert",
+    "emptyBody": "Tippe bei einer Übersetzung auf den Stern, um das Wort hier zu speichern."
+  },
+  "translationVote": {
+    "up": "Dieses Wort ist richtig",
+    "down": "Dieses Wort ist falsch",
+    "signIn": "Melde dich an, um über ein Wort abzustimmen"
   }
 }

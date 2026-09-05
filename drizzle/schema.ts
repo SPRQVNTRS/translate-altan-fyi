@@ -30,8 +30,9 @@ export * from './schema/enrichment';
 // rows it accounts for.
 export * from './schema/translation-runs';
 
-// Reader votes on an enrichment, plus the per-headword re-enrichment cooldown.
-// Both describe the shared dictionary, and both are reached through `getRawDb()`.
+// Reader votes on an enrichment and on a single translation edge, plus the
+// per-headword re-enrichment cooldown. All three describe the shared
+// dictionary, and all three are reached through `getRawDb()`.
 export * from './schema/votes';
 
 // The account model: `users` and `user_tokens`. A user is a person's own

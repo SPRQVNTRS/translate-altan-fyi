@@ -65,6 +65,12 @@ export default [
   // THE RETRY PATH SITS UNDER THE DYNAMIC SEGMENT, NOT BESIDE IT, and that is
   // safe here where `/api/enrichment-vote` was not: `retry` is a THIRD segment,
   // so it cannot be swallowed by `:headwordId`, which matches exactly one.
+  // The vote on ONE translated word (M194/03). It sits BESIDE `/api/translation/`
+  // for the reason the enrichment vote sits beside `/api/enrichment/`: as
+  // `/api/translation/vote` the `:headwordId` segment below would swallow it and
+  // every vote would reach the poll loader instead of the action.
+  route('/api/translation-vote', 'routes/api.translation-vote.ts'),
+
   route('/api/translation/:headwordId', 'routes/api.translation.$headwordId.ts'),
   route('/api/translation/:headwordId/retry', 'routes/api.translation.$headwordId.retry.ts'),
 
@@ -155,6 +161,11 @@ export default [
       // so there is no list id to hang them off: the entry ids travel in
       // `?entries=`, and the screen resolves them against the device's own store.
       route('/review', 'routes/review.tsx'),
+      // Client only for the same reason `/lists` is: the rows are in this
+      // device's own store. They SYNC, unlike history, but the server holds
+      // them as one opaque document and never as rows, so there is still
+      // nothing here for a server loader to read.
+      route('/favourites', 'routes/favourites.tsx'),
       route('/history', 'routes/history.tsx'),
       route('/settings', 'routes/settings.tsx'),
     ]),

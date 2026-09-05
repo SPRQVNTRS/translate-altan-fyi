@@ -20,6 +20,10 @@ all.
 - **Review state.** What the flashcard loop recorded about one saved word: how
   many times it was answered got-it, how many times still-learning, and when it
   was last reviewed. Keyed by the list entry's own id, one row per saved word.
+- **Favourites.** The words a reader kept with one tap on an answer: the word,
+  the answer as it read when it was kept, and the language pair it was given in.
+  Addressed by `(headwordId, senseId, to)`, folded into the row's id, so one
+  word kept twice is one row and one word kept into two target languages is two.
 
 Every one of these is a record of what a person does not yet know, which is why
 none of it is stored in plaintext. Review state is the sharpest case of that: a
@@ -31,10 +35,17 @@ ease factor, so there is nothing in the blob a future scheduling algorithm could
 be mistaken for. That is a product decision (milestone M174), and if it is ever
 reversed the new fields arrive with a `SCHEMA_VERSION` bump like any other.
 
-Review state joined the blob at `SCHEMA_VERSION` 2. Adding it needed no
-migration in either direction: every collection defaults to empty on the way in,
-so a blob written by a v1 device reads as "that device recorded no reviews",
-which is exactly what was true.
+Review state joined the blob at `SCHEMA_VERSION` 2 and favourites at 3. Neither
+needed a migration in either direction: every collection defaults to empty on the
+way in, so a blob written by a v1 device reads as "that device recorded no
+reviews" and one written by a v2 device as "that device kept no favourites",
+which is exactly what was true of each.
+
+Favourites are in the blob and search history is not, and the two are less alike
+than they look. A favourite is a deliberate keep, one row per word, bounded by
+how many words a person chooses to star; the log grows with every query typed.
+The blob is a whole-document compare-and-swap, so what it can afford is a
+collection whose size is a decision the reader makes.
 
 Conflicts between two devices are resolved per entity by last write wins on
 `(lamport, deviceId)`. The compare-and-swap on `blobVersion` protects the blob;
@@ -71,8 +82,8 @@ append stream the swap's cost.
 
 ## What the server knows
 
-Everything in the document: the lists, the entries in them, the notes and the
-review tallies. That is the honest answer since M191, and the privacy page says
+Everything in the document: the lists, the entries in them, the notes, the
+review tallies and the favourites. That is the honest answer since M191, and the privacy page says
 it in as many words.
 
 WHAT IT STILL DOES NOT KNOW IS WHAT WAS LOOKED UP. The search log is not in the

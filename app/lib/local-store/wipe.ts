@@ -7,7 +7,13 @@
  * `_app.gated.tsx` says so in as many words. Sign-out is the single exception,
  * and it is an exception because it is the one moment a PERSON says they are
  * done with this browser. A shared phone whose next reader sees the previous
- * reader's vocabulary lists is the failure this closes.
+ * reader's vocabulary lists, favourites or searches is the failure this closes.
+ *
+ * IT NEEDS NO ENTRY PER COLLECTION, AND THAT IS WHY IT IS SAFE TO ADD ONE. The
+ * two databases go whole, so a new synced table such as `favorites` is carried
+ * out by the same delete with no edit here. A version of this that cleared
+ * named TABLES would have to be revisited for every collection ever added, and
+ * the one somebody forgot is the one that survives a sign-out.
  *
  * ── The persisters are stopped FIRST, and that is the whole fix ───────────
  *

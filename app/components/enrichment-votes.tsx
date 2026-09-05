@@ -5,6 +5,7 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
 import { Link } from '#app/components/link';
 import { Button } from '#app/components/ui/button';
+import { applyVote, submittedVote, type VoteChoice, type VoteTallyView } from '#app/lib/votes/optimistic';
 import type { VoteOutcome } from '#app/routes/api.enrichment-vote';
 
 /**
@@ -29,16 +30,6 @@ import type { VoteOutcome } from '#app/routes/api.enrichment-vote';
  *   is deliberately silent: it cannot be produced by these buttons, and copy
  *   invented for it would be one untranslated sentence in a translated page.
  */
-
-/** The two directions a vote can point. There is no neutral vote: not voting is neutral. */
-type VoteChoice = -1 | 1;
-
-/** The score as the buttons render it, whether it came from the server or from a click. */
-interface VoteTallyView {
-  up: number;
-  down: number;
-  myVote: VoteChoice | null;
-}
 
 export interface EnrichmentVotesProps {
   enrichmentId: string;
@@ -76,42 +67,6 @@ function settledTally(outcome: VoteOutcome | undefined): VoteTallyView | null {
   if (outcome.state === 'unauthenticated') return null;
   if (outcome.state === 'invalid') return null;
   return { up: outcome.up, down: outcome.down, myVote: outcome.myVote };
-}
-
-/**
- * The vote this submission is carrying, read back out of the request itself.
- *
- * THE OPTIMISTIC FIGURE COMES FROM `fetcher.formData`, NOT FROM STATE.
- *   The in-flight request already holds what the reader clicked, so mirroring
- *   it into a `useState` inside an effect would be a second copy of a fact the
- *   router is already holding, and the two would disagree for one render on
- *   every click.
- *
- * The value is compared as the STRING a form actually sends. A form body has no
- * numbers in it.
- */
-function submittedVote(formData: FormData | undefined): VoteChoice | null {
-  if (formData === undefined) return null;
-  const raw = formData.get('value');
-  if (raw === '1') return 1;
-  if (raw === '-1') return -1;
-  return null;
-}
-
-/**
- * The score as it will read once this vote lands.
- *
- * One vote per reader, so casting a vote also RETRACTS the reader's previous
- * one. Adding without subtracting would let a reader who changes their mind
- * count twice for one render, which is the same arithmetic error the upsert in
- * `castVote` exists to prevent on the server.
- */
-function applyVote(base: VoteTallyView, next: VoteChoice): VoteTallyView {
-  return {
-    up: base.up + (next === 1 ? 1 : 0) - (base.myVote === 1 ? 1 : 0),
-    down: base.down + (next === -1 ? 1 : 0) - (base.myVote === -1 ? 1 : 0),
-    myVote: next,
-  };
 }
 
 export function EnrichmentVotes(props: EnrichmentVotesProps): ReactNode {
@@ -195,9 +150,7 @@ export function EnrichmentVotes(props: EnrichmentVotesProps): ReactNode {
           </Link>
         </p>
       )}
-      {messageKey !== null && !isSignInPrompt && (
-        <p className="mt-2 text-xs text-muted-foreground">{t(messageKey)}</p>
-      )}
+      {messageKey !== null && !isSignInPrompt && <p className="mt-2 text-xs text-muted-foreground">{t(messageKey)}</p>}
     </div>
   );
 }

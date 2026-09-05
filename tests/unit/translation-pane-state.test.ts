@@ -45,8 +45,26 @@ const BUDGET: TranslationPanel = { state: 'budget', reason: 'daily-cap' };
 const READY: TranslationPanel = {
   state: 'ready',
   translations: [
-    { lemma: 'devirmek', pos: 'verb', confidence: 0.9, generated: true },
-    { lemma: 'devirmek', pos: null, confidence: null, generated: false },
+    {
+      translationId: '2a7d9b1c-4e5f-4a6b-8c9d-0e1f2a3b4c5d',
+      lemma: 'devirmek',
+      pos: 'verb',
+      confidence: 0.9,
+      generated: true,
+      up: 0,
+      down: 0,
+      myVote: null,
+    },
+    {
+      translationId: '3b8e0c2d-5f60-4b7c-9d0e-1f2a3b4c5d6e',
+      lemma: 'devirmek',
+      pos: null,
+      confidence: null,
+      generated: false,
+      up: 0,
+      down: 0,
+      myVote: null,
+    },
   ],
 };
 

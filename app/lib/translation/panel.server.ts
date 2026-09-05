@@ -126,6 +126,17 @@ export interface TranslationPanelKey {
   headwordId: string;
   from: LanguageCode;
   to: LanguageCode;
+  /**
+   * Whose votes to mark as "mine" on the rows this panel carries.
+   *
+   * IT IS ON THE KEY SO EVERY CALLER HAS TO SEE IT. The reader who is looking
+   * at an answer is the reader whose own vote has to be pressed on it, and the
+   * three routes that resolve a panel all have a session in hand. Omitting it,
+   * or passing `null`, means no per-account read is issued at all and every
+   * `myVote` is `null`, which is the right answer for the public polling route
+   * when nobody is signed in.
+   */
+  accountId?: number | null;
 }
 
 /**
@@ -143,7 +154,11 @@ export interface TranslationPanelKey {
  * @returns One of `ready`, `translating`, `failed`, `budget` or `none`.
  */
 export async function resolveTranslationPanel(db: DictionaryDb, key: TranslationPanelKey): Promise<TranslationPanel> {
-  const translations = await listTranslationsInto(db, { headwordId: key.headwordId, to: key.to });
+  const translations = await listTranslationsInto(db, {
+    headwordId: key.headwordId,
+    to: key.to,
+    accountId: key.accountId,
+  });
   if (translations.length > 0) return { state: 'ready', translations };
 
   const run = await latestRun(db, key);
@@ -205,8 +220,8 @@ export async function resolveTriggeredTranslationPanel(
   db: DictionaryDb,
   params: ResolveTriggeredTranslationPanelParams,
 ): Promise<TranslationPanel> {
-  const { request, retry = false, headwordId, from, to } = params;
-  const key: TranslationPanelKey = { headwordId, from, to };
+  const { request, retry = false, headwordId, from, to, accountId } = params;
+  const key: TranslationPanelKey = { headwordId, from, to, accountId };
 
   const resolved = await resolveTranslationPanel(db, key);
   if (resolved.state === 'ready' || resolved.state === 'translating') return resolved;
@@ -215,7 +230,11 @@ export async function resolveTriggeredTranslationPanel(
   const refusal = await refuseTranslation(db, request);
   if (refusal !== null) return { state: 'budget', reason: refusal };
 
-  const outcome = await enqueueTranslation(db, { ...key, promptVersion: PROMPT_VERSION });
+  // THE QUEUE PAYLOAD IS BUILT FIELD BY FIELD, NOT SPREAD FROM THE KEY. The key
+  // now carries an account id so the rows can be marked with the reader's own
+  // vote, and a job payload must never carry one: a queued row naming a reader
+  // and a headword is the search log this product says it does not keep.
+  const outcome = await enqueueTranslation(db, { headwordId, from, to, promptVersion: PROMPT_VERSION });
   // A DEDUPED ENQUEUE IS STILL `translating`. The work is already queued or
   // running under this key, which is what the singleton key exists to arrange,
   // and the run row the first caller opened is what the pane will poll.

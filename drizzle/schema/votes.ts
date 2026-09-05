@@ -1,7 +1,7 @@
 import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { pgTable, text, smallint, timestamp, uuid, integer, index, check, primaryKey } from 'drizzle-orm/pg-core';
 import { users } from './users';
-import { headwords, languages } from './dictionary';
+import { headwords, languages, translations } from './dictionary';
 import { enrichments } from './enrichment';
 
 // =============================================================================
@@ -78,6 +78,78 @@ export const enrichmentVotes = pgTable(
 
 export type InsertEnrichmentVote = InferInsertModel<typeof enrichmentVotes>;
 export type SelectEnrichmentVote = InferSelectModel<typeof enrichmentVotes>;
+
+// =============================================================================
+// Translation votes
+// =============================================================================
+// A reader tells us whether ONE translated word is right. Seven Turkish words
+// for `umwerfen` are seven separate claims, and a reader who thinks one of them
+// is wrong is saying so about that one, so the row points at a single
+// `translations` edge rather than at the answer as a whole.
+//
+// THE PRIVACY RULE OF THIS FILE STILL HOLDS, AND HERE IS WHY IT HOLDS FOR AN
+// EDGE.
+//   A translation id names a dictionary EDGE: the assertion that one sense in
+//   one language is rendered by one sense in another, written by a source. It
+//   is an object in the shared zone, exactly like an enrichment, and it exists
+//   whether or not anybody ever searched for it. Turning it into a word takes a
+//   second read, through `senses` to `headwords`, and nothing in the vote path
+//   performs that read. So a row here says "this reader judged this edge", not
+//   "this reader looked this word up".
+//
+//   That distinction survives only as long as this table stays this narrow. No
+//   headword, no lemma, no query text and no language pair may be added to it.
+//   Any one of those columns would put the word and the reader on the same row,
+//   and the claim would be lost with no bug and no other change, because the row
+//   would then say WHO looked up WHAT.
+//
+// WHAT A VOTE DOES, TODAY: it is recorded, and nothing else. No translation is
+// re-run, hidden or re-ordered because of its score (M194 decision 8). The rows
+// are the signal; what to do with them is a decision to take on real data, and
+// the operator's list at `/super/llm` is the only thing built on top of them.
+// =============================================================================
+
+export const translationVotes = pgTable(
+  'translation_votes',
+  {
+    // `cascade` for the same reason the enrichment link cascades: a vote on an
+    // edge that no longer exists scores an assertion nobody can read.
+    translationId: uuid('translation_id')
+      .notNull()
+      .references(() => translations.id, { onDelete: 'cascade' }),
+    // `cascade` again, and it is also what makes account deletion a single
+    // DELETE that leaves nothing behind, which is the self-serve erasure path.
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** `-1` or `1`, pinned by the check constraint below. There is no neutral vote: not voting is the neutral case. */
+    value: smallint('value').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    // THE COMPOSITE KEY IS THE RULE. "One vote per reader per edge" is not
+    // enforced anywhere in the application; it is this primary key. A reader who
+    // changes their mind upserts on it, so the second vote REPLACES the first.
+    // Without the key a re-vote would be a second row, the tally would count one
+    // person twice, and any reader could push a score as far as they liked by
+    // clicking again.
+    primaryKey({ columns: [table.translationId, table.accountId] }),
+
+    check('translation_votes_value_check', sql`value in (-1, 1)`),
+
+    // The primary key starts with `translationId`, so it cannot serve a read
+    // that starts from the account. "Which translations has this account voted
+    // on" is what the search pane needs to show a reader their own vote.
+    index('translation_votes_account_idx').on(table.accountId),
+  ],
+);
+
+export type InsertTranslationVote = InferInsertModel<typeof translationVotes>;
+export type SelectTranslationVote = InferSelectModel<typeof translationVotes>;
 
 // =============================================================================
 // Re-enrichment cooldown

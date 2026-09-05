@@ -24,6 +24,7 @@ import {
   listLocalListItems,
   listLocalNotes,
   listLocalReviewState,
+  listFavorites,
   putLocalList,
   setLanguagePair,
   toSyncedSnapshot,
@@ -97,6 +98,7 @@ describe('the device language pair', () => {
       listItems: await listLocalListItems({ store }),
       notes: await listLocalNotes({ store }),
       reviewState: await listLocalReviewState({ store }),
+      favorites: await listFavorites({ store }),
     });
 
     assert.equal(snapshot.lists.length, 1, 'the projection carried the list, so it is not empty');

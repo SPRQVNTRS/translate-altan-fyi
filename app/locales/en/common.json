@@ -11,7 +11,8 @@
     "bottomBarLabel": "Main navigation",
     "back": "Back",
     "attribution": "Sources",
-    "admin": "Admin"
+    "admin": "Admin",
+    "favourites": "Favourites"
   },
   "theme": {
     "selector": "Color theme",
@@ -369,5 +370,29 @@
       "ignore": "If you did not request this, ignore this message. Your password will not change.",
       "signoff": "Thank you."
     }
+  },
+  "favourites": {
+    "metaTitle": "Favourites",
+    "metaDescription": "The words you kept while translating.",
+    "add": "Save this word",
+    "remove": "Remove this saved word",
+    "rowSummary": "{{term}} → {{answer}}",
+    "pair": "{{from}} to {{to}}",
+    "repeat": "Search for {{term}} again",
+    "removeTrigger": "Remove",
+    "removeLabel": "Remove {{term}}",
+    "removeTitle": "Remove this word?",
+    "removeBody": "It leaves this list on every device you use.",
+    "removeConfirm": "Remove",
+    "removePending": "Removing...",
+    "removeCancel": "Cancel",
+    "removedToast": "Removed.",
+    "emptyTitle": "No saved words yet",
+    "emptyBody": "Tap the star on an answer to keep the word here."
+  },
+  "translationVote": {
+    "up": "This word is right",
+    "down": "This word is wrong",
+    "signIn": "Sign in to vote on a word"
   }
 }

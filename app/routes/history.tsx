@@ -4,7 +4,7 @@ import type { MetaFunction } from 'react-router';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ConfirmAction } from '#app/components/confirm-action';
-import { Link } from '#app/components/link';
+import { repeatSearchHref, SavedWordRow } from '#app/components/personal/saved-word-row';
 import { Button } from '#app/components/ui/button';
 import { Skeleton } from '#app/components/ui/skeleton';
 import { metaLanguage, metaTitle } from '#app/i18n/meta-title';
@@ -90,36 +90,41 @@ function formatRelativeTime(atMs: number, nowMs: number, language: string): stri
   return formatter.format(Math.round(duration), 'year');
 }
 
-/** The URL that re-runs this search, direction included so the repeat is the same search. */
-function repeatSearchHref(entry: { query: string; from: string; to: string }): string {
-  const params = new URLSearchParams({ q: entry.query, from: entry.from, to: entry.to });
-  return `/translate?${params.toString()}`;
-}
-
 interface HistoryEntryView {
   id: string;
   query: string;
   from: string;
   to: string;
+  /** The answer this search got, or null when it was logged before one arrived. */
+  translation: string | null;
   at: number;
 }
 
+/**
+ * One recorded search, on the row both personal screens share.
+ *
+ * WHAT IS LOCAL TO THIS SCREEN IS THE INSTANT, and it is handed to the row as
+ * its trailing element rather than built into it: a favourite is not a moment,
+ * so a shared row that always printed a time would have to invent one for the
+ * screen that has none.
+ */
 function HistoryRow({ entry, nowMs }: { entry: HistoryEntryView; nowMs: number }) {
   const { t, i18n } = useTranslation();
 
   return (
-    <li className="border-b last:border-b-0">
-      <Link
-        to={repeatSearchHref(entry)}
-        aria-label={t('history.repeat', { query: entry.query })}
-        className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-primary/5 hover:text-primary"
-      >
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.query}</span>
+    <SavedWordRow
+      term={entry.query}
+      answer={entry.translation}
+      from={entry.from}
+      to={entry.to}
+      href={repeatSearchHref({ term: entry.query, from: entry.from, to: entry.to })}
+      ariaLabel={t('history.repeat', { query: entry.query })}
+      trailing={
         <time dateTime={new Date(entry.at).toISOString()} className="text-xs text-muted-foreground tabular-nums">
           {formatRelativeTime(entry.at, nowMs, i18n.language)}
         </time>
-      </Link>
-    </li>
+      }
+    />
   );
 }
 

@@ -136,7 +136,17 @@ const request = new Request('https://translate.altan.fyi/?q=umwerfen');
 
 /** One translation row, as the corpus read returns it. */
 function row(overrides: Partial<TranslationRow> = {}): TranslationRow {
-  return { lemma: 'devirmek', pos: 'verb', confidence: 0.9, generated: true, ...overrides };
+  return {
+    translationId: 'b0f1c8a4-2f52-4a1a-9f3d-1c2b3a4d5e6f',
+    lemma: 'devirmek',
+    pos: 'verb',
+    confidence: 0.9,
+    generated: true,
+    up: 0,
+    down: 0,
+    myVote: null,
+    ...overrides,
+  };
 }
 
 /** One run row, with only the fields the resolver reads filled in. */

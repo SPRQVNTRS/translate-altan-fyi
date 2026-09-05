@@ -10,14 +10,7 @@ import { Button } from '#app/components/ui/button';
 import { Input } from '#app/components/ui/input';
 import { Label } from '#app/components/ui/label';
 import { Link } from '#app/components/link';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '#app/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#app/components/ui/table';
 import { getUser } from '#app/middleware/helpers';
 import {
   PROVIDERS,
@@ -26,11 +19,7 @@ import {
   type OptionSupport,
   type ProviderId,
 } from '#app/lib/llm/catalog';
-import {
-  LlmCapabilityError,
-  LlmNotConfiguredError,
-  registry,
-} from '#app/lib/llm/registry.server';
+import { LlmCapabilityError, LlmNotConfiguredError, registry } from '#app/lib/llm/registry.server';
 import { BUDGET_WARN_FRACTION, readBudget } from '#app/lib/abuse/budget.server';
 import {
   readRejections,
@@ -39,6 +28,7 @@ import {
 } from '#app/lib/abuse/rate-limit.server';
 import { getActiveModel, listActiveModelAudit, setActiveModel } from '#app/models/app-settings.server';
 import { readCorpusStats } from '#app/models/corpus-stats.server';
+import { listDownVotedTranslations } from '#app/models/translation-votes.server';
 import { listFlaggedForReview } from '#app/models/votes.server';
 import { getRawDb } from '#drizzle/db';
 
@@ -67,6 +57,15 @@ const AUDIT_LIMIT = 20;
 
 /** How many flagged enrichments the review block shows. */
 const FLAGGED_LIMIT = 20;
+
+/**
+ * How many down-voted translations the block below the flagged one shows.
+ *
+ * CAPPED FOR THE SAME REASON THE FLAGGED LIST IS. Nothing automatic reads this
+ * list (M194 decision 8), so it is a page a person scans, and an uncapped one
+ * would grow into a report nobody opens.
+ */
+const DOWN_VOTED_LIMIT = 20;
 
 /**
  * The switch form.
@@ -103,10 +102,11 @@ export async function loader() {
   // each other and of the model reads above, so they are issued together.
   // Every one of them is a plain read: this page never grants, releases or
   // clears anything.
-  const [budget, rejections, flagged, corpus] = await Promise.all([
+  const [budget, rejections, flagged, downVoted, corpus] = await Promise.all([
     readBudget(),
     readRejections(),
     listFlaggedForReview(getRawDb(), FLAGGED_LIMIT),
+    listDownVotedTranslations(getRawDb(), DOWN_VOTED_LIMIT),
     readCorpusStats(getRawDb()),
   ]);
 
@@ -139,6 +139,7 @@ export async function loader() {
     spend,
     rejections,
     flagged,
+    downVoted,
     corpus,
     // The two trigger ceilings travel as data rather than being read from the
     // module in the component, because `rate-limit.server` must never reach the
@@ -240,7 +241,7 @@ function describeSelection(selection: ActiveModelSelection | null): string {
 }
 
 export default function SuperLlm({ loaderData, actionData }: Route.ComponentProps) {
-  const { active, status, audit, providers, spend, rejections, flagged, corpus, triggerLimits } = loaderData;
+  const { active, status, audit, providers, spend, rejections, flagged, downVoted, corpus, triggerLimits } = loaderData;
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== 'idle';
 
@@ -381,12 +382,8 @@ export default function SuperLlm({ loaderData, actionData }: Route.ComponentProp
                 value={customModel}
                 onChange={(event) => setCustomModel(event.target.value)}
               />
-              <p className="text-sm text-muted-foreground">
-                Enter a model identifier if it is not in the list.
-              </p>
-              {fields.customModel.errors && (
-                <p className="text-sm text-destructive">{fields.customModel.errors}</p>
-              )}
+              <p className="text-sm text-muted-foreground">Enter a model identifier if it is not in the list.</p>
+              {fields.customModel.errors && <p className="text-sm text-destructive">{fields.customModel.errors}</p>}
             </div>
           )}
 
@@ -540,9 +537,7 @@ export default function SuperLlm({ loaderData, actionData }: Route.ComponentProp
         )}
 
         <h3 className="mt-5 text-sm font-medium">Senses by language</h3>
-        {corpus.sensesByLanguage.length === 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">No senses yet.</p>
-        )}
+        {corpus.sensesByLanguage.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No senses yet.</p>}
         {corpus.sensesByLanguage.length > 0 && (
           <div className="mt-2">
             <Table>
@@ -608,6 +603,53 @@ export default function SuperLlm({ loaderData, actionData }: Route.ComponentProp
                     <TableCell className="tabular-nums">{row.up}</TableCell>
                     <TableCell className="tabular-nums">{row.down}</TableCell>
                     <TableCell className="tabular-nums">{new Date(row.createdAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      <section className={CARD_CLASS}>
+        <h2 className={SECTION_LABEL_CLASS}>Down-voted translations</h2>
+        {/* WHAT THIS LIST IS FOR, AND WHAT IT DELIBERATELY IS NOT. A reader
+            votes on one translated word, and the vote is recorded and nothing
+            else: no translation is re-run, hidden or re-ordered because of its
+            score. This page is therefore the only place the signal is readable
+            at all, and it exists so that a decision about what to DO with these
+            votes can be taken on real rows rather than guessed at in advance.
+            A row appears on its first down-vote, with no minimum, because the
+            cost of showing it early is one extra line and the cost of hiding it
+            is a complaint nobody sees. The up count beside it is what separates
+            a disputed word from a rejected one. */}
+        <p className="mt-2 text-sm text-muted-foreground">
+          Words readers marked wrong, most recently voted first. Nothing is re-run or hidden because of a score; these
+          rows are the record of what readers think.
+        </p>
+        {downVoted.length === 0 && <p className="mt-3 text-sm text-muted-foreground">No down-voted translations.</p>}
+        {downVoted.length > 0 && (
+          <div className="mt-3">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Word</TableHead>
+                  <TableHead>Pair</TableHead>
+                  <TableHead>Up</TableHead>
+                  <TableHead>Down</TableHead>
+                  <TableHead>Last vote</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {downVoted.map((row) => (
+                  <TableRow key={row.translationId}>
+                    <TableCell className="font-mono">{row.lemma}</TableCell>
+                    <TableCell className="font-mono">
+                      {row.fromLanguageCode} to {row.toLanguageCode}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{row.up}</TableCell>
+                    <TableCell className="tabular-nums">{row.down}</TableCell>
+                    <TableCell className="tabular-nums">{new Date(row.lastVotedAt).toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

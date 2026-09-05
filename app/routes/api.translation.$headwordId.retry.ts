@@ -4,6 +4,7 @@ import { entryHeadwordQuery } from '#app/lib/dictionary/entry.server';
 import { jsonError } from '#app/lib/api-auth.server';
 import { createEntryLookups, resolveEntry } from '#app/lib/dictionary/queries.server';
 import { resolveTriggeredTranslationPanel, type TranslationPanel } from '#app/lib/translation/panel.server';
+import { requireVoterAccount } from '#app/lib/votes/account-gate.server';
 import { authMiddleware } from '#app/middleware/auth';
 import { getRawDb } from '#drizzle/db';
 
@@ -68,6 +69,10 @@ export async function action({ params, request }: Route.ActionArgs): Promise<Res
     to,
     request,
     retry: true,
+    // The reader whose retry this is, so the rows a successful retry returns
+    // already carry their own votes. `authMiddleware` above has established
+    // that there IS one, and this reads the same cookie for its id.
+    accountId: await requireVoterAccount(request),
   });
   return Response.json(panel);
 }

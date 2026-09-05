@@ -104,7 +104,8 @@ export const ROUTE_CLASSIFICATION = {
   },
   'translate.tsx': {
     access: 'landing-loader-split',
-    reason: 'Served at `/` and at `/translate`. Empty `q` is public, any non-empty `q` requires an account, decided in the one shared loader.',
+    reason:
+      'Served at `/` and at `/translate`. Empty `q` is public, any non-empty `q` requires an account, decided in the one shared loader.',
   },
   'search-redirect.ts': {
     access: 'public',
@@ -113,7 +114,8 @@ export const ROUTE_CLASSIFICATION = {
   },
   'account.tsx': {
     access: 'public',
-    reason: 'Reports the signed-out state rather than ending it. Its loader answers `null` for an anonymous visitor and never redirects.',
+    reason:
+      'Reports the signed-out state rather than ending it. Its loader answers `null` for an anonymous visitor and never redirects.',
   },
   'sign-up.tsx': {
     access: 'public',
@@ -147,23 +149,31 @@ export const ROUTE_CLASSIFICATION = {
   },
   'offline.tsx': {
     access: 'public',
-    reason: 'The service-worker fallback. It renders with no network, which is not a state in which a session can be resolved.',
+    reason:
+      'The service-worker fallback. It renders with no network, which is not a state in which a session can be resolved.',
   },
   'entry.$headwordId.tsx': {
     access: 'gated-layout',
     reason: 'Under `_app.gated`. It enqueues enrichment, so leaving it public would move the hole here from `/?q=`.',
   },
   'attribution.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
-  'lists.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`. The device keeps its own copy either way, the gate blocks the screen only.' },
+  'lists.tsx': {
+    access: 'gated-layout',
+    reason: 'Under `_app.gated`. The device keeps its own copy either way, the gate blocks the screen only.',
+  },
   'lists.$listId.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
   'lists.$listId.review.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
   'review.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
+  'favourites.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
   'history.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
   'settings.tsx': { access: 'gated-layout', reason: 'Under `_app.gated`.' },
 
   // ── The public layout ──────────────────────────────────────────────────
   '_public.tsx': { access: 'public', reason: 'The chrome around the legal pages and the catch-all.' },
-  'legal/imprint.tsx': { access: 'public', reason: 'A legal document. It is a legal requirement that it is reachable.' },
+  'legal/imprint.tsx': {
+    access: 'public',
+    reason: 'A legal document. It is a legal requirement that it is reachable.',
+  },
   'legal/privacy.tsx': { access: 'public', reason: 'A legal document.' },
   'legal/terms.tsx': { access: 'public', reason: 'A legal document.' },
   '$.tsx': { access: 'public', reason: 'The 404. Every unmatched URL lands here, signed in or not.' },
@@ -181,7 +191,13 @@ export const ROUTE_CLASSIFICATION = {
   },
   'api.enrichment-vote.ts': {
     access: 'gated-inline',
-    reason: 'Its action calls `requireVoterAccount` first and answers 401 before any path that could reach `enqueueEnrichment` on a downvote.',
+    reason:
+      'Its action calls `requireVoterAccount` first and answers 401 before any path that could reach `enqueueEnrichment` on a downvote.',
+  },
+  'api.translation-vote.ts': {
+    access: 'gated-inline',
+    reason:
+      'Its action calls `requireVoterAccount` first and answers 401 before it reads the body, so a signed-out post learns nothing from a well-formed one. It records a vote and starts no work, so there is nothing behind the gate to spend.',
   },
   'api.translation.$headwordId.ts': {
     access: 'public',
@@ -195,11 +211,15 @@ export const ROUTE_CLASSIFICATION = {
   },
   'api.v1.transcribe.ts': {
     access: 'gated-inline',
-    reason: 'Its action reads the session first and answers a 401 refusal in JSON. A redirect would be unusable to the `fetch` that calls it.',
+    reason:
+      'Its action reads the session first and answers a 401 refusal in JSON. A redirect would be unusable to the `fetch` that calls it.',
   },
 
   // ── The synced personal document ───────────────────────────────────────
-  'api.v1.sync.blob.ts': { access: 'gated-inline', reason: 'Reads the session and answers 401 in JSON. The document belongs to one user.' },
+  'api.v1.sync.blob.ts': {
+    access: 'gated-inline',
+    reason: 'Reads the session and answers 401 in JSON. The document belongs to one user.',
+  },
 
   // ── The bearer-token REST surface, inherited from ts-factory-stack ─────
   'api.v1.api-keys.ts': { access: 'bearer-token', reason: 'requireSuperadminApiKey.' },
@@ -216,9 +236,14 @@ export const ROUTE_CLASSIFICATION = {
   // by M189 with their tables (ADR-0010), and `_auth.tsx` went with them.
   '_super.tsx': {
     access: 'gated-layout',
-    reason: 'Carries `authMiddleware` then `superadminMiddleware`. A top-level layout since M189: it no longer nests under `_auth`.',
+    reason:
+      'Carries `authMiddleware` then `superadminMiddleware`. A top-level layout since M189: it no longer nests under `_auth`.',
   },
-  'super/index-redirect.ts': { access: 'gated-layout', reason: 'Under `_super`. A hop from `/super` to `/super/llm`, refused before it runs for anyone who is not a superadmin.' },
+  'super/index-redirect.ts': {
+    access: 'gated-layout',
+    reason:
+      'Under `_super`. A hop from `/super` to `/super/llm`, refused before it runs for anyone who is not a superadmin.',
+  },
   'super/llm.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
   'super/whoami-ip.tsx': { access: 'gated-layout', reason: 'Under `_super`.' },
 } as const satisfies Record<string, RouteClassification>;

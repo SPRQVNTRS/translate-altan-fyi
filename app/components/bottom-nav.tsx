@@ -4,13 +4,18 @@ import { cn } from '#app/lib/utils';
 import { tabNavigationItems, type NavigationItem } from './app-sidebar';
 
 /**
- * The mobile tab bar. It carries the three places you move between while you
- * work: Search, Lists and History. Settings and Account live in the top-left
- * navigation drawer (`app-wrapper.tsx`), which shows the same complete map the
- * desktop sidebar does.
+ * The mobile tab bar. It carries the places you move between while you work:
+ * Search, Lists, Favourites and History. Settings and Account live in the
+ * top-left navigation drawer (`app-wrapper.tsx`), which shows the same complete
+ * map the desktop sidebar does.
  *
- * The three tabs are equal. There is no raised centre button, because this app
- * has no single flagship verb, and a raised tab would claim one.
+ * The tabs are equal. There is no raised centre button, because this app has no
+ * single flagship verb, and a raised tab would claim one.
+ *
+ * THE BAR NAMES NO DESTINATION OF ITS OWN, not even the new one: `nav.search`,
+ * `nav.lists`, `nav.favourites` and `nav.history` are catalog keys, resolved
+ * where each tab is rendered. A key written here would be a second place a
+ * destination can be labelled, and the two would eventually disagree.
  *
  * The entries come from the shared catalog, pre-ordered by each item's
  * `tab.order`, so this file lists no catalog keys or hrefs of its own and the
