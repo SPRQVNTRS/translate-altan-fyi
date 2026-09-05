@@ -28,6 +28,28 @@ own configured setting already applies. And the pane has exactly five states,
 `ready`, `translating`, `no-entry`, `budget`, `failed`, with no "no translation
 yet" copy anywhere on the search surface.
 
+### A phrase translates like a word (M195)
+
+The code: `drizzle/schema/phrase-translations.ts`, `app/prompts/phrase/`,
+`app/lib/llm/phrase-schema.ts`, `app/lib/translation/phrase-panel.server.ts`
+and its enqueue and payload siblings, `app/models/phrase-runs.server.ts`,
+`app/workflows/operations/translation/translate-phrase.ts`, the routes
+`api.translation-phrase.ts` and its retry, and for the outside world
+`app/lib/translation/translate-request.server.ts`,
+`app/routes/api.v1.translate.ts`, `app/routes/api.v1.translation-votes.ts`
+and `cli/commands/translate.ts`.
+
+Three rules. **A phrase answer is never dictionary data**: it lives in
+`phrase_translations` and the job must not touch `senses`, `headwords` or
+`translations`, because a sentence is not a lexical edge and one row of running
+text would poison every corpus query M193 built. **The word and the phrase
+branch are decided by one call**, `normalizeQuery(q, from).isPhrase`, in the
+loader AND in the API, so the screen and the CLI can never disagree about what a
+phrase is. **A text over `PHRASE_MAX_CHARS` is refused, never truncated**:
+truncating would translate a sentence the reader did not type and present it as
+their answer. This reverses M193 decision 8, which said a phrase creates
+nothing.
+
 ### Favourites, history and translation votes (M194)
 
 The code: `app/lib/local-store/favorites.ts` and the `favorites` collection in
